@@ -20,6 +20,7 @@ setup(
         "beautifulsoup4",
         "black",
         "typer",
+        "pyyaml",
     ],
     extras_require={"test": ["pytest"]},
 )
