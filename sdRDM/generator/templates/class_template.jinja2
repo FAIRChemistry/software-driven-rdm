@@ -1,0 +1,11 @@
+class {{name}}({% if inherit is not none %}
+                {{inherit.name}}
+                {% else %}sdRDM.DataModel{% endif %}):
+                
+    {% if docstring is not none %}"""{{ docstring }}"""{% endif %}
+
+    {% for attribute in attributes -%}
+    {{ attribute }}
+    {% endfor -%}
+    
+    

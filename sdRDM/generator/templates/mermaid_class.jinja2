@@ -1,0 +1,18 @@
+```mermaid
+classDiagram
+    {%- for inherit in inherits %}
+    {{inherit.parent}} <-- {{inherit.child}}
+    {%- endfor %}
+    
+    {%- for composition in compositions %}
+    {{composition.container}} *-- {{composition.module}}
+    {%- endfor %}
+    {% for class in classes%}
+    class {{class.name}} {
+    
+        {%- for attr in class.attributes %}
+        +{{attr.type}}{% if "multiple" in attr %}[0..*]{% endif %} {{attr.name}}{{attr.required}}
+        {%- endfor %}
+    }
+    {% endfor %}
+```

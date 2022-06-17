@@ -1,0 +1,22 @@
+    def add_{{ snake_case }}(
+        self,
+        {%- for attr in signature %}
+        {{attr.name}}: {{attr.dtype}} {% if 'Optional' in attr.dtype %}= None{% endif %},
+        {%- endfor %}
+    ) -> None:
+        """
+        {{summary}}
+
+        Args:
+            {%- for attr in signature %}
+            {{attr.name}} ({{ attr.dtype }}): {{ attr.description }}.{% if 'default' in attr %} Defaults to {{attr.default}}{% endif %}
+            {%- endfor %}
+        """
+
+        self.{{attribute}}.append(
+            {{cls}}(
+                {%- for attr in signature %}
+                {{attr.name}}={{attr.name}},
+                {%- endfor %}
+            )
+        )

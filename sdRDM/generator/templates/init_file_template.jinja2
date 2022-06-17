@@ -1,0 +1,9 @@
+{%- for class in classes %}
+from .{{class.fname}} import {{class.name}}
+{%- endfor %}
+
+__all__ = [
+    {%- for class in classes %}
+    "{{class.name}}",
+    {%- endfor %}
+]

@@ -1,0 +1,7 @@
+{{name}}: {{dtype}} = Field(
+    {% if required is true %}...,{% endif %}
+    {% for key, value in metadata.items() %}
+    {{key}}={{value}},
+    {% endfor %}
+    )
+
