@@ -27,7 +27,10 @@ def generate(
     open(os.path.join(lib_path, "__init__.py"), "w")
 
     # Read and find all files
-    for file in glob.glob(os.path.join(path, "*")):
+    specifications = list(glob.glob(os.path.join(path, "*")))
+    is_single = len(specifications) == 1
+
+    for file in specifications:
         extension = os.path.basename(file).split(".")[-1]
 
         if extension not in type_mapping:
@@ -38,7 +41,12 @@ def generate(
         mermaid_path, metadata_path = type_fun(file, schema_path)
 
         # Generate the API
-        write_module(schema=mermaid_path, descriptions=metadata_path, out=core_path)
+        write_module(
+            schema=mermaid_path,
+            descriptions=metadata_path,
+            out=core_path,
+            is_single=is_single,
+        )
 
 
 @app.command()

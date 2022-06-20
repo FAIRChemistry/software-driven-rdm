@@ -253,9 +253,11 @@ class MermaidClass:
                 {"name": name, **attr} for name, attr in add_class.attributes.items()
             ]
 
+            signature = sorted(signature, key=lambda x: "Optional" in x["dtype"])
+
             methods.append(
                 add_template.render(
-                    snake_case=add_class.snake_case,
+                    snake_case=attribute,
                     signature=signature,
                     attribute=attribute,
                     cls=add_class.name,
@@ -321,7 +323,9 @@ class MermaidClass:
         )
 
 
-def write_module(schema: str, descriptions: str, out: str) -> None:
+def write_module(
+    schema: str, descriptions: str, out: str, is_single: bool = False
+) -> None:
     """Renders and writes a module based on a Mermaid schema
 
     Steps:
@@ -337,7 +341,10 @@ def write_module(schema: str, descriptions: str, out: str) -> None:
     """
 
     # (0) Build target path
-    path = os.path.join(out, os.path.basename(schema).split(".")[0])
+    if is_single:
+        path = out
+    else:
+        path = os.path.join(out, os.path.basename(schema).split(".")[0])
     descriptions = json.loads(open(descriptions).read())
     os.makedirs(path, exist_ok=True)
 
@@ -423,6 +430,34 @@ def get_keys(dictionary):
 def write_class(tree: dict, classes: dict, dirpath: str, inherit=None):
     """Recursively writes classes"""
 
+    used_classes = _write_dependent_classes(tree, classes, dirpath, inherit)
+    _write_lone_classes(classes, dirpath, None, used_classes)
+
+
+def _write_lone_classes(classes: dict, dirpath: str, inherit, used_classes):
+
+    for cls_name, cls_obj in classes.items():
+
+        # Guard clause
+        if cls_name in used_classes:
+            continue
+
+        # First, check if all arbitrary types exist
+        # if not render them to a file
+        for sub_class in cls_obj.sub_classes:
+            sub_class = classes[sub_class]
+            cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
+
+            if sub_class not in used_classes:
+                _render_class(sub_class, dirpath, inherit=None, classes=classes)
+
+        # Finally, render the given class
+        _render_class(cls_obj, dirpath, inherit, classes=classes)
+
+
+def _write_dependent_classes(tree: dict, classes: dict, dirpath: str, inherit=None):
+    # Write classes from the dependency tree
+    used_classes = []
     for cls_name, sub_cls in tree.items():
 
         # Get the class object
@@ -435,13 +470,19 @@ def write_class(tree: dict, classes: dict, dirpath: str, inherit=None):
             cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
 
             _render_class(sub_class, dirpath, inherit=None, classes=classes)
+            used_classes.append(sub_class)
 
         # Finally, render the given class
         _render_class(cls_obj, dirpath, inherit, classes=classes)
+        used_classes.append(cls_name)
 
         # Repeat process for sub-classes
         if sub_cls:
-            write_class(tree=sub_cls, classes=classes, dirpath=dirpath, inherit=cls_obj)
+            _write_dependent_classes(
+                tree=sub_cls, classes=classes, dirpath=dirpath, inherit=cls_obj
+            )
+
+    return used_classes
 
 
 def _render_class(cls_obj, dirpath, inherit, classes):
@@ -474,10 +515,3 @@ def render_dunder_init(classes: dict):
     return init_template.render(
         classes=sorted(classes.values(), key=lambda cls: cls.fname)
     )
-
-
-if __name__ == "__main__":
-    path = "./test/core"
-    os.makedirs(path, exist_ok=True)
-
-    write_module("test/biocatalyst.md", "test/biocatalyst_metadata.json", out=path)

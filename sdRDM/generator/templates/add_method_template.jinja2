@@ -1,4 +1,4 @@
-    def add_{{ snake_case }}(
+    def add_to_{{ snake_case }}(
         self,
         {%- for attr in signature %}
         {{attr.name}}: {{attr.dtype}} {% if 'Optional' in attr.dtype %}= None{% endif %},
