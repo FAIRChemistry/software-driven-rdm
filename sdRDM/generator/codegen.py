@@ -20,7 +20,15 @@ class DataTypes(Enum):
     float = ("float", None)
     int = ("int", None)
     posfloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
+    PositiveFloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
     date = ("date", "from datetime import date")
+
+    @classmethod
+    def get_value_list(cls):
+        return [
+            member.value[0]
+            for member in cls.__members__.values()
+        ]
 
 
 class MermaidClass:
@@ -238,6 +246,9 @@ class MermaidClass:
         )
 
         for attribute, add_class in self.adders.items():
+
+            if add_class in DataTypes.get_value_list():
+                continue
 
             # Fetch the target class
             add_class = classes[add_class]

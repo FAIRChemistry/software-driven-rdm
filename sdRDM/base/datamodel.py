@@ -50,10 +50,6 @@ class DataModel(pydantic.BaseModel):
         cls_name = camel_to_snake(cls.__name__)
         obj = dict(xmltodict.parse(xml_string, force_list=True))
 
-        print(obj)
-
-        print("RESULT", change_dict_keys(obj[cls.__name__][0], camel_to_snake))
-
         return cls.parse_obj(change_dict_keys(obj, camel_to_snake)[cls_name][0])
 
     @classmethod

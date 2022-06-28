@@ -123,7 +123,6 @@ def _extract_attributes_from_tag(tags: Tag):
     tags = list(filter(lambda elem: r"\n" not in repr(elem), tags))
 
     for tag in tags:
-
         if tag.find("strong"):
 
             if "attribute" in locals():
@@ -137,6 +136,7 @@ def _extract_attributes_from_tag(tags: Tag):
             attribute = {"name": name, "required": required}
 
         else:
+
             config, content = tag.contents[0].split(":")
             attribute[config.lower().strip()] = content.strip()
 
