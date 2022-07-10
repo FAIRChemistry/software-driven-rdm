@@ -2,6 +2,8 @@
 from .{{class.fname}} import {{class.name}}
 {%- endfor %}
 
+{% if docstring is not none %}__doc__ = "{{docstring}}"{% endif %}
+
 __all__ = [
     {%- for class in classes %}
     "{{class.name}}",

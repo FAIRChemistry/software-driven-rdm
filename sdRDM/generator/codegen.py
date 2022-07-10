@@ -25,10 +25,7 @@ class DataTypes(Enum):
 
     @classmethod
     def get_value_list(cls):
-        return [
-            member.value[0]
-            for member in cls.__members__.values()
-        ]
+        return [member.value[0] for member in cls.__members__.values()]
 
 
 class MermaidClass:
@@ -335,7 +332,7 @@ class MermaidClass:
 
 
 def write_module(
-    schema: str, descriptions: str, out: str, is_single: bool = False
+    schema: str, descriptions_path: str, out: str, is_single: bool = False
 ) -> None:
     """Renders and writes a module based on a Mermaid schema
 
@@ -356,7 +353,7 @@ def write_module(
         path = out
     else:
         path = os.path.join(out, os.path.basename(schema).split(".")[0])
-    descriptions = json.loads(open(descriptions).read())
+    descriptions: Dict = json.loads(open(descriptions_path).read())
     os.makedirs(path, exist_ok=True)
 
     # (1) Get class definitions
@@ -371,7 +368,9 @@ def write_module(
     # (3) Finally, write the __init__ file
     init_path = os.path.join(path, "__init__.py")
     with open(init_path, "w") as f:
-        module_init = render_dunder_init(classes=class_defs)
+        module_init = render_dunder_init(
+            classes=class_defs, module_doc=descriptions.get("docstring")
+        )
         f.write(module_init)
 
     subprocess.run([sys.executable, "-m", "black", "-q", init_path])
@@ -481,15 +480,16 @@ def _write_dependent_classes(tree: dict, classes: dict, dirpath: str, inherit=No
             cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
 
             _render_class(sub_class, dirpath, inherit=None, classes=classes)
-            used_classes.append(sub_class)
+            used_classes.append(sub_class.name)
 
         # Finally, render the given class
-        _render_class(cls_obj, dirpath, inherit, classes=classes)
+        if cls_name not in used_classes:
+            _render_class(cls_obj, dirpath, inherit, classes=classes)
         used_classes.append(cls_name)
 
         # Repeat process for sub-classes
         if sub_cls:
-            _write_dependent_classes(
+            used_classes += _write_dependent_classes(
                 tree=sub_cls, classes=classes, dirpath=dirpath, inherit=cls_obj
             )
 
@@ -515,7 +515,7 @@ def _render_class(cls_obj, dirpath, inherit, classes):
     subprocess.run([sys.executable, "-m", "black", "-q", path])
 
 
-def render_dunder_init(classes: dict):
+def render_dunder_init(classes: dict, module_doc):
     """Renders the __init__ file of the module"""
 
     # Get the init template
@@ -524,5 +524,6 @@ def render_dunder_init(classes: dict):
     )
 
     return init_template.render(
-        classes=sorted(classes.values(), key=lambda cls: cls.fname)
+        classes=sorted(classes.values(), key=lambda cls: cls.fname),
+        docstring=module_doc,
     )

@@ -1,172 +1,225 @@
-import jinja2
-import json
-import markdown
-import os
 import re
+import os
 
-from bs4 import BeautifulSoup
-from bs4.element import Tag
-from importlib import resources as pkg_resources
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import Dict, List
 
-from sdRDM.generator import templates as jinja_templates
 from sdRDM.generator.codegen import DataTypes
+from sdRDM.generator.abstractparser import SchemaParser
+
+MODULE_PATTERN = r"^#{1} "
+OBJECT_PATTERN = r"^#{2,3}"
+ATTRIBUTE_PATTERN = r"- __([A-Za-z\_]*)(\*?)__"
+OPTION_PATTERN = r"([A-Za-z\_]*)\s?\:\s(.*)?"
+SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
+OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
+
+MANDATORY_OPTIONS = ["description", "type"]
 
 
-def parse_markdown(path: str, out: str):
-    """
-    Converts a markdown specification file to a Mermaid Class Definition and metadata that
-    in turn can be used to generate an API from.
+class ValidatorState(Enum):
 
-    Args:
-        path (str): Path to the Markdown file
-        out (str): Destination of the resulting Mermaid and Metadata JSON file
-    """
-
-    name, definitions, inherits, soup = extract_classes_from_markdown(path)
-    compositions = construct_class_definitions(definitions, soup)
-    template = jinja2.Template(
-        pkg_resources.read_text(jinja_templates, "mermaid_class.jinja2")
-    )
-    mermaid_string = template.render(
-        inherits=inherits, compositions=compositions, classes=definitions.values()
-    )
-
-    # Create dirs if not already created
-    os.makedirs(out, exist_ok=True)
-
-    # Set paths for each file
-    mermaid_path = os.path.join(out, f"{name}.md")
-    metadata_path = os.path.join(out, f"{name}_metadata.json")
-
-    with open(mermaid_path, "w") as file:
-        file.write(mermaid_string)
-
-    with open(metadata_path, "w") as file:
-        file.write(write_metadata(definitions))
-
-    return mermaid_path, metadata_path
+    NEW_MODULE = auto()
+    INSIDE_MODULE = auto()
+    NEW_OBJECT = auto()
+    INSIDE_OBJECT = auto()
+    INSIDE_ATTRIBUTE = auto()
+    NEW_ATTRIBUTE = auto()
+    END_OF_FILE = auto()
+    IDLE = auto()
 
 
-def extract_classes_from_markdown(path: str):
-    """Extracts classes from a markdown file using BeautifulSoup"""
+@dataclass
+class MarkdownParser(SchemaParser):
 
-    # Convert markdown to HTML
-    html = markdown.markdown(open(path).read())
-    soup = BeautifulSoup(html, "html.parser")
-    module_name = os.path.basename(path).split(".")[0]
+    module_name: str = ""
+    state: ValidatorState = ValidatorState.IDLE
+    attr: Dict = field(default_factory=dict)
+    obj: Dict = field(default_factory=dict)
+    objs: List = field(default_factory=list)
+    inherits: List = field(default_factory=list)
+    compositions: List = field(default_factory=list)
 
-    # Bild a list of dependencies
-    cls_defs, inherits = {}, []
+    @classmethod
+    def parse(cls, path: str):
 
-    # Get all class tags
-    tags = soup.find_all("h3")
-
-    for tag in tags:
-
-        content = tag.contents
-        definition = {}
-
-        name = content[0].strip(" [")
-        definition["name"] = name
-        super_class = list(filter(lambda tag: isinstance(tag, Tag), content))
-
-        if super_class:
-            definition["super"] = super_class[0].contents[0]
-            inherits.append({"parent": definition["super"], "child": name})
-
-        cls_defs[name] = definition
-
-    return module_name, cls_defs, inherits, soup
-
-
-def construct_class_definitions(definitions, soup):
-    """Constructs class definitions based on the HTML that was previously constructed.
-
-    Args:
-        definitions (List[Dict]): Contains informations such as name and super classes.
-
-    Returns:
-        List[Dict]: Compositions present in the module.
-    """
-
-    compositions = []
-    for name, definition in definitions.items():
-        element = list(
-            filter(
-                lambda elem: name in repr(elem).split("[")[0] and elem.name == "h3",
-                soup,
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"File '{path}' does not exist. Please specify a valid file."
             )
-        )[0]
 
-        for tag in element.next_siblings:
-            if tag.name == "h3" and name not in repr(tag.contents).split("["):
-                break
-            elif tag.name == "p":
-                definition["docstring"] = tag.contents[0]
-            elif tag.name == "ul":
-                definition["attributes"] = _extract_attributes_from_tag(tag)
+        # Open the markdown file, clean it and set up the parser
+        markdown_f = open(path).readlines()
+        lines = [line.rstrip() for line in markdown_f if line.rstrip()]
+        parser = cls()
 
-        # Process compositions
-        for attribute in definition["attributes"]:
-            if attribute["type"] not in DataTypes.__members__:
-                compositions.append(
-                    {"module": attribute["type"], "container": definition["name"]}
+        # Perform parsing
+        for index, line in enumerate(lines):
+            if bool(re.match(MODULE_PATTERN, line)):
+                parser.state = ValidatorState.NEW_MODULE
+
+            elif bool(re.match(OBJECT_PATTERN, line)):
+                parser.state = ValidatorState.NEW_OBJECT
+
+            elif bool(re.match(ATTRIBUTE_PATTERN, line)):
+                parser.state = ValidatorState.NEW_ATTRIBUTE
+
+            elif re.findall(OPTION_PATTERN, line):
+                parser.state = ValidatorState.INSIDE_ATTRIBUTE
+
+            parser.parse_line(line, index)
+
+            if index == len(lines) - 1:
+                parser.state = ValidatorState.END_OF_FILE
+
+        return parser
+
+    def parse_line(self, line: str, index: int):
+
+        if self.state is ValidatorState.NEW_MODULE:
+            # Parses name whenever a new module is encountered
+            # Sets state to INSIDE_MODULE to catch the docstring
+
+            self.module_name = line.replace("#", "").strip()
+            self.state = ValidatorState.INSIDE_MODULE
+
+        elif self.state is ValidatorState.INSIDE_MODULE:
+            # Catches the docstring of the module
+
+            self.module_docstring = line.strip()
+
+        elif self.state is ValidatorState.NEW_OBJECT:
+            # New objects will trigger the following workflow
+            #
+            # (0) Finalize previous objects for intermediate ones
+            # (1) Reset object an attributes
+            # (2) Gather the object name
+            # (3) Set Parser state to INSIDE_OBJECT
+
+            # Add the last attribute and object
+            self._add_attribute_to_obj()
+            if self.obj:
+                self.objs.append(self.obj.copy())
+
+            # Reset object and attributes
+            self.obj = {"attributes": []}
+            self.attr = {}
+
+            # Parse new object
+            self._parse_object_name(line, index)
+
+            # Set state to inside an object
+            self.state = ValidatorState.INSIDE_OBJECT
+
+        elif self.state is ValidatorState.INSIDE_OBJECT:
+            # Catches the docstring of the object
+
+            if line.strip() and self.obj:
+                self.obj["docstring"] = line.strip()
+
+        elif self.state is ValidatorState.INSIDE_ATTRIBUTE:
+            # Parses a line containing attribute options
+            # Example: 'Type: string' or 'xml: attribute'
+
+            self._parse_attribute_part(line)
+
+        elif self.state is ValidatorState.NEW_ATTRIBUTE:
+            # Whenever a new atribute is encountered the
+            # following steps are executed
+            #
+            # (1) Parse possible compositions and foreign types
+            # (2) Add the attribute to the object --> Triggers checks for mandatory options
+            # (3) Sets up a new attribute that will be filled with options
+
+            self._check_compositions()
+            self._add_attribute_to_obj()
+            self._set_up_new_attribute(line)
+
+        elif self.state is ValidatorState.END_OF_FILE:
+            # When the file has ende, usually there will be a "leftover"
+            # attribute. This will be addd here and the object put into
+            # the list of all objects from the module
+
+            self.obj["attributes"].append(self.attr.copy())
+            self.objs.append(self.obj.copy())
+
+    def _parse_object_name(self, line: str, index: int):
+        """Checks and parses the object (### ObjectName) for a name and possible inheritance."""
+
+        name = re.findall(OBJECT_NAME_PATTERN, line)[0]
+        parent = re.findall(SUPER_PATTERN, line)
+
+        if not name:
+            raise ValueError(
+                "".join(
+                    [
+                        f"No object name avalaible at \033[1mline {index}\033[0m. ",
+                        f"Please make sure to enter objects by using the following: \033[1m### ObjectName\033[0m",
+                    ]
                 )
-
-    return compositions
-
-
-def _extract_attributes_from_tag(tags: Tag):
-    """Extracts attibutes from a <ul> element"""
-
-    attributes = []
-    tags = list(filter(lambda elem: r"\n" not in repr(elem), tags))
-
-    for tag in tags:
-        if tag.find("strong"):
-
-            if "attribute" in locals():
-                attributes.append(attribute)
-
-            attr_pattern = re.compile(r"([a-zA-Z\_]*)(\*?)")
-            raw_name = tag.find("strong").contents[0]
-
-            # Get name and required of the attribute
-            name, required = attr_pattern.findall(raw_name)[0]
-            attribute = {"name": name, "required": required}
-
+            )
         else:
+            self.obj["name"] = name
 
-            config, content = tag.contents[0].split(":")
-            attribute[config.lower().strip()] = content.strip()
+        if parent:
+            self.inherits.append({"parent": parent[0], "child": self.obj["name"]})
 
-    # Add the last one
-    attributes.append(attribute)
+    def _parse_attribute_part(self, line):
+        """Extracts the key value relation of an attribute option (e.g. 'Type : string')"""
+        key, value = re.findall(OPTION_PATTERN, line)[0]
+        self.attr[key.lower()] = value
 
-    return attributes
+    def _check_compositions(self):
+        """Checks for composition patterns and non-native types"""
+        if not self.attr.get("type"):
+            return None
 
+        dtype = self.attr["type"]
+        if dtype not in DataTypes.__members__:
+            self.compositions.append({"module": dtype, "container": self.obj["name"]})
 
-def write_metadata(definitions) -> str:
-    metadata = definitions.copy()
-    for module, item in metadata.items():
-        attr_meta = {}
-        for attr in item["attributes"]:
+    def _add_attribute_to_obj(self):
+        """Adds an attribute to an object only IF the mandatory fields are given.
 
-            # Build new dictionary w/o mermaid attrs
-            attr_name = attr["name"]
-            mermaid_keys = [
-                "required",
-                "type",
-                "name",
-            ]
-            attr_meta[attr_name] = {
-                key: item for key, item in attr.items() if key not in mermaid_keys
-            }
+        This method will perform a content checkup that includes all mandatory
+        fields such as 'Type' and 'Description' without which a code generation
+        is infeasible. Raises an error with report if tests fail.
+        """
 
-        metadata[module] = {"attributes": attr_meta, "docstring": item.get("docstring")}
+        if self._check_mandatory_options() and self.attr:
+            self.obj["attributes"].append(self.attr.copy())
+        elif self.attr:
+            missing_fields = list(
+                filter(lambda option: option not in self.attr.keys(), MANDATORY_OPTIONS)
+            )
+            raise ValueError(
+                "".join(
+                    [
+                        f"Missing mandatory fields for attribute \033[1m{self.attr['name']}\033[0m ",
+                        f"in object \033[1m{self.obj['name']}\033[0m: {missing_fields}",
+                    ]
+                )
+            )
 
-    return json.dumps(metadata, indent=2)
+        self.attr = {}
 
+    def _check_mandatory_options(self) -> bool:
+        """Checks if an attribute covers all mandatory fields/options"""
+        if not self.attr:
+            return False
+        return all(option in self.attr.keys() for option in MANDATORY_OPTIONS)
 
-if __name__ == "__main__":
-    parse_markdown("specifications/biocatalyst.md", "test")
+    def _set_up_new_attribute(self, line):
+        """Sets up a new attribute based on the Markdown definition '- __Name__'."""
+        name, required = re.findall(ATTRIBUTE_PATTERN, line)[0]
+        self.attr["name"] = name
+        self.attr["required"] = required
+
+    def __setattr__(self, key, value):
+        """Overload of the set attribute method to signalize the end of the file"""
+        if value is ValidatorState.END_OF_FILE:
+            self._add_attribute_to_obj()
+            self.objs.append(self.obj.copy())
+
+        super().__setattr__(key, value)

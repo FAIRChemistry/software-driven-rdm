@@ -2,11 +2,14 @@ import typer
 import os
 import glob
 
-from sdRDM.generator import write_module, parse_markdown
+from typing import Dict
+
+from sdRDM.generator import write_module, generate_schema, Format
+from sdRDM.generator.abstractparser import SchemaParser
 
 app = typer.Typer()
 
-type_mapping = {"md": parse_markdown}
+FORMAT_MAPPING: Dict[str, Format] = {"md": Format.MARKDOWN}
 
 
 @app.command()
@@ -33,17 +36,17 @@ def generate(
     for file in specifications:
         extension = os.path.basename(file).split(".")[-1]
 
-        if extension not in type_mapping:
+        if extension not in FORMAT_MAPPING:
             pass
 
         # Generate schemata
-        type_fun = type_mapping[extension]
-        mermaid_path, metadata_path = type_fun(file, schema_path)
+        format_type = FORMAT_MAPPING[extension]
+        mermaid_path, metadata_path = generate_schema(file, schema_path, format_type)
 
         # Generate the API
         write_module(
             schema=mermaid_path,
-            descriptions=metadata_path,
+            descriptions_path=metadata_path,
             out=core_path,
             is_single=is_single,
         )
