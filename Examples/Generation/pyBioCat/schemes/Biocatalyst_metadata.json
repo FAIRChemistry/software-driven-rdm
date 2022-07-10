@@ -1,0 +1,106 @@
+{
+  "docstring": "Do fugiat mollit sit duis deserunt dolor ex. Quis do occaecat dolor consectetur nostrud occaecat eu sint aute. Laboris commodo laborum proident id laboris cupidatat amet commodo tempor laborum sint occaecat mollit velit.",
+  "BiocatalystBase": {
+    "attributes": {
+      "name": {
+        "description": "Name of the biocatalyst"
+      },
+      "ecnumber": {
+        "description": "Code used to determine the family of a protein."
+      },
+      "reaction": {
+        "description": "Reaction in which the biocatalyst is activ."
+      },
+      "sequence": {
+        "description": "Amino acid sequence of the biocatalyst."
+      },
+      "host_organism": {
+        "description": "Organism used for expression."
+      },
+      "source_organism": {
+        "description": "Organism the biocatalyst originates from."
+      },
+      "post_translational_mods": {
+        "description": "Post-translational modifications that were made."
+      },
+      "production_procedure": {
+        "description": "Procedure on how the biocatalyst was synthesized/expressed."
+      },
+      "isoenzyme": {
+        "description": "Isoenzyme of the biocatalyst."
+      },
+      "tissue": {
+        "description": "Tissue in which the reaction is happening."
+      },
+      "localisation": {
+        "description": "Localisation of the biocatalyst."
+      }
+    },
+    "docstring": "Do fugiat mollit sit duis deserunt dolor ex. Quis do occaecat dolor consectetur nostrud occaecat eu sint aute. Laboris commodo laborum proident id laboris cupidatat amet commodo tempor laborum sint occaecat mollit velit."
+  },
+  "SolubleBiocatalyst": {
+    "attributes": {
+      "storage": {
+        "multiple": "True",
+        "description": "How the soluble biocatalyst has been stored."
+      },
+      "concentration": {
+        "description": "Concentration of the biocatalyst."
+      },
+      "concentration_det_method": {
+        "description": "Method on how the concentration has been determined."
+      }
+    },
+    "docstring": "Irure dolore dolore non sit adipisicing anim commodo est laborum. Proident do do velit eiusmod. Amet aliquip mollit aliqua voluptate eu. Proident ut id Lorem fugiat fugiat cillum ex. Aliqua excepteur laborum quis qui minim esse. Proident magna nostrud pariatur eiusmod nisi excepteur cillum sunt ad deserunt sint culpa ut proident. Esse ex qui occaecat aliquip ipsum exercitation amet ullamco laborum ea commodo exercitation do."
+  },
+  "ImmobilisedCatalyst": {
+    "attributes": {
+      "purification": {
+        "description": "How the biocatalyst was purified."
+      },
+      "immobilisation_procedure": {
+        "description": "How the biocatalyst was immobilised"
+      }
+    },
+    "docstring": "Laboris aliquip cupidatat id aliqua magna. Minim consectetur enim dolor qui laborum aute nisi. Sit quis aute aliquip labore anim quis consequat consequat anim nulla consequat in Lorem. Fugiat cupidatat nostrud nostrud enim in. Proident in fugiat excepteur elit quis laboris nostrud veniam cillum elit culpa. Excepteur qui irure ipsum eu. Officia exercitation ut dolor anim nulla Lorem ut incididunt amet aute do."
+  },
+  "CrudeCellExtract": {
+    "attributes": {
+      "cell_disruption_process": {
+        "description": "Method used to disrupt cells."
+      },
+      "purity_determination": {
+        "description": "Method that was used to determine the purity of the extract."
+      }
+    },
+    "docstring": "Fugiat fugiat nulla mollit officia exercitation adipisicing et labore proident nostrud proident fugiat. Voluptate esse mollit nulla tempor proident laborum et voluptate eu sit commodo. Elit consequat consectetur excepteur nulla irure qui. Proident labore esse ipsum Lorem eiusmod labore tempor consequat est esse deserunt. Fugiat aliqua sit tempor incididunt qui."
+  },
+  "WholeCell": {
+    "attributes": {
+      "harvesting_method": {
+        "description": "How the cells were harvested."
+      }
+    },
+    "docstring": "Fugiat dolor enim aute dolore tempor consectetur commodo commodo occaecat pariatur aute. Incididunt aliqua do ipsum proident do aute cupidatat tempor voluptate mollit eiusmod sunt. Quis duis mollit anim ex nulla enim minim. Incididunt qui commodo cupidatat occaecat dolor ipsum excepteur sint fugiat minim. Enim ipsum adipisicing ut proident enim sunt non."
+  },
+  "StorageConditions": {
+    "attributes": {
+      "temperature": {
+        "description": "Temperature of thet storage"
+      },
+      "storing_start": {
+        "description": "Date when catalyst was put into storage."
+      },
+      "removing": {
+        "description": "Date when catalyst was removed from storage."
+      },
+      "rethawing": {
+        "description": "Date when catalyst was rethawed from storage."
+      },
+      "thawing_process": {
+        "description": "Method of thawing."
+      }
+    },
+    "docstring": "Ut aute ut Lorem veniam proident. Laborum do nisi ut eiusmod in nostrud proident. Commodo nulla ipsum commodo culpa aliqua dolore. Labore exercitation eiusmod ea do tempor. Eiusmod enim mollit sit enim eiusmod anim excepteur veniam culpa minim dolor. Labore aliquip sint laboris quis mollit nostrud cillum dolore elit sunt pariatur aliquip."
+  }
+}
