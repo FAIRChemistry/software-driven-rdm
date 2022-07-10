@@ -73,7 +73,7 @@ print(group.yaml())
 
 ### 🧬 Code Generation
 
-Software-driven RDM is also capable of generating Python APIs from __Markdown__ specifications. For this, please inspect the example found here. In this example, a Python API for a *Biocatalyst* will be generated from its corresponding [specification]. Aside from a functional [API] this will also result in a [class diagram] to understand the workings of the data model.
+Software-driven RDM is also capable of generating Python APIs from __Markdown__ specifications. For this, please inspect the example found [here](https://github.com/JR-1991/software-driven-rdm/tree/master/Examples/Generation). In this example, a Python API for a *Biocatalyst* will be generated from its corresponding [specification](https://github.com/JR-1991/software-driven-rdm/blob/master/Examples/Generation/specifications/biocatalyst.md). Aside from a functional [API](https://github.com/JR-1991/software-driven-rdm/tree/master/Examples/Generation/pyBioCat) this will also result in a [class diagram](https://github.com/JR-1991/software-driven-rdm/blob/master/Examples/Generation/pyBioCat/schemes/Biocatalyst.md) to understand the workings of the data model.
 
 ## 📖 Documentation and more examples
 
