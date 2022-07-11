@@ -455,7 +455,14 @@ def _write_lone_classes(classes: dict, dirpath: str, inherit, used_classes):
         # First, check if all arbitrary types exist
         # if not render them to a file
         for sub_class in cls_obj.sub_classes:
-            sub_class = classes[sub_class]
+
+            try:
+                sub_class = classes[sub_class]
+            except KeyError:
+                raise ValueError(
+                    f"Cant locate object \033[1m{sub_class}\033[0m in specifications. Please make sure to include this object in your file."
+                )
+
             cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
 
             if sub_class not in used_classes:
