@@ -4,9 +4,9 @@ import yaml
 import deepdish as dd
 import pydantic
 
+from anytree import RenderTree
 
-from sdRDM.tools.xmltools import XMLWriter
-from sdRDM.tools.utils import camel_to_snake, change_dict_keys
+from sdRDM.linking.treeutils import build_guide_tree
 
 
 class DataModel(pydantic.BaseModel):
@@ -47,12 +47,16 @@ class DataModel(pydantic.BaseModel):
 
     @classmethod
     def from_xml_string(cls, xml_string: str):
-        cls_name = camel_to_snake(cls.__name__)
-        obj = dict(xmltodict.parse(xml_string, force_list=True))
-
-        return cls.parse_obj(change_dict_keys(obj, camel_to_snake)[cls_name][0])
+        raise NotImplementedError()
 
     @classmethod
     def from_hdf5(cls, path: str):
         """Reads a hdf5 file from path into the class model"""
         return cls.from_dict(dd.io.load(path))
+
+    def create_tree(self):
+        """Builds a tree structure from the class definition and all decending types."""
+
+        tree = build_guide_tree(self.__class__)
+
+        return tree, RenderTree(tree)
