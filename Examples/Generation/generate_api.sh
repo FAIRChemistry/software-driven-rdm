@@ -16,4 +16,4 @@
 #
 # Jan Range - 10/Jul/2022
 
-softdata generate --path ./specifications --out . --name pyBioCat
+sdrdm generate --path ./specifications --out . --name pyBioCat

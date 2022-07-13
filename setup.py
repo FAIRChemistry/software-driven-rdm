@@ -8,7 +8,7 @@ setup(
     author_email="jan.range@simtech.uni-stuttgart.de",
     license="MIT License",
     packages=setuptools.find_packages(),
-    entry_points={"console_scripts": ["softdata=sdRDM.cli:app"]},
+    entry_points={"console_scripts": ["sdrdm=sdRDM.cli:app"]},
     include_package_data=True,
     install_requires=[
         "pydantic",
@@ -21,6 +21,7 @@ setup(
         "black",
         "typer",
         "pyyaml",
+        "anytree"
     ],
     extras_require={"test": ["pytest"]},
 )
