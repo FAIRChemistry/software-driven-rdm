@@ -38,6 +38,14 @@ class DataModel(pydantic.BaseModel):
         dd.io.save(path, self.dict())
 
     @classmethod
+    def create_tree(cls):
+        """Builds a tree structure from the class definition and all decending types."""
+
+        tree = build_guide_tree(cls)
+
+        return tree, RenderTree(tree)
+
+    @classmethod
     def from_dict(cls, obj: dict):
         return cls.parse_obj(obj)
 
@@ -53,10 +61,3 @@ class DataModel(pydantic.BaseModel):
     def from_hdf5(cls, path: str):
         """Reads a hdf5 file from path into the class model"""
         return cls.from_dict(dd.io.load(path))
-
-    def create_tree(self):
-        """Builds a tree structure from the class definition and all decending types."""
-
-        tree = build_guide_tree(self.__class__)
-
-        return tree, RenderTree(tree)

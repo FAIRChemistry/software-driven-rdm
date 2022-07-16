@@ -1,5 +1,7 @@
 from .nodes import AttributeNode, ClassNode
 
+DEFAULT_MAPPINGS = {"list": list, "dict": dict}
+
 
 def build_guide_tree(obj, parent=None, outer=None):
     """Creates a binary tree representation from the underlying data model.
@@ -25,7 +27,14 @@ def build_guide_tree(obj, parent=None, outer=None):
         inner_type = field.type_
         outer_type = field.outer_type_.__dict__.get("__origin__")
 
-        current_parent = AttributeNode(name, parent=obj_tree, outer_type=outer_type)
+        if outer_type and outer_type.__module__ == "builtins":
+            value = DEFAULT_MAPPINGS[outer_type.__name__]()
+        else:
+            value = None
+
+        current_parent = AttributeNode(
+            name, parent=obj_tree, outer_type=outer_type, value=value
+        )
 
         if inner_type.__module__ != "builtins" and hasattr(inner_type, "__fields__"):
             build_guide_tree(inner_type, current_parent, outer=outer_type)
