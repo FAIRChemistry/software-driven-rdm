@@ -21,7 +21,7 @@ setup(
         "black",
         "typer",
         "pyyaml",
-        "anytree"
+        "anytree",
     ],
-    extras_require={"test": ["pytest"]},
+    extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
