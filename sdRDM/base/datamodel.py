@@ -6,7 +6,7 @@ import pydantic
 
 from anytree import RenderTree
 
-from sdRDM.linking.treeutils import build_guide_tree
+from sdRDM.linking.utils import build_guide_tree
 
 
 class DataModel(pydantic.BaseModel):
