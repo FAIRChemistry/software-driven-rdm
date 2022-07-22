@@ -532,5 +532,5 @@ def render_dunder_init(classes: dict, module_doc):
 
     return init_template.render(
         classes=sorted(classes.values(), key=lambda cls: cls.fname),
-        docstring=module_doc,
+        docstring=module_doc.replace("/", ""),
     )

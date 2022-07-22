@@ -79,10 +79,13 @@ class MarkdownParser(SchemaParser):
             parser.parse_line(line, index)
 
             if index == len(lines) - 1:
+                # End of the file is reached
+                # doctsring will be merged into a single string
+                parser.obj["docstring"] = "\n".join(parser.obj["docstring"]).strip()
                 parser.state = State.END_OF_FILE
 
         # Concatenate docstring
-        parser.module_docstring = "\n".join(parser.module_docstring)
+        parser.module_docstring = "\n".join(parser.module_docstring).strip()
 
         return parser
 
