@@ -3,7 +3,7 @@ import os
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from sdRDM.generator.codegen import DataTypes
 from sdRDM.generator.abstractparser import SchemaParser
@@ -18,7 +18,7 @@ OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
 MANDATORY_OPTIONS = ["description", "type"]
 
 
-class ValidatorState(Enum):
+class State(Enum):
 
     NEW_MODULE = auto()
     INSIDE_MODULE = auto()
@@ -34,12 +34,13 @@ class ValidatorState(Enum):
 class MarkdownParser(SchemaParser):
 
     module_name: str = ""
-    state: ValidatorState = ValidatorState.IDLE
+    state: State = State.IDLE
     attr: Dict = field(default_factory=dict)
     obj: Dict = field(default_factory=dict)
     objs: List = field(default_factory=list)
     inherits: List = field(default_factory=list)
     compositions: List = field(default_factory=list)
+    module_docstring: Union[List[str], str] = field(default_factory=list)
 
     @classmethod
     def parse(cls, path: str):
@@ -51,45 +52,58 @@ class MarkdownParser(SchemaParser):
 
         # Open the markdown file, clean it and set up the parser
         markdown_f = open(path).readlines()
-        lines = [line.rstrip() for line in markdown_f if line.rstrip()]
+        # lines = [line.rstrip() for line in markdown_f if line.rstrip()]
+        lines = markdown_f
         parser = cls()
 
         # Perform parsing
         for index, line in enumerate(lines):
-            if bool(re.match(MODULE_PATTERN, line)):
-                parser.state = ValidatorState.NEW_MODULE
+            if not line.strip():
+                continue
 
-            elif bool(re.match(OBJECT_PATTERN, line)):
-                parser.state = ValidatorState.NEW_OBJECT
+            if bool(re.match(MODULE_PATTERN, line)):
+                # Used to start the parsing process
+                parser.state = State.NEW_MODULE
+            elif parser.state == State.IDLE:
+                continue
+
+            if bool(re.match(OBJECT_PATTERN, line)):
+                parser.state = State.NEW_OBJECT
 
             elif bool(re.match(ATTRIBUTE_PATTERN, line)):
-                parser.state = ValidatorState.NEW_ATTRIBUTE
+                parser.state = State.NEW_ATTRIBUTE
 
             elif re.findall(OPTION_PATTERN, line):
-                parser.state = ValidatorState.INSIDE_ATTRIBUTE
+                parser.state = State.INSIDE_ATTRIBUTE
 
             parser.parse_line(line, index)
 
             if index == len(lines) - 1:
-                parser.state = ValidatorState.END_OF_FILE
+                parser.state = State.END_OF_FILE
+
+        # Concatenate docstring
+        parser.module_docstring = "\n".join(parser.module_docstring)
 
         return parser
 
     def parse_line(self, line: str, index: int):
 
-        if self.state is ValidatorState.NEW_MODULE:
+        if self.state is State.NEW_MODULE:
             # Parses name whenever a new module is encountered
             # Sets state to INSIDE_MODULE to catch the docstring
 
             self.module_name = line.replace("#", "").strip()
-            self.state = ValidatorState.INSIDE_MODULE
+            self.state = State.INSIDE_MODULE
 
-        elif self.state is ValidatorState.INSIDE_MODULE:
+        elif self.state is State.INSIDE_MODULE:
             # Catches the docstring of the module
 
-            self.module_docstring = line.strip()
+            if not hasattr(self, "module_docstring"):
+                self.module_docstring = [line]
+            else:
+                self.module_docstring.append(line)
 
-        elif self.state is ValidatorState.NEW_OBJECT:
+        elif self.state is State.NEW_OBJECT:
             # New objects will trigger the following workflow
             #
             # (0) Finalize previous objects for intermediate ones
@@ -98,8 +112,11 @@ class MarkdownParser(SchemaParser):
             # (3) Set Parser state to INSIDE_OBJECT
 
             # Add the last attribute and object
+            self._check_compositions()
             self._add_attribute_to_obj()
             if self.obj:
+                if "docstring" in self.obj:
+                    self.obj["docstring"] = "\n".join(self.obj["docstring"])
                 self.objs.append(self.obj.copy())
 
             # Reset object and attributes
@@ -110,21 +127,25 @@ class MarkdownParser(SchemaParser):
             self._parse_object_name(line, index)
 
             # Set state to inside an object
-            self.state = ValidatorState.INSIDE_OBJECT
+            self.state = State.INSIDE_OBJECT
 
-        elif self.state is ValidatorState.INSIDE_OBJECT:
+        elif self.state is State.INSIDE_OBJECT:
             # Catches the docstring of the object
 
             if line.strip() and self.obj:
-                self.obj["docstring"] = line.strip()
 
-        elif self.state is ValidatorState.INSIDE_ATTRIBUTE:
+                if "docstring" in self.obj:
+                    self.obj["docstring"].append(line)
+                else:
+                    self.obj["docstring"] = [line]
+
+        elif self.state is State.INSIDE_ATTRIBUTE:
             # Parses a line containing attribute options
             # Example: 'Type: string' or 'xml: attribute'
 
             self._parse_attribute_part(line)
 
-        elif self.state is ValidatorState.NEW_ATTRIBUTE:
+        elif self.state is State.NEW_ATTRIBUTE:
             # Whenever a new atribute is encountered the
             # following steps are executed
             #
@@ -136,7 +157,7 @@ class MarkdownParser(SchemaParser):
             self._add_attribute_to_obj()
             self._set_up_new_attribute(line)
 
-        elif self.state is ValidatorState.END_OF_FILE:
+        elif self.state is State.END_OF_FILE:
             # When the file has ende, usually there will be a "leftover"
             # attribute. This will be addd here and the object put into
             # the list of all objects from the module
@@ -167,6 +188,7 @@ class MarkdownParser(SchemaParser):
 
     def _parse_attribute_part(self, line):
         """Extracts the key value relation of an attribute option (e.g. 'Type : string')"""
+        line = line.strip()
         key, value = re.findall(OPTION_PATTERN, line)[0]
         self.attr[key.lower()] = value
 
@@ -206,9 +228,11 @@ class MarkdownParser(SchemaParser):
 
     def _check_mandatory_options(self) -> bool:
         """Checks if an attribute covers all mandatory fields/options"""
-        if not self.attr:
-            return False
-        return all(option in self.attr.keys() for option in MANDATORY_OPTIONS)
+        return (
+            all(option in self.attr.keys() for option in MANDATORY_OPTIONS)
+            if self.attr
+            else False
+        )
 
     def _set_up_new_attribute(self, line):
         """Sets up a new attribute based on the Markdown definition '- __Name__'."""
@@ -218,7 +242,7 @@ class MarkdownParser(SchemaParser):
 
     def __setattr__(self, key, value):
         """Overload of the set attribute method to signalize the end of the file"""
-        if value is ValidatorState.END_OF_FILE:
+        if value is State.END_OF_FILE:
             self._add_attribute_to_obj()
             self.objs.append(self.obj.copy())
 
