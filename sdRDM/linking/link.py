@@ -1,5 +1,6 @@
 import importlib
-from typing import Dict
+import inspect
+from typing import Dict, List
 
 from sdRDM.linking.utils import build_guide_tree
 from anytree import findall
@@ -91,7 +92,7 @@ def _convert_tree(obj, roots, option, obj_index=0):
         field_options = field.field_info.extra
         value = getattr(obj, attribute)
 
-        if isinstance(value, list):
+        if isinstance(value, list) and _only_classes(value):
             wrap_type = _get_wrapping_type(field)
             if wrap_type == "list":
                 for i, sub_obj in enumerate(value):
@@ -103,6 +104,11 @@ def _convert_tree(obj, roots, option, obj_index=0):
             _, root, *path = field_options[option].split(".")
             node = roots[root]
             _assign_primitive_data_to_node(path, node, value, index=obj_index)
+
+
+def _only_classes(value: List):
+    """Checks whether the content of a list are classes"""
+    return all(inspect.isclass(obj) for obj in value)
 
 
 def _assign_primitive_data_to_node(path, node, value, index=0):
