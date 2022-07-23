@@ -1,2 +1,2 @@
 from .codegen import write_module
-from .schemagen import generate_schema, Format
+from .schemagen import generate_schema
