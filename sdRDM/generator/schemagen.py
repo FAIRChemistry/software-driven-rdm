@@ -18,7 +18,7 @@ class Format(Enum):
 PARSER_MAPPING = {Format.MARKDOWN: MarkdownParser}
 
 
-def generate_schema(path: str, out: str, format: Format):
+def generate_schema(handle, out: str, format: Format):
     """
     Converts a markdown specification file to a Mermaid Class Definition and metadata that
     in turn can be used to generate an API from.
@@ -29,7 +29,7 @@ def generate_schema(path: str, out: str, format: Format):
     """
 
     # Set up and execute parser
-    parser: SchemaParser = PARSER_MAPPING[format].parse(path)
+    parser: SchemaParser = PARSER_MAPPING[format].parse(handle)
 
     template = jinja2.Template(
         pkg_resources.read_text(jinja_templates, "mermaid_class.jinja2")

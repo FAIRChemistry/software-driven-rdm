@@ -2,6 +2,8 @@
 {{import}}
 {% endfor %}
  
+from typing import Optional
+from pydantic import PrivateAttr
 {%- for import in from_imports %}
 {{import}}
 {%- endfor %}

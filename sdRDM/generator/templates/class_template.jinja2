@@ -1,6 +1,9 @@
 class {{name}}({% if inherit is not none %}
                 {{inherit.name}}
                 {% else %}sdRDM.DataModel{% endif %}):
+
+    {% if url is not none %}__url__: Optional[str] = PrivateAttr(default="{{url}}"){% endif %}
+    {% if commit is not none %}__commit__: Optional[str] = PrivateAttr(default="{{commit}}"){% endif %}
                 
     {% if docstring is not none %}"""{{ docstring }}"""{% endif %}
 

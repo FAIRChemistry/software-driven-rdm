@@ -1,11 +1,11 @@
 import re
-import os
+import io
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List, Union
 
-from sdRDM.generator.codegen import DataTypes
+from sdRDM.generator.mermaid import DataTypes
 from sdRDM.generator.abstractparser import SchemaParser
 
 MODULE_PATTERN = r"^#{1} "
@@ -40,18 +40,13 @@ class MarkdownParser(SchemaParser):
     objs: List = field(default_factory=list)
     inherits: List = field(default_factory=list)
     compositions: List = field(default_factory=list)
-    module_docstring: Union[List[str], str] = field(default_factory=list)
+    module_docstring: List[str] = field(default_factory=list)
 
     @classmethod
-    def parse(cls, path: str):
-
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                f"File '{path}' does not exist. Please specify a valid file."
-            )
+    def parse(cls, handle):
 
         # Open the markdown file, clean it and set up the parser
-        markdown_f = open(path).readlines()
+        markdown_f = handle.readlines()
         # lines = [line.rstrip() for line in markdown_f if line.rstrip()]
         lines = markdown_f
         parser = cls()
@@ -85,7 +80,7 @@ class MarkdownParser(SchemaParser):
                 parser.state = State.END_OF_FILE
 
         # Concatenate docstring
-        parser.module_docstring = "\n".join(parser.module_docstring).strip()
+        parser.module_docstring = "\n".join(parser.module_docstring).strip()  # type: ignore
 
         return parser
 
