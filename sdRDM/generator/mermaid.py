@@ -57,7 +57,7 @@ class MermaidClass:
             if multiple:
                 self.adders[name] = attr.get("dtype")
                 attr["dtype"] = f"List[{dtype}]"
-                attr["default_factory"] = "list"
+                attr["default_factory"] = "ListPlus"
                 attr["required"] = None
                 self.imports.add("from typing import List")
             elif not required:
@@ -102,7 +102,7 @@ class MermaidClass:
             attributes=attributes,
             docstring=self.docstring,
             url=url,
-            commit=commit
+            commit=commit,
         )
 
     def _render_attributes(self):
