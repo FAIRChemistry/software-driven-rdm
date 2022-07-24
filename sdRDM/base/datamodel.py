@@ -1,15 +1,18 @@
 import inspect
 import xmltodict
 import json
-import os
 import yaml
 import deepdish as dd
 import pydantic
+import warnings
 
-from anytree import RenderTree
-from pydantic import PrivateAttr
-from typing import Callable, Dict, Optional
+from anytree import RenderTree, Node
+from lxml import etree
+from pydantic import PrivateAttr, root_validator, validator
+from typing import Dict, Iterable, Optional, List
 
+from sdRDM.base.listplus import ListPlus
+from sdRDM.base.utils import build_xml
 from sdRDM.linking.link import convert_data_model_by_option
 from sdRDM.linking.utils import build_guide_tree
 from sdRDM.tools.gitutils import ObjectNode, build_library_from_git_specs
@@ -21,31 +24,93 @@ class DataModel(pydantic.BaseModel):
         validate_assignment = True
         use_enum_values = True
 
+    # * Private attributes
+    __node__: Optional[Node] = PrivateAttr(default=None)
+
+    # ! Getters
+    def get(self, path: str):
+        """Traverses the data model tree by a path and returns its content.
+
+        Args:
+            path (str): _description_
+        """
+
+        checkpoints = iter(path.split("/"))
+        print(self._traverse_data_model(checkpoints, self))
+
+    def _traverse_data_model(self, checkpoints: Iterable[str], obj):
+
+        try:
+            checkpoint = next(checkpoints)
+        except StopIteration:
+            return obj
+
+        if checkpoint.isdigit():
+            sub_obj = obj[int(checkpoint)]
+        else:
+            sub_obj = obj.__dict__.get(checkpoint)
+
+        return self._traverse_data_model(checkpoints, sub_obj)
+
     # ! Exporters
-    def dict(self):
+    def to_dict(self):
         data = super().dict(exclude_none=True)
-        data["__source__"] = {"url": self.__url__, "commit": self.__commit__}
+
+        # Convert all ListPlus items back to normal lists
+        # to stay compliant to PyDantic
+        self._convert_to_lists(data)
+
+        try:
+            data["__source__"] = {
+                "repo": self.__repo__,  # type: ignore
+                "commit": self.__commit__,  # type: ignore
+                "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
+            }  # type: ignore
+        except AttributeError:
+            warnings.warn(
+                "No 'URL' and 'Commit' specified. This model might not be re-usable."
+            )
 
         return data
 
+    def _convert_to_lists(self, data):
+        """Converts als ListPlus items back to lists."""
+        for key, value in data.items():
+            if isinstance(value, ListPlus):
+                data[key] = [self._check_and_convert_sub(element) for element in value]
+
+    def _check_and_convert_sub(self, element):
+        """Helper function used to trigger recursion on deeply nested lists."""
+        if element.__class__.__module__ == "builtins":
+            return element
+
+        return self._convert_to_lists(element)
+
     def json(self, indent: int = 2):
-        return json.dumps(self.dict(), indent=indent)
+        return json.dumps(self.to_dict(), indent=indent)
 
     def yaml(self):
         return yaml.dump(
-            self.dict(), Dumper=YAMLDumper, default_flow_style=False, sort_keys=True
+            self.to_dict(), Dumper=YAMLDumper, default_flow_style=False, sort_keys=True
         )
 
     def xml(self, to_string=True):
-        return xmltodict.unparse(
-            {self.__class__.__name__: self.dict()},
-            pretty=True,
-            indent="    ",
+        tree = build_xml(self)
+        tree.attrib.update(
+            {
+                "repo": self.__repo__,  # type: ignore
+                "commit": self.__commit__,  # type: ignore
+                "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
+            }
         )
+
+        return etree.tostring(
+            tree, pretty_print=True, xml_declaration=True, encoding="UTF-8"
+        ).decode("utf-8")
 
     def hdf5(self, path: str) -> None:
         """Writes the object instance to HDF5."""
-        dd.io.save(path, self.dict())
+        dd.io.save(path, self.to_dict())
 
     def convert(self, option: str):
         """
@@ -94,7 +159,50 @@ class DataModel(pydantic.BaseModel):
 
     # ! Dynamic initializers
     @classmethod
-    def from_git(cls, url: str, commit: Optional[str] = None):
+    def parse(cls, path: str):
+        """Reads an arbitrary format and infers the corresponding object model to load the data.
+
+        This function is used to open legacy files or any other file where the software
+        is not known. In addition, this function allows you to load any sdRDM capable
+        format without having to install a library.
+
+        Args:
+            path (str): Path to the file to load.
+        """
+
+        # Read the file
+        raw_dataset = open(path).read()
+
+        # Detect base
+        if cls._is_json(raw_dataset):
+            dataset = json.loads(raw_dataset)
+        else:
+            raise TypeError("Base format is unknown!")
+
+        # Check if there is a source reference
+        if "__source__" not in dataset:
+            raise ValueError("Source reference is missing!")
+
+        # Get source and build libary
+        url = dataset.get("__source__")["repo"]
+        commit = dataset.get("__source__")["commit"]
+        lib = cls.from_git(url=url, commit=commit)
+
+        # Use the internal librar to parse the file
+        return lib.from_dict(dataset)  # type: ignore
+
+    @staticmethod
+    def _is_json(json_string: str):
+        try:
+            json.loads(json_string)
+        except ValueError as e:
+            return False
+        return True
+
+    @classmethod
+    def from_git(
+        cls, url: str, commit: Optional[str] = None, import_modules: List[str] = []
+    ):
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -109,27 +217,33 @@ class DataModel(pydantic.BaseModel):
         # Build and import the library
         lib = build_library_from_git_specs(url=url, commit=commit)
 
+        # Get all classes present
+        classes = {
+            obj.__name__: ObjectNode(obj)
+            for obj in lib.__dict__.values()
+            if inspect.isclass(obj) and issubclass(obj, DataModel)
+        }
+
         # Find the corresponding root(s)
-        roots = cls._find_root_objects(lib)
+        roots = cls._find_root_objects(classes)
+
+        # Get all optional modules
+        modules = []
+        for module in import_modules:
+            modules.append(classes[module].cls)
 
         if len(roots) == 1:
-            return roots[0]
+            roots = roots[0]
 
-        return roots
+        return tuple([roots, *modules])
 
     @staticmethod
-    def _find_root_objects(lib: Callable):
+    def _find_root_objects(classes: Dict):
         """Parses a given library and returns the root object(s)
 
         Root objects are assumed to be objects that are not part of
         another class yet possess other objects/attributes.
         """
-
-        classes = {
-            cls.__name__: ObjectNode(cls)
-            for cls in lib.__dict__.values()
-            if inspect.isclass(cls) and issubclass(cls, DataModel)
-        }
 
         for definition in classes.values():
             for field in definition.cls.__fields__.values():
@@ -158,8 +272,7 @@ class DataModel(pydantic.BaseModel):
 
         dataset = Dataset()
         for block in blocks:
-            if block.dict(exclude_none=True):
-                dataset.add_metadatablock(block)
+            dataset.add_metadatablock(block)
 
         return dataset
 
@@ -174,3 +287,17 @@ class DataModel(pydantic.BaseModel):
     def visualize_tree(cls):
         _, render = cls.create_tree()
         print(render.by_attr("name"))
+
+    # ! Validators
+    @root_validator
+    def turn_into_extended_list(cls, values):
+        """Validator used to convert any list into a ListPlus."""
+
+        for field, value in values.items():
+            if isinstance(value, list):
+                values[field] = ListPlus(*value, in_setup=True)
+
+            if field == "id":
+                values[field] = str(value)
+
+        return values
