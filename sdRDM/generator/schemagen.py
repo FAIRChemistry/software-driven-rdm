@@ -78,8 +78,3 @@ def write_metadata(definitions, module_doc) -> str:
         }
 
     return json.dumps(module_objs, indent=2)
-
-
-if __name__ == "__main__":
-    print(os.getcwd())
-    generate_schema("specifications/biocatalyst.md", ".", Format.MARKDOWN)
