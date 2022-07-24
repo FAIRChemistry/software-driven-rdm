@@ -29,7 +29,7 @@ def generate(
     if not all([url, commit]):
         url, commit = None, None
 
-    generate_python_api(path=path, out=out, name=name)
+    generate_python_api(path=path, out=out, name=name, commit=commit, url=url)
 
 
 @app.command()
