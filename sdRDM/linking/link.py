@@ -108,7 +108,7 @@ def _convert_tree(obj, roots, option, obj_index=0):
 
 def _only_classes(value: List):
     """Checks whether the content of a list are classes"""
-    return all(inspect.isclass(obj) for obj in value)
+    return all(hasattr(obj, "__fields__") for obj in value)
 
 
 def _assign_primitive_data_to_node(path, node, value, index=0):
