@@ -1,4 +1,10 @@
 import re
+import yaml
+
+
+class YAMLDumper(yaml.Dumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super(YAMLDumper, self).increase_indent(flow, False)
 
 
 def snake_to_camel(word: str) -> str:

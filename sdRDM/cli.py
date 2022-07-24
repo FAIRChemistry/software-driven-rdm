@@ -1,55 +1,35 @@
+from typing import Optional
 import typer
-import os
-import glob
 
-from typing import Dict
-
-from sdRDM.generator import write_module, generate_schema, Format
-from sdRDM.generator.abstractparser import SchemaParser
+from sdRDM.generator.codegen import generate_python_api
 
 app = typer.Typer()
-
-FORMAT_MAPPING: Dict[str, Format] = {"md": Format.MARKDOWN}
 
 
 @app.command()
 def generate(
-    path: str = typer.Option("", help="Path to the data model specifications"),
-    out: str = typer.Option("", help="Destination where the Software will be written"),
-    name: str = typer.Option("", help="Name of the resulting software model"),
+    path: str = typer.Option(..., help="Path to the data model specifications"),
+    out: str = typer.Option(".", help="Destination where the Software will be written"),
+    name: str = typer.Option(..., help="Name of the resulting software model"),
+    url: Optional[str] = typer.Option(
+        None, help="URL to the templates GitHub repository"
+    ),
+    commit: Optional[str] = typer.Option(
+        None, help="Commit hash from which this API was generated"
+    ),
 ):
+    """Generates a Python API based on the Markdown fiels found in the path.
 
-    # Create library directory
-    lib_path = os.path.join(out, name)
-    core_path = os.path.join(lib_path, "core")
-    schema_path = os.path.join(lib_path, "schemes")
+    Args:
+        path (str, optional): Path to the data model specifications.
+        out (str, optional): Destination where the Software will be written.
+        name (str, optional): Name of the resulting software model.
+    """
 
-    os.makedirs(core_path, exist_ok=True)
+    if not all([url, commit]):
+        url, commit = None, None
 
-    # Add __init__ for module compliance
-    open(os.path.join(lib_path, "__init__.py"), "w")
-
-    # Read and find all files
-    specifications = list(glob.glob(os.path.join(path, "*")))
-    is_single = len(specifications) == 1
-
-    for file in specifications:
-        extension = os.path.basename(file).split(".")[-1]
-
-        if extension not in FORMAT_MAPPING:
-            pass
-
-        # Generate schemata
-        format_type = FORMAT_MAPPING[extension]
-        mermaid_path, metadata_path = generate_schema(file, schema_path, format_type)
-
-        # Generate the API
-        write_module(
-            schema=mermaid_path,
-            descriptions_path=metadata_path,
-            out=core_path,
-            is_single=is_single,
-        )
+    generate_python_api(path=path, out=out, name=name)
 
 
 @app.command()
