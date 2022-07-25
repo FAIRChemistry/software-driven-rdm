@@ -1,9 +1,11 @@
 import inspect
-import xmltodict
 import json
-import yaml
 import deepdish as dd
+import os
 import pydantic
+import tempfile
+import uuid
+import yaml
 import warnings
 
 from anytree import RenderTree, Node
@@ -13,10 +15,15 @@ from typing import Dict, Iterable, Optional, List
 
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import build_xml
-from sdRDM.linking.link import convert_data_model_by_option
-from sdRDM.linking.utils import build_guide_tree
-from sdRDM.tools.gitutils import ObjectNode, build_library_from_git_specs
+from sdRDM.linking.link import convert_data_model
+from sdRDM.generator.codegen import generate_python_api
+from sdRDM.linking.utils import build_guide_tree, generate_template
 from sdRDM.tools.utils import YAMLDumper
+from sdRDM.tools.gitutils import (
+    ObjectNode,
+    build_library_from_git_specs,
+    _import_library,
+)
 
 
 class DataModel(pydantic.BaseModel):
@@ -36,7 +43,7 @@ class DataModel(pydantic.BaseModel):
         """
 
         checkpoints = iter(path.split("/"))
-        print(self._traverse_data_model(checkpoints, self))
+        return self._traverse_data_model(checkpoints, self)
 
     def _traverse_data_model(self, checkpoints: Iterable[str], obj):
 
@@ -112,7 +119,7 @@ class DataModel(pydantic.BaseModel):
         """Writes the object instance to HDF5."""
         dd.io.save(path, self.to_dict())
 
-    def convert(self, option: str):
+    def convert_to(self, option: str, linking_template: Optional[str] = None):
         """
         Converts a given data model to another model that has been specified
         in the attributes metadata. This will create a new object model from
@@ -133,7 +140,13 @@ class DataModel(pydantic.BaseModel):
             option (str): Key of the attribute metadata, where the destination is stored.
         """
 
-        return convert_data_model_by_option(obj=self, option=option)
+        return convert_data_model(obj=self, option=option, path=linking_template)
+
+    @classmethod
+    def generate_linking_template(cls, path: str = "linking_template.yaml"):
+        """Generates a template that can be used to link between two data models."""
+
+        generate_template(cls, path)
 
     # ! Inherited Initializers
     @classmethod
@@ -200,6 +213,29 @@ class DataModel(pydantic.BaseModel):
         return True
 
     @classmethod
+    def from_markdown(cls, path: str, import_modules=[]):
+        """Fetches a Markdown specification from a git repository and builds the library accordingly.
+
+        This function will clone the repository into a temporary directory and
+        builds the correpsonding API and loads it into the memory. After that
+        the cloned repository is deleted and the root object(s) detected.
+
+        Args:
+            url (str): Link to the git repository. Use the URL ending with ".git".
+            commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
+        """
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            # Generate API to parse the file
+            lib_name = f"sdRDM-Library-{str(uuid.uuid4())}"
+            api_loc = os.path.join(tmpdirname, lib_name)
+            generate_python_api(path=path, out=tmpdirname, name=lib_name)
+
+            lib = _import_library(api_loc, lib_name)
+
+        return cls._extract_modules(lib, import_modules)
+
+    @classmethod
     def from_git(
         cls, url: str, commit: Optional[str] = None, import_modules: List[str] = []
     ):
@@ -216,6 +252,12 @@ class DataModel(pydantic.BaseModel):
 
         # Build and import the library
         lib = build_library_from_git_specs(url=url, commit=commit)
+
+        return cls._extract_modules(lib, import_modules)
+
+    @classmethod
+    def _extract_modules(cls, lib, import_modules):
+        """Extracts root nodes and specified modules from a generated API"""
 
         # Get all classes present
         classes = {
@@ -235,7 +277,10 @@ class DataModel(pydantic.BaseModel):
         if len(roots) == 1:
             roots = roots[0]
 
-        return tuple([roots, *modules])
+        if not import_modules:
+            return roots
+
+        return roots, *modules
 
     @staticmethod
     def _find_root_objects(classes: Dict):
@@ -257,7 +302,7 @@ class DataModel(pydantic.BaseModel):
         return [root.cls for root in roots]
 
     # ! Databases
-    def to_dataverse(self):
+    def to_dataverse(self, linking_template: Optional[str] = None):
         """
         Converts a dataset to it Datavere specifications and returns a Dataset object,
         which can be uploaded to Dataverse.
@@ -265,7 +310,7 @@ class DataModel(pydantic.BaseModel):
 
         from easyDataverse import Dataset
 
-        blocks = self.convert("dataverse")
+        blocks = self.convert_to("dataverse", linking_template=linking_template)
 
         if not blocks:
             raise ValueError("Couldnt convert, no mapping towards Dataverse specified.")
@@ -289,7 +334,7 @@ class DataModel(pydantic.BaseModel):
         print(render.by_attr("name"))
 
     # ! Validators
-    @root_validator
+    @root_validator(pre=True)
     def turn_into_extended_list(cls, values):
         """Validator used to convert any list into a ListPlus."""
 

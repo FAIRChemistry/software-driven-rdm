@@ -1,4 +1,9 @@
-from .nodes import AttributeNode, ClassNode
+import yaml
+
+from anytree import LevelOrderGroupIter
+
+from sdRDM.linking.nodes import AttributeNode, ClassNode
+from sdRDM.tools.utils import YAMLDumper
 
 DEFAULT_MAPPINGS = {"list": list, "dict": dict}
 
@@ -40,3 +45,30 @@ def build_guide_tree(obj, parent=None, outer=None):
             build_guide_tree(inner_type, current_parent, outer=outer_type)
 
     return obj_tree
+
+
+def generate_template(obj, out: str) -> None:
+    """Generates a template for linking two datasets."""
+
+    template = {"__model__": obj.__name__}
+    for nodes in LevelOrderGroupIter(obj.create_tree()[0]):
+        for node in nodes:
+            path = _get_path(node.path)
+
+            if isinstance(node, ClassNode) and path:
+                attr_template = {n.name: "Enter target" for n in node.children}
+                template[path] = [
+                    {
+                        "attribute": "ObjectAttribute",
+                        "pattern": r"[A-Za-z0-9]",
+                        "targets": attr_template,
+                    }
+                ]
+
+    with open(out, "w") as f:
+        f.write(yaml.dump(template, Dumper=YAMLDumper))
+
+
+def _get_path(path):
+    """Parses a tree path to a symbolic path through the data model"""
+    return ".".join([node.name for node in path if node.name[0].islower()])
