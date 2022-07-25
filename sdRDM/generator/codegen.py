@@ -1,3 +1,4 @@
+from genericpath import isdir, isfile
 import glob
 import os
 import re
@@ -40,8 +41,14 @@ def generate_python_api(
             f.write(init_lib_template.render(url=url, commit=commit))
 
     # Read and find all files
-    specifications = list(glob.glob(os.path.join(path, "*")))
-    is_single = len(specifications) == 1
+    if os.path.isdir(path):
+        specifications = list(glob.glob(os.path.join(path, "*")))
+        is_single = len(specifications) == 1
+    elif os.path.isfile(path):
+        specifications = [path]
+        is_single = True
+    else:
+        raise TypeError(f"Given path '{path}' is neither a file nor a directory.")
 
     for file in specifications:
         extension = os.path.basename(file).split(".")[-1]
