@@ -7,7 +7,7 @@ import tempfile
 import uuid
 
 from functools import lru_cache
-from typing import Callable, Optional
+from typing import Optional
 
 from sdRDM.generator.codegen import generate_python_api
 
@@ -44,7 +44,9 @@ def build_library_from_git_specs(url: str, commit: Optional[str] = None):
     with tempfile.TemporaryDirectory() as tmpdirname:
 
         # Fetch from github
-        _fetch_from_git(url=url, path=tmpdirname, cwd=os.getcwd(), commit=commit)
+        commit = _fetch_from_git(
+            url=url, path=tmpdirname, cwd=os.getcwd(), commit=commit
+        )
 
         # Write specification
         schema_loc = os.path.join(tmpdirname, "specifications")
@@ -64,11 +66,19 @@ def _fetch_from_git(url: str, path: str, cwd: str, commit: Optional[str] = None)
 
     subprocess.call(["git", "clone", url, path])
 
+    os.chdir(path)
     if commit:
-        os.chdir(path)
         subprocess.call(["git", "config", "--global", "advice.detachedHead", "false"])
         subprocess.call(["git", "checkout", commit])
         os.chdir(cwd)
+
+        return None
+
+    else:
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"])
+        os.chdir(cwd)
+
+        return commit.decode("utf-8").strip()
 
 
 @lru_cache(maxsize=5)
