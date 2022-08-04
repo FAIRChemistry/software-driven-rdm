@@ -295,7 +295,7 @@ class MermaidClass:
             )
 
         # Get all attributes and types
-        attrib_regex = re.compile(r"\+([a-zA-Z]*)(\[.*?\])? ([a-zA-Z|\_]*)(\*?)")
+        attrib_regex = re.compile(r"\+([a-zA-Z0-9]*)(\[.*?\])? ([a-zA-Z0-9|\_]*)(\*?)")
         raw_attrs = attrib_regex.findall(mermaid_cls)
         attributes = {}
 

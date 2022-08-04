@@ -10,7 +10,7 @@ from sdRDM.generator.abstractparser import SchemaParser
 
 MODULE_PATTERN = r"^#{1} "
 OBJECT_PATTERN = r"^#{2,3}"
-ATTRIBUTE_PATTERN = r"- __([A-Za-z\_]*)(\*?)__"
+ATTRIBUTE_PATTERN = r"- __([A-Za-z0-9\_]*)(\*?)__"
 OPTION_PATTERN = r"([A-Za-z\_]*)\s?\:\s(.*)?"
 SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
 OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
