@@ -42,9 +42,12 @@ def build_xml(obj):
                 composite_node = etree.Element(snake_to_camel(name))
 
                 for v in value:
-                    element = etree.Element(
-                        snake_to_camel(field.field_info.extra["xml"])
-                    )
+                    try:
+                        element = etree.Element(
+                            snake_to_camel(field.field_info.extra["xml"])
+                        )
+                    except KeyError:
+                        element = etree.Element(snake_to_camel(name))
                     element.text = str(v)
                     composite_node.append(element)
 
