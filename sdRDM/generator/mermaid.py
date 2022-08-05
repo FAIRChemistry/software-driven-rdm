@@ -7,6 +7,9 @@ from importlib import resources as pkg_resources
 
 from sdRDM.generator import templates as jinja_templates
 
+DTYPE_PATTERN = r"List\[|Optional\[|\]"
+BUILTINS = ["str", "float", "int", "datetime"]
+
 
 class DataTypes(Enum):
     """Holds Data Type mappings"""
@@ -16,7 +19,7 @@ class DataTypes(Enum):
     int = ("int", None)
     posfloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
     PositiveFloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
-    date = ("date", "from datetime import date")
+    date = ("datetime", "from datetime import datetime")
 
     @classmethod
     def get_value_list(cls):
@@ -60,6 +63,7 @@ class MermaidClass:
                 attr["default_factory"] = "ListPlus"
                 attr["required"] = None
                 self.imports.add("from typing import List")
+
             elif not required:
                 attr["dtype"] = f"Optional[{dtype}]"
                 attr["default"] = "None"
@@ -252,6 +256,12 @@ class MermaidClass:
             for imp in list(add_class.imports):
                 if "sdRDM" not in imp:
                     self.imports.add(imp)
+
+            for attr in add_class.attributes.values():
+                # Add dependcies from add method
+                dtype = re.sub(DTYPE_PATTERN, "", attr["dtype"])
+                if dtype not in BUILTINS:
+                    self.imports.add(f"from .{dtype.lower()} import {dtype}")
 
             # Get all attributes into the appropriate format
             signature = [
