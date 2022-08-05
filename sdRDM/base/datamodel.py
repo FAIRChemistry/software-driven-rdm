@@ -119,7 +119,7 @@ class DataModel(pydantic.BaseModel):
         """Writes the object instance to HDF5."""
         dd.io.save(path, self.to_dict())
 
-    def convert_to(self, option: str, linking_template: Optional[str] = None):
+    def convert_to(self, option: str = "", linking_template: Optional[str] = None):
         """
         Converts a given data model to another model that has been specified
         in the attributes metadata. This will create a new object model from
@@ -341,8 +341,5 @@ class DataModel(pydantic.BaseModel):
         for field, value in values.items():
             if isinstance(value, list):
                 values[field] = ListPlus(*value, in_setup=True)
-
-            if field == "id":
-                values[field] = str(value)
 
         return values
