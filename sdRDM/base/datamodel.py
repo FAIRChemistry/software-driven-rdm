@@ -336,10 +336,18 @@ class DataModel(pydantic.BaseModel):
     # ! Validators
     @root_validator(pre=True)
     def turn_into_extended_list(cls, values):
-        """Validator used to convert any list into a ListPlus."""
+        """Validator used to convert any list into a ListPlus. On root level."""
 
         for field, value in values.items():
             if isinstance(value, list):
                 values[field] = ListPlus(*value, in_setup=True)
 
         return values
+
+    @validator("*")
+    def turn_individual_value_into_extended_list(cls, value):
+        """Validator used to convert any list into a ListPlus."""
+        if isinstance(value, list):
+            return ListPlus(*value, in_setup=True)
+        else:
+            return value
