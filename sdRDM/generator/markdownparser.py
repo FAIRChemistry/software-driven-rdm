@@ -16,6 +16,7 @@ SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
 OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
 
 MANDATORY_OPTIONS = ["description", "type"]
+FORBIDDEN_NAMES = ["yield"]
 
 
 class State(Enum):
@@ -207,6 +208,11 @@ class MarkdownParser(SchemaParser):
         fields such as 'Type' and 'Description' without which a code generation
         is infeasible. Raises an error with report if tests fail.
         """
+
+        if self.attr.get("name") and self.attr["name"] in FORBIDDEN_NAMES:
+            raise NameError(
+                f"The attribute name of '{self.attr['name']}' is not allowed. Either add an underscore '_' after it or change the name otherwise. These are the forbidden names to avoid: {FORBIDDEN_NAMES}"
+            )
 
         if self._check_mandatory_options() and self.attr:
             self.obj["attributes"].append(self.attr.copy())
