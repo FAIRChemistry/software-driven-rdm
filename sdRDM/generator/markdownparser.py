@@ -210,12 +210,16 @@ class MarkdownParser(SchemaParser):
         """
 
         if self.attr.get("name") and self.attr["name"] in FORBIDDEN_NAMES:
-            raise NameError(
-                f"The attribute name of '{self.attr['name']}' is not allowed. Either add an underscore '_' after it or change the name otherwise. These are the forbidden names to avoid: {FORBIDDEN_NAMES}"
-            )
+            # In case any python internal attribute name is used, an underscore
+            # will be added to the name and the actually wanted name as an alias.
+            # Exported datasets will use the alias instead.
+
+            self.attr["alias"] = self.attr["name"]
+            self.attr["name"] = self.attr["name"] + "_"
 
         if self._check_mandatory_options() and self.attr:
             self.obj["attributes"].append(self.attr.copy())
+
         elif self.attr:
             missing_fields = list(
                 filter(lambda option: option not in self.attr.keys(), MANDATORY_OPTIONS)

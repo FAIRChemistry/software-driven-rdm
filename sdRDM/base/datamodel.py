@@ -11,7 +11,7 @@ import warnings
 from anytree import RenderTree, Node
 from lxml import etree
 from pydantic import PrivateAttr, root_validator, validator
-from typing import Dict, Iterable, Optional, List
+from typing import Dict, Iterable, Optional, List, Union
 
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import build_xml
@@ -61,7 +61,7 @@ class DataModel(pydantic.BaseModel):
 
     # ! Exporters
     def to_dict(self):
-        data = super().dict(exclude_none=True)
+        data = super().dict(exclude_none=True, by_alias=True)
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
@@ -237,7 +237,10 @@ class DataModel(pydantic.BaseModel):
 
     @classmethod
     def from_git(
-        cls, url: str, commit: Optional[str] = None, import_modules: List[str] = []
+        cls,
+        url: str,
+        commit: Optional[str] = None,
+        import_modules: Union[str, List[str]] = [],
     ):
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
@@ -259,6 +262,9 @@ class DataModel(pydantic.BaseModel):
     def _extract_modules(cls, lib, import_modules):
         """Extracts root nodes and specified modules from a generated API"""
 
+        if isinstance(import_modules, str):
+            import_modules = [import_modules]
+
         # Get all classes present
         classes = {
             obj.__name__: ObjectNode(obj)
@@ -266,21 +272,24 @@ class DataModel(pydantic.BaseModel):
             if inspect.isclass(obj) and issubclass(obj, DataModel)
         }
 
-        # Find the corresponding root(s)
-        roots = cls._find_root_objects(classes)
+        # Get modules instead of guessed root if specified
+        if import_modules:
+            modules = []
+            for module in import_modules:
+                modules.append(classes[module].cls)
 
-        # Get all optional modules
-        modules = []
-        for module in import_modules:
-            modules.append(classes[module].cls)
+            if len(modules) == 1:
+                return modules[0]
+
+            return modules
+
+        # Find the corresponding root(s) if no modules specified
+        roots = cls._find_root_objects(classes)
 
         if len(roots) == 1:
             roots = roots[0]
 
-        if not import_modules:
-            return roots
-
-        return roots, *modules
+        return roots, {name: node.cls for name, node in classes.items()}
 
     @staticmethod
     def _find_root_objects(classes: Dict):
