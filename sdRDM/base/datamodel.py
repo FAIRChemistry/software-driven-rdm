@@ -3,8 +3,8 @@ import json
 import deepdish as dd
 import os
 import pydantic
+import random
 import tempfile
-import uuid
 import yaml
 import warnings
 
@@ -99,8 +99,9 @@ class DataModel(pydantic.BaseModel):
             elif isinstance(value, dict):
                 if not value and exclude_none:
                     continue
-
-                nu_data[key] = self._convert_to_lists(value, exclude_none)
+                
+                if self._convert_to_lists(value, exclude_none):
+                    nu_data[key] = self._convert_to_lists(value, exclude_none)
 
             else:
                 nu_data[key] = value
@@ -109,7 +110,8 @@ class DataModel(pydantic.BaseModel):
 
     def _check_and_convert_sub(self, element, exclude_none):
         """Helper function used to trigger recursion on deeply nested lists."""
-        if element.__class__.__module__ == "builtins":
+
+        if element.__class__.__module__ == "builtins" and not isinstance(element, dict):
             return element
 
         return self._convert_to_lists(element, exclude_none)
@@ -249,7 +251,7 @@ class DataModel(pydantic.BaseModel):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             # Generate API to parse the file
-            lib_name = f"sdRDM-Library-{str(uuid.uuid4())}"
+            lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
             api_loc = os.path.join(tmpdirname, lib_name)
             generate_python_api(path=path, out=tmpdirname, name=lib_name)
 
@@ -293,18 +295,12 @@ class DataModel(pydantic.BaseModel):
         class ImportedModules:
             """Empty class used to store all sub classes"""
 
-            def __init__(self, classes, roots):
-
-                if len(roots) == 1:
-                    self.root = roots[0]
-                else:
-                    self.root = roots
-
+            def __init__(self, classes):
                 for name, node in classes.items():
                     # Add all classes
                     setattr(self, name, node.cls)
 
-        return ImportedModules(classes, cls._find_root_objects(classes))
+        return ImportedModules(classes)
 
     @staticmethod
     def _find_root_objects(classes: Dict):
