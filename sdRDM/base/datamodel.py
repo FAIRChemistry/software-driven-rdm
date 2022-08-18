@@ -60,18 +60,19 @@ class DataModel(pydantic.BaseModel):
         return self._traverse_data_model(checkpoints, sub_obj)
 
     # ! Exporters
-    def to_dict(self):
+    def to_dict(self, exclude_none=True):
         data = super().dict(exclude_none=True, by_alias=True)
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
-        self._convert_to_lists(data)
+        data = self._convert_to_lists(data, exclude_none)
 
         try:
             data["__source__"] = {
                 "repo": self.__repo__,  # type: ignore
                 "commit": self.__commit__,  # type: ignore
-                "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
+                "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
+                "root": self.__class__.__name__,
             }  # type: ignore
         except AttributeError:
             warnings.warn(
@@ -80,18 +81,38 @@ class DataModel(pydantic.BaseModel):
 
         return data
 
-    def _convert_to_lists(self, data):
+    def _convert_to_lists(self, data, exclude_none):
         """Converts als ListPlus items back to lists."""
+
+        nu_data = {}
+
         for key, value in data.items():
             if isinstance(value, ListPlus):
-                data[key] = [self._check_and_convert_sub(element) for element in value]
+                if not value and exclude_none:
+                    continue
 
-    def _check_and_convert_sub(self, element):
+                nu_data[key] = [
+                    self._check_and_convert_sub(element, exclude_none)
+                    for element in value
+                ]
+
+            elif isinstance(value, dict):
+                if not value and exclude_none:
+                    continue
+
+                nu_data[key] = self._convert_to_lists(value, exclude_none)
+
+            else:
+                nu_data[key] = value
+
+        return nu_data
+
+    def _check_and_convert_sub(self, element, exclude_none):
         """Helper function used to trigger recursion on deeply nested lists."""
         if element.__class__.__module__ == "builtins":
             return element
 
-        return self._convert_to_lists(element)
+        return self._convert_to_lists(element, exclude_none)
 
     def json(self, indent: int = 2):
         return json.dumps(self.to_dict(), indent=indent)
@@ -199,10 +220,11 @@ class DataModel(pydantic.BaseModel):
         # Get source and build libary
         url = dataset.get("__source__")["repo"]
         commit = dataset.get("__source__")["commit"]
+        root = dataset.get("__source__")["root"]
         lib = cls.from_git(url=url, commit=commit)
 
         # Use the internal librar to parse the file
-        return lib.from_dict(dataset)  # type: ignore
+        return getattr(lib, root).from_dict(dataset)  # type: ignore
 
     @staticmethod
     def _is_json(json_string: str):
@@ -213,7 +235,7 @@ class DataModel(pydantic.BaseModel):
         return True
 
     @classmethod
-    def from_markdown(cls, path: str, import_modules=[]):
+    def from_markdown(cls, path: str):
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -233,14 +255,13 @@ class DataModel(pydantic.BaseModel):
 
             lib = _import_library(api_loc, lib_name)
 
-        return cls._extract_modules(lib, import_modules)
+        return cls._extract_modules(lib)
 
     @classmethod
     def from_git(
         cls,
         url: str,
         commit: Optional[str] = None,
-        import_modules: Union[str, List[str]] = [],
     ):
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
@@ -256,14 +277,11 @@ class DataModel(pydantic.BaseModel):
         # Build and import the library
         lib = build_library_from_git_specs(url=url, commit=commit)
 
-        return cls._extract_modules(lib, import_modules)
+        return cls._extract_modules(lib)
 
     @classmethod
-    def _extract_modules(cls, lib, import_modules):
+    def _extract_modules(cls, lib):
         """Extracts root nodes and specified modules from a generated API"""
-
-        if isinstance(import_modules, str):
-            import_modules = [import_modules]
 
         # Get all classes present
         classes = {
@@ -272,24 +290,21 @@ class DataModel(pydantic.BaseModel):
             if inspect.isclass(obj) and issubclass(obj, DataModel)
         }
 
-        # Get modules instead of guessed root if specified
-        if import_modules:
-            modules = []
-            for module in import_modules:
-                modules.append(classes[module].cls)
+        class ImportedModules:
+            """Empty class used to store all sub classes"""
 
-            if len(modules) == 1:
-                return modules[0]
+            def __init__(self, classes, roots):
 
-            return modules
+                if len(roots) == 1:
+                    self.root = roots[0]
+                else:
+                    self.root = roots
 
-        # Find the corresponding root(s) if no modules specified
-        roots = cls._find_root_objects(classes)
+                for name, node in classes.items():
+                    # Add all classes
+                    setattr(self, name, node.cls)
 
-        if len(roots) == 1:
-            roots = roots[0]
-
-        return roots, {name: node.cls for name, node in classes.items()}
+        return ImportedModules(classes, cls._find_root_objects(classes))
 
     @staticmethod
     def _find_root_objects(classes: Dict):
@@ -301,7 +316,9 @@ class DataModel(pydantic.BaseModel):
 
         for definition in classes.values():
             for field in definition.cls.__fields__.values():
-                if issubclass(field.type_, DataModel):
+                if "Union" not in repr(field.type_) and issubclass(
+                    field.type_, DataModel
+                ):
                     classes[field.type_.__name__].add_parent_class(definition)
 
         roots = list(
