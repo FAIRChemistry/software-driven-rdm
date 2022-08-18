@@ -1,10 +1,9 @@
 import importlib
-import inspect
 import os
+import random
 import subprocess
 import sys
 import tempfile
-import uuid
 
 from functools import lru_cache
 from typing import Optional
@@ -52,7 +51,7 @@ def build_library_from_git_specs(url: str, commit: Optional[str] = None):
         schema_loc = os.path.join(tmpdirname, "specifications")
 
         # Generate API to parse the file
-        lib_name = f"sdRDM-Library-{str(uuid.uuid4())}"
+        lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
         api_loc = os.path.join(tmpdirname, lib_name)
         generate_python_api(
             path=schema_loc, out=tmpdirname, name=lib_name, url=url, commit=commit

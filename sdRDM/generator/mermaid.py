@@ -4,6 +4,7 @@ import jinja2
 
 from enum import Enum
 from importlib import resources as pkg_resources
+from typing import Optional
 
 from sdRDM.generator import templates as jinja_templates
 
@@ -30,7 +31,7 @@ class DataTypes(Enum):
 
 
 class MermaidClass:
-    def __init__(self, name: str, attributes: dict, docstring=None):
+    def __init__(self, name: str, attributes: dict, docstring: Optional[str] = None):
         self.name = name
         self.docstring = docstring
         self.imports = set()
@@ -40,6 +41,10 @@ class MermaidClass:
         self.attributes = self._process_attributes(attributes)
         self.fname = self.name.lower()
         self.snake_case = self._camel_to_snake(name)
+
+        # Process docstring to not include quotation marks
+        if isinstance(self.docstring, str):
+            self.docstring = self.docstring.replace('"', "")
 
     @staticmethod
     def _camel_to_snake(name):
