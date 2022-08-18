@@ -1,9 +1,8 @@
 import re
-import io
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List, Union
+from typing import Dict, List
 
 from sdRDM.generator.mermaid import DataTypes
 from sdRDM.generator.abstractparser import SchemaParser
@@ -14,6 +13,7 @@ ATTRIBUTE_PATTERN = r"- __([A-Za-z0-9\_]*)(\*?)__"
 OPTION_PATTERN = r"([A-Za-z\_]*)\s?\:\s(.*)?"
 SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
 OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
+LINKED_TYPE_PATTERN = r"\[([A-Za-z0-9\s\,]*)\]\([\#A-Za-z0-9\s\,]*\)"
 
 MANDATORY_OPTIONS = ["description", "type"]
 FORBIDDEN_NAMES = ["yield"]
@@ -189,7 +189,28 @@ class MarkdownParser(SchemaParser):
     def _parse_attribute_part(self, line):
         """Extracts the key value relation of an attribute option (e.g. 'Type : string')"""
         line = line.strip()
+
         key, value = re.findall(OPTION_PATTERN, line)[0]
+
+        if bool(re.match(LINKED_TYPE_PATTERN, value)) and key == "Type":
+            # Markdown linked types
+            types = re.findall(LINKED_TYPE_PATTERN, value)[0].split(",")
+            types = [dtype.strip() for dtype in types]
+
+            if len(types) > 1:
+                value = f"Union[{','.join(types)}]"
+            else:
+                value = types[0]
+
+        elif key == "Type":
+            # Non Markdown-linked types
+            types = [dtype.strip() for dtype in value.split(",")]
+
+            if len(types) > 1:
+                value = f"Union[{','.join(types)}]"
+            else:
+                value = types[0]
+
         self.attr[key.lower()] = value
 
     def _check_compositions(self):
@@ -197,9 +218,13 @@ class MarkdownParser(SchemaParser):
         if not self.attr.get("type"):
             return None
 
-        dtype = self.attr["type"]
-        if dtype not in DataTypes.__members__:
-            self.compositions.append({"module": dtype, "container": self.obj["name"]})
+        dtypes = self.attr["type"].replace("Union[", "").replace("]", "")
+        for dtype in dtypes.split(","):
+            dtype = dtype.strip()
+            if dtype not in DataTypes.__members__:
+                self.compositions.append(
+                    {"module": dtype, "container": self.obj["name"]}
+                )
 
     def _add_attribute_to_obj(self):
         """Adds an attribute to an object only IF the mandatory fields are given.
@@ -210,12 +235,9 @@ class MarkdownParser(SchemaParser):
         """
 
         if self.attr.get("name") and self.attr["name"] in FORBIDDEN_NAMES:
-            # In case any python internal attribute name is used, an underscore
-            # will be added to the name and the actually wanted name as an alias.
-            # Exported datasets will use the alias instead.
-
-            self.attr["alias"] = self.attr["name"]
-            self.attr["name"] = self.attr["name"] + "_"
+            raise ValueError(
+                f"The attribute name '{self.attr['name']}' is not allowed. Please use a different name instead."
+            )
 
         if self._check_mandatory_options() and self.attr:
             self.obj["attributes"].append(self.attr.copy())

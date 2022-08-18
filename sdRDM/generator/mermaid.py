@@ -8,7 +8,7 @@ from importlib import resources as pkg_resources
 from sdRDM.generator import templates as jinja_templates
 
 DTYPE_PATTERN = r"List\[|Optional\[|\]"
-BUILTINS = ["str", "float", "int", "datetime"]
+BUILTINS = ["str", "float", "int", "datetime", "none", "bool", "bytes"]
 
 
 class DataTypes(Enum):
@@ -17,9 +17,12 @@ class DataTypes(Enum):
     string = ("str", None)
     float = ("float", None)
     int = ("int", None)
+    bytes = ("bytes", None)
     posfloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
     PositiveFloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
     date = ("datetime", "from datetime import datetime")
+    datetime = ("datetime", "from datetime import datetime")
+    bool = ("bool", None)
 
     @classmethod
     def get_value_list(cls):
@@ -57,15 +60,31 @@ class MermaidClass:
             multiple = attr.get("multiple")
             required = attr.get("required")
 
+            if self.name.lower() == dtype.lower():
+                # Address self-referencing objects
+                dtype = dtype.replace(self.name, f"'{self.name}'")
+
+            if "Union" in dtype:
+                self.imports.add("from typing import Union")
+
             if multiple:
-                self.adders[name] = attr.get("dtype")
+                if "Union" not in dtype:
+                    self.adders[name] = attr.get("dtype")
+
                 attr["dtype"] = f"List[{dtype}]"
                 attr["default_factory"] = "ListPlus"
                 attr["required"] = None
+
                 self.imports.add("from typing import List")
 
             elif not required:
-                attr["dtype"] = f"Optional[{dtype}]"
+                if "Union" in dtype:
+                    raw_types = dtype.replace("Union[", "").replace("]", "").split(",")
+                    dtype = ", ".join([type.strip() for type in raw_types])
+                    attr["dtype"] = f"Union[{dtype}, None]"
+                else:
+                    attr["dtype"] = f"Optional[{dtype}]"
+
                 attr["default"] = "None"
                 self.imports.add("from typing import Optional")
 
@@ -76,17 +95,26 @@ class MermaidClass:
 
         for attr in attributes.values():
 
-            if attr["dtype"] in DataTypes.__members__:
-                dtype, dependency = DataTypes[attr["dtype"]].value
-                attr["dtype"] = dtype
-            else:
-                dtype = attr["dtype"]
-                self.sub_classes.append(dtype)
-                dependency = None
+            dtypes = attr["dtype"].replace("Union[", "").replace("]", "")
 
-            if dependency is not None:
-                # Add possible dependencies
-                self.imports.add(dependency)
+            for dtype in dtypes.split(","):
+                if dtype in DataTypes.__members__:
+                    dtype, dependency = DataTypes[dtype].value
+
+                    if "Union" not in attr["dtype"]:
+                        # Make sure that native types are added
+                        # only when there are no Unions present
+                        attr["dtype"] = dtype
+                    else:
+                        # Make sure that 'string' is converted to 'str'
+                        attr["dtype"] = attr["dtype"].replace("string", "str")
+                else:
+                    self.sub_classes.append(dtype)
+                    dependency = None
+
+                if dependency is not None:
+                    # Add possible dependencies
+                    self.imports.add(dependency)
 
         return attributes
 
@@ -160,7 +188,7 @@ class MermaidClass:
         type_factory = {
             "default_factory": lambda value: value,
             "default": lambda value: value,
-            "description": lambda value: r'"' + value + r'"',
+            "description": lambda value: r'"' + value.replace('"', "'") + r'"',
         }
 
         def check_numeric(value):
@@ -221,9 +249,8 @@ class MermaidClass:
 
         local_imps = list(
             filter(
-                lambda imp: bool(
-                    re.match(r"^from \.[a-zA-Z\.]* import [a-zA-Z]*", imp)
-                ),
+                lambda imp: bool(re.match(r"^from \.[a-zA-Z\.]* import [a-zA-Z]*", imp))
+                and f"from .{self.name.lower()} import {self.name}" != imp,
                 list(self.imports),
             )
         )
@@ -255,13 +282,26 @@ class MermaidClass:
             # foreign class definition
             for imp in list(add_class.imports):
                 if "sdRDM" not in imp:
+
                     self.imports.add(imp)
 
             for attr in add_class.attributes.values():
                 # Add dependcies from add method
                 dtype = re.sub(DTYPE_PATTERN, "", attr["dtype"])
+
                 if dtype not in BUILTINS:
-                    self.imports.add(f"from .{dtype.lower()} import {dtype}")
+
+                    dtypes = dtype.replace("Union[", "").replace("]", "")
+                    for dtype in dtypes.split(","):
+                        dtype = dtype.strip()
+
+                        if dtype.lower() in BUILTINS or dtype.startswith("'"):
+                            # Discard builtins and self-references
+                            continue
+
+                        # Adress Union import and split them up
+                        # to individually import the classes
+                        self.imports.add(f"from .{dtype.lower()} import {dtype}")
 
             # Get all attributes into the appropriate format
             signature = [
@@ -305,8 +345,11 @@ class MermaidClass:
             )
 
         # Get all attributes and types
-        attrib_regex = re.compile(r"\+([a-zA-Z0-9]*)(\[.*?\])? ([a-zA-Z0-9|\_]*)(\*?)")
+        attrib_regex = re.compile(
+            r"\+([a-zA-Z0-9\[\]\,]*)(\[.*?\])? ([a-zA-Z0-9|\_]*)(\*?)"
+        )
         raw_attrs = attrib_regex.findall(mermaid_cls)
+
         attributes = {}
 
         for dtype, multiple, attr_name, required in raw_attrs:

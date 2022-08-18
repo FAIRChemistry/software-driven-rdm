@@ -1,4 +1,3 @@
-from genericpath import isdir, isfile
 import glob
 import os
 import re
@@ -7,6 +6,7 @@ import json
 import subprocess
 import sys
 
+from joblib import Parallel, delayed
 from typing import Dict, Optional
 from importlib import resources as pkg_resources
 
@@ -195,53 +195,41 @@ def write_class(tree: dict, classes: dict, dirpath: str, url, commit, inherit=No
         url=url,
         commit=commit,
     )
-    _write_lone_classes(
-        classes=classes,
-        dirpath=dirpath,
-        inherit=None,
-        used_classes=used_classes,
-        url=url,
-        commit=commit,
+
+    kwargs = {
+        "classes": classes,
+        "dirpath": dirpath,
+        "used_classes": used_classes,
+        "url": url,
+        "commit": commit,
+    }
+
+    Parallel(n_jobs=-1)(
+        delayed(_write_lone_class)(cls_obj=cls_obj, **kwargs)
+        for cls_obj in classes.values()
     )
 
 
-def _write_lone_classes(
-    classes: dict, dirpath: str, inherit, used_classes, url, commit
-):
+def _write_lone_class(cls_obj, classes: dict, dirpath: str, used_classes, url, commit):
 
-    for cls_name, cls_obj in classes.items():
+    if cls_obj.name in used_classes:
+        return
 
-        # Guard clause
-        if cls_name in used_classes:
-            continue
+    # First, check if all arbitrary types exist
+    # if not render them to a file
+    for sub_class in cls_obj.sub_classes:
 
-        # First, check if all arbitrary types exist
-        # if not render them to a file
-        for sub_class in cls_obj.sub_classes:
+        try:
+            sub_class = classes[sub_class]
+        except KeyError:
+            raise ValueError(
+                f"Cant locate object \033[1m{sub_class}\033[0m in specifications. Please make sure to include this object in your file."
+            )
 
-            try:
-                sub_class = classes[sub_class]
-            except KeyError:
-                raise ValueError(
-                    f"Cant locate object \033[1m{sub_class}\033[0m in specifications. Please make sure to include this object in your file."
-                )
+        cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
 
-            cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
-
-            if sub_class not in used_classes:
-                _render_class(
-                    sub_class,
-                    dirpath,
-                    inherit=None,
-                    classes=classes,
-                    url=url,
-                    commit=commit,
-                )
-
-        # Finally, render the given class
-        _render_class(
-            cls_obj, dirpath, inherit, classes=classes, url=url, commit=commit
-        )
+    # Finally, render the given class
+    _render_class(cls_obj, dirpath, None, classes=classes, url=url, commit=commit)
 
 
 def _write_dependent_classes(
