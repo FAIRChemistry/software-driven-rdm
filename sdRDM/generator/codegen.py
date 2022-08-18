@@ -294,6 +294,11 @@ def _render_class(cls_obj, dirpath, inherit, classes, url, commit):
 
     path = os.path.join(dirpath, cls_obj.fname + ".py")
 
+    # Check if there are any sub classes in the attributes
+    # that do not have any required field and thus can be
+    # set as a default factory
+    _set_optional_classes_as_default_factories(cls_obj, classes)
+
     with open(path, "w") as file:
         attributes = cls_obj._render_class_attrs(
             inherit=inherit, url=url, commit=commit
@@ -310,6 +315,26 @@ def _render_class(cls_obj, dirpath, inherit, classes, url, commit):
     subprocess.run([sys.executable, "-m", "black", "-q", path])
 
 
+def _set_optional_classes_as_default_factories(cls_obj, classes):
+    """Checks if there are any optional classes that can be set as default factory"""
+
+    for name, attribute in cls_obj.attributes.items():
+        dtype = re.sub(r"\[|\]|Union|Optional", "", attribute["dtype"])
+
+        if dtype not in classes:
+            continue
+
+        # Check if the datatype has only optional values
+        is_optional = all(
+            bool(re.match(r"List|Optional", attr["dtype"]))
+            for attr in classes[dtype].attributes.values()
+        )
+
+        if is_optional:
+            cls_obj.attributes[name]["default_factory"] = dtype
+            del cls_obj.attributes[name]["default"]
+
+
 def render_dunder_init(classes: dict, module_doc):
     """Renders the __init__ file of the module"""
 
@@ -320,5 +345,5 @@ def render_dunder_init(classes: dict, module_doc):
 
     return init_template.render(
         classes=sorted(classes.values(), key=lambda cls: cls.fname),
-        docstring=module_doc.replace("/", ""),
+        docstring=module_doc.replace("/", "").replace('"', "'"),
     )
