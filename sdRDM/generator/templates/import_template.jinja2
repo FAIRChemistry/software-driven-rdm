@@ -5,6 +5,7 @@
 from typing import Optional
 from pydantic import PrivateAttr
 from sdRDM.base.listplus import ListPlus
+from sdRDM.base.utils import forge_signature
 {%- for import in from_imports %}
 {{import}}
 {%- endfor %}

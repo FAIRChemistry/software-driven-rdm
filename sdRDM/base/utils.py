@@ -1,5 +1,5 @@
 from lxml import etree
-from typing import Type
+from inspect import Signature, Parameter
 
 from sdRDM.tools.utils import snake_to_camel
 
@@ -63,3 +63,37 @@ def build_xml(obj):
                     node.append(element)
 
     return node
+
+def forge_signature(cls):
+    """Changes the signature of a class to include forbidden names such as 'yield'.
+    
+    Since PyDantic aliases are also applied to the signature, forbidden names
+    such as 'yield' are impossible. This decorator will turn add an underscore
+    while the exports aligns to the alias.
+    
+    """
+        
+    parameters = _construct_signature(cls)
+    cls.__signature__ = Signature(parameters=parameters)
+        
+    return cls
+
+def _construct_signature(cls):
+    """Helper function to extract parameters"""
+    
+    parameters = []
+    
+    for name, parameter in cls.__signature__.parameters.items():
+
+        if f"{name}_" in cls.__fields__:
+            name = f"{name}_"
+
+        parameters.append(Parameter(
+            name=name,
+            kind=parameter.kind,
+            default=parameter.default,
+            annotation=parameter.annotation
+        ))
+        
+    return parameters
+    
