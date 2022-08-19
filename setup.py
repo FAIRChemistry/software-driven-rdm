@@ -19,7 +19,8 @@ setup(
         "typer",
         "pyyaml",
         "anytree",
-        "typing_utils"
+        "typing_utils",
+        "joblib"
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
