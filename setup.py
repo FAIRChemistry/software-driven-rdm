@@ -13,15 +13,13 @@ setup(
     install_requires=[
         "pydantic",
         "deepdish",
-        "xmltodict",
         "lxml",
         "jinja2",
-        "markdown",
-        "beautifulsoup4",
         "black",
         "typer",
         "pyyaml",
         "anytree",
+        "typing_utils"
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )

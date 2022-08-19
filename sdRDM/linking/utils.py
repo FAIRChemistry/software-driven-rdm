@@ -1,7 +1,8 @@
 import yaml
 
 from anytree import LevelOrderGroupIter
-from typing import Union, get_origin
+from typing import Union
+from typing_utils import get_origin
 
 from sdRDM.linking.nodes import AttributeNode, ClassNode
 from sdRDM.tools.utils import YAMLDumper
