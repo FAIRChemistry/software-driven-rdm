@@ -1,6 +1,7 @@
 import yaml
 
 from anytree import LevelOrderGroupIter
+from typing import Union, get_origin
 
 from sdRDM.linking.nodes import AttributeNode, ClassNode
 from sdRDM.tools.utils import YAMLDumper
@@ -41,8 +42,16 @@ def build_guide_tree(obj, parent=None, outer=None):
             name, parent=obj_tree, outer_type=outer_type, value=value
         )
 
-        if inner_type.__module__ != "builtins" and hasattr(inner_type, "__fields__"):
-            build_guide_tree(inner_type, current_parent, outer=outer_type)
+        if get_origin(inner_type) is Union:
+            # Adress Union types
+            inner_type = list(inner_type.__args__)
+        else:
+            # If not, put the single type in a list
+            inner_type = [inner_type]
+
+        for dtype in inner_type:
+            if hasattr(dtype, "__fields__") and dtype.__name__ != obj_tree.name:
+                build_guide_tree(dtype, current_parent, outer=outer_type)
 
     return obj_tree
 
