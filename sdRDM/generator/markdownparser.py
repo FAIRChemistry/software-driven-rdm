@@ -238,8 +238,8 @@ class MarkdownParser(SchemaParser):
             # Prevents forbidden names to be used and adds it to the
             # given alias of a fields.
 
-            self.attr["name"] = f"{self.attr['name']}_"
             self.attr["alias"] = self.attr["name"]
+            self.attr["name"] = f"{self.attr['name']}_"
 
         if self._check_mandatory_options() and self.attr:
             self.obj["attributes"].append(self.attr.copy())
