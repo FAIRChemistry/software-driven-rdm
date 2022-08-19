@@ -1,9 +1,7 @@
-import inspect
-
-from typing import Any
+from typing import Any, List
 
 
-class ListPlus(list[Any]):
+class ListPlus(List[Any]):
     """
     This class extends a list to a search functionality
     similar to a dictionary, but based on its available
