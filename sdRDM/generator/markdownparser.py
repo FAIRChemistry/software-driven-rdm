@@ -16,7 +16,7 @@ OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
 LINKED_TYPE_PATTERN = r"\[([A-Za-z0-9\s\,]*)\]\([\#A-Za-z0-9\s\,]*\)"
 
 MANDATORY_OPTIONS = ["description", "type"]
-FORBIDDEN_NAMES = ["yield"]
+FORBIDDEN_NAMES = ["yield", "list", "dict", "return", "def", "class"]
 
 
 class State(Enum):
@@ -235,9 +235,11 @@ class MarkdownParser(SchemaParser):
         """
 
         if self.attr.get("name") and self.attr["name"] in FORBIDDEN_NAMES:
-            raise ValueError(
-                f"The attribute name '{self.attr['name']}' is not allowed. Please use a different name instead."
-            )
+            # Prevents forbidden names to be used and adds it to the
+            # given alias of a fields.
+
+            self.attr["name"] = f"{self.attr['name']}_"
+            self.attr["alias"] = self.attr["name"]
 
         if self._check_mandatory_options() and self.attr:
             self.obj["attributes"].append(self.attr.copy())
