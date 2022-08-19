@@ -68,13 +68,16 @@ class DataModel(pydantic.BaseModel):
         # to stay compliant to PyDantic
         data = self._convert_to_lists(data, exclude_none)
 
+        # Add source for reproducibility
+        data["__source__"] = {"root": self.__class__.__name__}
+
         try:
-            data["__source__"] = {
+            # Add git specs if available
+            data["__source__"].update({
                 "repo": self.__repo__,  # type: ignore
                 "commit": self.__commit__,  # type: ignore
                 "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
-                "root": self.__class__.__name__,
-            }  # type: ignore
+            })  # type: ignore
         except AttributeError:
             warnings.warn(
                 "No 'URL' and 'Commit' specified. This model might not be re-usable."

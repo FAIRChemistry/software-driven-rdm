@@ -71,7 +71,7 @@ def _fetch_from_git(url: str, path: str, cwd: str, commit: Optional[str] = None)
         subprocess.call(["git", "checkout", commit])
         os.chdir(cwd)
 
-        return None
+        return commit
 
     else:
         commit = subprocess.check_output(["git", "rev-parse", "HEAD"])
