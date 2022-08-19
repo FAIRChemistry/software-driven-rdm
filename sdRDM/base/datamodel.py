@@ -30,6 +30,7 @@ class DataModel(pydantic.BaseModel):
     class Config:
         validate_assignment = True
         use_enum_values = True
+        allow_population_by_field_name = True
 
     # * Private attributes
     __node__: Optional[Node] = PrivateAttr(default=None)
@@ -99,7 +100,7 @@ class DataModel(pydantic.BaseModel):
             elif isinstance(value, dict):
                 if not value and exclude_none:
                     continue
-                
+
                 if self._convert_to_lists(value, exclude_none):
                     nu_data[key] = self._convert_to_lists(value, exclude_none)
 
