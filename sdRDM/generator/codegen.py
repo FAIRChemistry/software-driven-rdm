@@ -10,7 +10,8 @@ from joblib import Parallel, delayed
 from typing import Dict, Optional
 from importlib import resources as pkg_resources
 
-from sdRDM.generator.mermaid import MermaidClass
+from sdRDM.generator.mermaidclass import MermaidClass
+from sdRDM.generator.mermaidenum import MermaidEnum
 from sdRDM.generator.schemagen import generate_schema, Format
 from sdRDM.generator import templates as jinja_templates
 
@@ -131,7 +132,14 @@ def get_class_definitions(path: str, descriptions) -> Dict[str, MermaidClass]:
 
     definitions = {}
     for cls_def in classes:
-        cls_def = MermaidClass.parse(cls_def, descriptions)
+
+        if "<< Enumeration >>" in cls_def:
+            name = cls_def.split("{")[0].strip()
+            values = cls_def.split("        +")[1:-1]
+            cls_def = MermaidEnum(name=name, values=values)
+        else:
+            cls_def = MermaidClass.parse(cls_def, descriptions)
+
         definitions[cls_def.name] = cls_def
 
     return definitions
@@ -184,35 +192,42 @@ def get_keys(dictionary):
     return keys
 
 
-def write_class(tree: dict, classes: dict, dirpath: str, url, commit, inherit=None):
-    """Recursively writes classes"""
+def write_class(tree: dict, classes: dict, dirpath: str, url, commit):
+    """Writes all classes in a parallel manner"""
 
-    used_classes = _write_dependent_classes(
+    _distribute_inheritance(
         tree=tree,
         classes=classes,
-        dirpath=dirpath,
-        inherit=inherit,
-        url=url,
-        commit=commit,
     )
 
     kwargs = {
         "classes": classes,
         "dirpath": dirpath,
-        "used_classes": used_classes,
         "url": url,
         "commit": commit,
     }
 
     Parallel(n_jobs=-1)(
-        delayed(_write_lone_class)(cls_obj=cls_obj, **kwargs)
+        delayed(_write_classes)(cls_obj=cls_obj, **kwargs)
         for cls_obj in classes.values()
     )
 
 
-def _write_lone_class(cls_obj, classes: dict, dirpath: str, used_classes, url, commit):
+def _distribute_inheritance(
+    tree: dict,
+    classes: dict,
+):
+    """Parses the dependency tree and assigns class that is to inherit"""
+    for cls_name, sub_cls in tree.items():
+        for cls in sub_cls.keys():
+            classes[cls].inherit = classes[cls_name]
 
-    if cls_obj.name in used_classes:
+
+def _write_classes(cls_obj, classes: dict, dirpath: str, url, commit):
+
+    if isinstance(cls_obj, MermaidEnum):
+        # Enums do not possess sub classes so they can be directly rendered
+        _render_class(cls_obj, dirpath, classes=classes, url=url, commit=commit)
         return
 
     # First, check if all arbitrary types exist
@@ -229,90 +244,47 @@ def _write_lone_class(cls_obj, classes: dict, dirpath: str, used_classes, url, c
         cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
 
     # Finally, render the given class
-    _render_class(cls_obj, dirpath, None, classes=classes, url=url, commit=commit)
+    _render_class(cls_obj, dirpath, classes=classes, url=url, commit=commit)
 
 
-def _write_dependent_classes(
-    tree: dict,
-    classes: dict,
-    dirpath: str,
-    url: str,
-    commit: str,
-    inherit=None,
-):
-    # Write classes from the dependency tree
-    used_classes = []
-    for cls_name, sub_cls in tree.items():
-
-        # Get the class object
-        cls_obj = classes[cls_name]
-
-        # First, check if all arbitrary types exist
-        # if not render them to a file
-        for sub_class in cls_obj.sub_classes:
-            sub_class = classes[sub_class]
-            cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
-
-            _render_class(
-                sub_class,
-                dirpath,
-                inherit=None,
-                classes=classes,
-                url=url,
-                commit=commit,
-            )
-            used_classes.append(sub_class.name)
-
-        # Finally, render the given class
-        if cls_name not in used_classes:
-            _render_class(
-                cls_obj,
-                dirpath,
-                inherit,
-                classes=classes,
-                url=url,
-                commit=commit,
-            )
-        used_classes.append(cls_name)
-
-        # Repeat process for sub-classes
-        if sub_cls:
-            used_classes += _write_dependent_classes(
-                tree=sub_cls,
-                classes=classes,
-                dirpath=dirpath,
-                inherit=cls_obj,
-                url=url,
-                commit=commit,
-            )
-
-    return used_classes
-
-
-def _render_class(cls_obj, dirpath, inherit, classes, url, commit):
+def _render_class(cls_obj, dirpath, classes, url, commit):
     """Renders imports, attributes and methods of a class"""
 
     path = os.path.join(dirpath, cls_obj.fname + ".py")
+
+    with open(path, "w") as file:
+
+        if isinstance(cls_obj, MermaidClass):
+            rendered_class = _render_data_class(cls_obj, dirpath, classes, url, commit)
+        elif isinstance(cls_obj, MermaidEnum):
+            rendered_class = cls_obj.render()
+        else:
+            raise TypeError(f"Class object of type '{type(cls_obj)}' is not supported.")
+
+        file.write(rendered_class)
+
+    # Call black to format everything
+    subprocess.run([sys.executable, "-m", "black", "-q", path])
+
+
+def _render_data_class(cls_obj, dirpath, classes, url, commit):
+    """Renders a given functional data class to a string that will be written to a file"""
 
     # Check if there are any sub classes in the attributes
     # that do not have any required field and thus can be
     # set as a default factory
     _set_optional_classes_as_default_factories(cls_obj, classes)
 
-    with open(path, "w") as file:
-        attributes = cls_obj._render_class_attrs(
-            inherit=inherit, url=url, commit=commit
-        )
-        add_methods = cls_obj._render_add_methods(classes=classes)
-        imports = cls_obj._render_imports(inherits=inherit)
+    attributes = cls_obj._render_class_attrs(
+        inherit=cls_obj.inherit, url=url, commit=commit
+    )
+    add_methods = cls_obj._render_add_methods(classes=classes)
+    imports = cls_obj._render_imports(inherits=cls_obj.inherit)
 
-        if add_methods:
-            file.write(f"{imports}\n{attributes}\n{add_methods}")
-        else:
-            file.write(f"{imports}\n{attributes}")
-
-    # Call black to format everything
-    subprocess.run([sys.executable, "-m", "black", "-q", path])
+    if add_methods:
+        return f"{imports}\n{attributes}\n{add_methods}"
+    else:
+        return f"{imports}\n{attributes}"
 
 
 def _set_optional_classes_as_default_factories(cls_obj, classes):
@@ -322,6 +294,8 @@ def _set_optional_classes_as_default_factories(cls_obj, classes):
         dtype = re.sub(r"\[|\]|Union|Optional", "", attribute["dtype"])
 
         if dtype not in classes:
+            continue
+        elif isinstance(classes[dtype], MermaidEnum):
             continue
 
         # Check if the datatype has only optional values
