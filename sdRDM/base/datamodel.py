@@ -9,9 +9,11 @@ import yaml
 import warnings
 
 from anytree import RenderTree, Node
+from enum import Enum
 from lxml import etree
+from nob import Nob
 from pydantic import PrivateAttr, root_validator, validator
-from typing import Dict, Iterable, Optional, List, Union
+from typing import Dict, Iterable, Optional
 
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import build_xml
@@ -37,32 +39,36 @@ class DataModel(pydantic.BaseModel):
 
     # ! Getters
     def get(self, path: str):
-        """Traverses the data model tree by a path and returns its content.
+        """Traverses the data model tree by a path or key and returns its content.
 
         Args:
             path (str): _description_
         """
 
-        checkpoints = iter(path.split("/"))
-        return self._traverse_data_model(checkpoints, self)
+        if not path.startswith("/"):
+            path = f"/{path}"
 
-    def _traverse_data_model(self, checkpoints: Iterable[str], obj):
+        model = Nob(self.to_dict(warn=False))
 
-        try:
-            checkpoint = next(checkpoints)
-        except StopIteration:
-            return obj
+        for path in model.find(path):
+            return self._traverse_model_by_path(self, path)
 
-        if checkpoint.isdigit():
-            sub_obj = obj[int(checkpoint)]
+    def _traverse_model_by_path(self, object, path):
+        """Traverses a give sdRDM model by using a path"""
+
+        if path[0].isdigit():
+            object = object[int(path[0])]
         else:
-            sub_obj = obj.__dict__.get(checkpoint)
+            object = getattr(object, path[0])
 
-        return self._traverse_data_model(checkpoints, sub_obj)
+        if len(path) == 1:
+            return object
+        else:
+            return self._traverse_model_by_path(object, path[1::])
 
     # ! Exporters
-    def to_dict(self, exclude_none=True):
-        data = super().dict(exclude_none=True, by_alias=True)
+    def to_dict(self, exclude_none=True, warn=True):
+        data = super().dict(exclude_none=exclude_none, by_alias=True)
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
@@ -73,15 +79,18 @@ class DataModel(pydantic.BaseModel):
 
         try:
             # Add git specs if available
-            data["__source__"].update({
-                "repo": self.__repo__,  # type: ignore
-                "commit": self.__commit__,  # type: ignore
-                "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
-            })  # type: ignore
+            data["__source__"].update(
+                {
+                    "repo": self.__repo__,  # type: ignore
+                    "commit": self.__commit__,  # type: ignore
+                    "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
+                }
+            )  # type: ignore
         except AttributeError:
-            warnings.warn(
-                "No 'URL' and 'Commit' specified. This model might not be re-usable."
-            )
+            if warn:
+                warnings.warn(
+                    "No 'URL' and 'Commit' specified. This model might not be re-usable."
+                )
 
         return data
 
@@ -296,15 +305,24 @@ class DataModel(pydantic.BaseModel):
             if inspect.isclass(obj) and issubclass(obj, DataModel)
         }
 
+        enums = {
+            obj.__name__: ObjectNode(obj)
+            for obj in lib.__dict__.values()
+            if inspect.isclass(obj) and issubclass(obj, Enum)
+        }
+
         class ImportedModules:
             """Empty class used to store all sub classes"""
 
-            def __init__(self, classes):
+            def __init__(self, classes, enums=None):
                 for name, node in classes.items():
                     # Add all classes
                     setattr(self, name, node.cls)
 
-        return ImportedModules(classes)
+                if enums:
+                    self.enums = self.__class__(classes=enums)
+
+        return ImportedModules(classes, enums)
 
     @staticmethod
     def _find_root_objects(classes: Dict):
