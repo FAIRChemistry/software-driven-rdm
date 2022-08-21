@@ -15,3 +15,21 @@ def camel_to_snake(name: str) -> str:
     name = re.sub("@", "", name)
     name = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
     return re.sub("([a-z0-9])([A-Z])", r"\1_\2", name).lower()
+
+
+def check_numeric(value):
+    # Checks whether the given value is of special type
+
+    if value.lower() == "none":
+        return value
+
+    if value.lower() in ["false", "true"]:
+        return value
+
+    try:
+        int(value)
+        float(value)
+        bool(value)
+        return value
+    except ValueError:
+        return f'"{value}"'
