@@ -1,7 +1,7 @@
     def add_to_{{ snake_case }}(
         self,
         {%- for attr in signature %}
-        {{attr.name}}: {{attr.dtype}} {% if 'Optional' in attr.dtype or 'None' in attr.dtype %}= None {% elif attr.multiple is true %}= ListPlus(){% endif %},
+        {{attr.name}}: {{attr.dtype}} {% if 'default' in attr%}= {{attr.default}} {% elif attr.multiple is true %}= ListPlus(){% endif %},
         {%- endfor %}
     ) -> None:
         """
@@ -13,10 +13,12 @@
             {%- endfor %}
         """
 
-        self.{{attribute}}.append(
+        {{ snake_case }} = [
             {{cls}}(
                 {%- for attr in signature %}
                 {{attr.name}}={{attr.name}},
                 {%- endfor %}
             )
-        )
+        ]
+
+        self.{{attribute}} = self.{{attribute}} + {{ snake_case }}
