@@ -4,11 +4,13 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List
 
-from sdRDM.generator.mermaid import DataTypes
+from sdRDM.generator.mermaidclass import DataTypes
 from sdRDM.generator.abstractparser import SchemaParser
 
-MODULE_PATTERN = r"^#{1} "
-OBJECT_PATTERN = r"^#{3}"
+MODULE_PATTERN = r"^#{1}\s"
+OBJECT_PATTERN = r"^#{3}\s"
+ENUM_PATTERN = r"^#{4}\s"
+ENUM_VALUE_PATTERN = r"[A-Z0-9a-z]*\s?\=\s?[A-Z0-9a-z]*"
 ATTRIBUTE_PATTERN = r"- __([A-Za-z0-9\_]*)(\*?)__"
 OPTION_PATTERN = r"([A-Za-z\_]*)\s?\:\s(.*)?"
 SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
@@ -23,10 +25,16 @@ class State(Enum):
 
     NEW_MODULE = auto()
     INSIDE_MODULE = auto()
+
     NEW_OBJECT = auto()
     INSIDE_OBJECT = auto()
     INSIDE_ATTRIBUTE = auto()
     NEW_ATTRIBUTE = auto()
+
+    NEW_ENUM = auto()
+    INSIDE_ENUM = auto()
+    NEW_ENUM_VALUE = auto()
+
     END_OF_FILE = auto()
     IDLE = auto()
 
@@ -39,6 +47,7 @@ class MarkdownParser(SchemaParser):
     attr: Dict = field(default_factory=dict)
     obj: Dict = field(default_factory=dict)
     objs: List = field(default_factory=list)
+    enums: List = field(default_factory=list)
     inherits: List = field(default_factory=list)
     compositions: List = field(default_factory=list)
     module_docstring: List[str] = field(default_factory=list)
@@ -71,6 +80,23 @@ class MarkdownParser(SchemaParser):
 
             elif re.findall(OPTION_PATTERN, line):
                 parser.state = State.INSIDE_ATTRIBUTE
+
+            elif not line.startswith("-") and parser.state == State.INSIDE_ATTRIBUTE:
+                parser.state = State.NEW_MODULE
+
+            elif re.findall(ENUM_PATTERN, line):
+                parser.state = State.NEW_ENUM
+
+            elif re.findall(ENUM_VALUE_PATTERN, line):
+                parser.state = State.NEW_ENUM_VALUE
+
+            elif (
+                not re.findall(ENUM_VALUE_PATTERN, line)
+                and parser.state == State.NEW_ENUM_VALUE
+            ):
+                parser.enums.append(parser.enum)
+                del parser.enum
+                parser.state = State.NEW_MODULE
 
             parser.parse_line(line, index)
 
@@ -156,6 +182,25 @@ class MarkdownParser(SchemaParser):
             self._check_compositions()
             self._add_attribute_to_obj()
             self._set_up_new_attribute(line)
+
+        elif self.state is State.NEW_ENUM:
+
+            if hasattr(self, "enum"):
+                self.enums.append(self.enum)
+
+            self.enum = {
+                "name": line.replace("#", "").strip(),
+                "mappings": [],
+                "docstring": [],
+            }
+            self.state = State.INSIDE_ENUM
+
+        elif self.state is State.INSIDE_ENUM:
+            if line.strip() and not line.startswith("'''"):
+                self.enum["docstring"].append(line.strip())
+
+        elif self.state is State.NEW_ENUM_VALUE:
+            self.enum["mappings"].append(line.strip())
 
         elif self.state is State.END_OF_FILE:
             # When the file has ende, usually there will be a "leftover"

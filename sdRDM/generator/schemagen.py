@@ -35,7 +35,10 @@ def generate_schema(handle, out: str, format: Format):
         pkg_resources.read_text(jinja_templates, "mermaid_class.jinja2")
     )
     mermaid_string = template.render(
-        inherits=parser.inherits, compositions=parser.compositions, classes=parser.objs
+        inherits=parser.inherits,
+        compositions=parser.compositions,
+        classes=parser.objs,
+        enums=parser.enums,
     )
 
     # Create dirs if not already created
@@ -50,14 +53,18 @@ def generate_schema(handle, out: str, format: Format):
         file.write(mermaid_string)
 
     with open(metadata_path, "w") as file:
-        file.write(write_metadata(parser.objs, parser.module_docstring))
+        file.write(write_metadata(parser))
 
     return mermaid_path, metadata_path
 
 
-def write_metadata(definitions, module_doc) -> str:
-    module_objs = {"docstring": module_doc}
-    for obj in definitions:
+def write_metadata(parser: SchemaParser) -> str:
+    module_objs = {"docstring": parser.module_docstring}
+    
+    # Add List of Enums to check for defaults
+    module_objs["enums"] = [enum["name"] for enum in parser.enums]
+    
+    for obj in parser.objs:
         attr_meta = {}
         for attr in obj["attributes"]:
 
@@ -76,5 +83,6 @@ def write_metadata(definitions, module_doc) -> str:
             "attributes": attr_meta,
             "docstring": obj.get("docstring"),
         }
+
 
     return json.dumps(module_objs, indent=2)

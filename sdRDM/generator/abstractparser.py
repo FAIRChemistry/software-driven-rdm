@@ -5,6 +5,7 @@ from typing import List
 class SchemaParser(ABC):
 
     objs: List
+    enums: List
     inherits: List
     compositions: List
     module_name: str = ""

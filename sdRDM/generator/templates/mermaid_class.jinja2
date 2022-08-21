@@ -15,4 +15,13 @@ classDiagram
         {%- endfor %}
     }
     {% endfor %}
+
+    {%- for enum in enums %}
+    class {{enum.name}} {
+        << Enumeration >>
+        {%- for value in enum.mappings %}
+        +{{value}}
+        {%- endfor %}
+    }
+    {% endfor %}
 ```

@@ -4,9 +4,10 @@ import jinja2
 
 from enum import Enum
 from importlib import resources as pkg_resources
-from typing import Optional
+from typing import Dict, List, Optional
 
 from sdRDM.generator import templates as jinja_templates
+from sdRDM.tools.utils import check_numeric
 
 DTYPE_PATTERN = r"List\[|Optional\[|\]"
 BUILTINS = ["str", "float", "int", "datetime", "none", "bool", "bytes"]
@@ -15,12 +16,15 @@ BUILTINS = ["str", "float", "int", "datetime", "none", "bool", "bytes"]
 class DataTypes(Enum):
     """Holds Data Type mappings"""
 
+    # TODO Add lookup to PyDantic Types
+
     string = ("str", None)
     float = ("float", None)
     int = ("int", None)
     bytes = ("bytes", None)
     posfloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
     PositiveFloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
+    positivefloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
     date = ("datetime", "from datetime import datetime")
     datetime = ("datetime", "from datetime import datetime")
     bool = ("bool", None)
@@ -37,6 +41,7 @@ class MermaidClass:
         self.imports = set()
         self.sub_classes = []
         self.adders = {}
+        self.inherit = None
 
         self.attributes = self._process_attributes(attributes)
         self.fname = self.name.lower()
@@ -196,19 +201,6 @@ class MermaidClass:
             "description": lambda value: r'"' + value.replace('"', "'") + r'"',
         }
 
-        def check_numeric(value):
-            # Checks whether the given value is of special type
-
-            if value.lower() == "none":
-                return value
-
-            try:
-                int(value)
-                float(value)
-                return value
-            except ValueError:
-                return f'"{value}"'
-
         for name, value in options.items():
 
             if name in type_factory:
@@ -269,13 +261,14 @@ class MermaidClass:
     def _render_add_methods(self, classes):
         """Renders add methods for all composite elements"""
 
-        methods = []
-
         add_template = jinja2.Template(
             pkg_resources.read_text(jinja_templates, "add_method_template.jinja2")
         )
 
-        for attribute, add_class in self.adders.items():
+        methods = []
+        adders = list(self.adders.items())
+
+        for attribute, add_class in adders:
 
             if add_class in DataTypes.get_value_list():
                 continue
@@ -287,33 +280,26 @@ class MermaidClass:
             # foreign class definition
             for imp in list(add_class.imports):
                 if "sdRDM" not in imp:
-
                     self.imports.add(imp)
 
-            for attr in add_class.attributes.values():
-                # Add dependcies from add method
-                dtype = re.sub(DTYPE_PATTERN, "", attr["dtype"])
+            # Combine attributes from adder class
+            # and their parent class, if given
+            add_class_attrs = add_class.attributes
+            if add_class.inherit:
+                add_class_attrs = {**add_class.inherit.attributes, **add_class_attrs}
 
-                if dtype not in BUILTINS:
-
-                    dtypes = dtype.replace("Union[", "").replace("]", "")
-                    for dtype in dtypes.split(","):
-                        dtype = dtype.strip()
-
-                        if dtype.lower() in BUILTINS or dtype.startswith("'"):
-                            # Discard builtins and self-references
-                            continue
-
-                        # Adress Union import and split them up
-                        # to individually import the classes
-                        self.imports.add(f"from .{dtype.lower()} import {dtype}")
+            # Add all dependencies
+            self._process_adder_dependencies(add_class_attrs=add_class_attrs)
 
             # Get all attributes into the appropriate format
             signature = [
-                {"name": name, **attr} for name, attr in add_class.attributes.items()
+                {"name": name, **attr} for name, attr in add_class_attrs.items()
             ]
 
-            signature = sorted(signature, key=lambda x: "Optional" in x["dtype"])
+            signature = sorted(
+                signature,
+                key=lambda x: "default" in x or x["multiple"],
+            )
 
             methods.append(
                 add_template.render(
@@ -328,11 +314,40 @@ class MermaidClass:
         if methods:
             return "\n".join(methods)
 
+    def _process_adder_dependencies(self, add_class_attrs: Dict):
+        """Processes the given datatypes found in the adder classes
+        to build an add function. This method will add the required
+        imports to guarantee the Typing.
+
+        """
+        for attr in add_class_attrs.values():
+            # Add dependcies from add method
+            dtype = re.sub(DTYPE_PATTERN, "", attr["dtype"])
+
+            if dtype in BUILTINS:
+                continue
+
+            dtypes = dtype.replace("Union[", "").replace("]", "")
+            for dtype in dtypes.split(","):
+                dtype = dtype.strip()
+
+                if (
+                    dtype.lower() in BUILTINS
+                    or dtype.startswith("'")
+                    or dtype.lower() in DataTypes.__members__
+                ):
+                    # Discard builtins and self-references
+                    continue
+
+                # Adress Union import and split them up
+                # to individually import the classes
+                self.imports.add(f"from .{dtype.lower()} import {dtype}")
+
     def __repr__(self) -> str:
         return yaml.safe_dump({self.name: self.attributes})
 
     @classmethod
-    def parse(cls, mermaid_cls, descriptions):
+    def parse(cls, mermaid_cls, module_meta):
         """Parses a mermaid class definition"""
 
         # Get the class name
@@ -340,7 +355,8 @@ class MermaidClass:
         name = name_regex.findall(mermaid_cls)[0]
 
         # Get the attribute metadata
-        descriptions = descriptions[name]
+        descriptions = module_meta[name]
+        objects = list(module_meta.keys()) + list(module_meta["enums"])
 
         if not name:
             raise ValueError(
@@ -360,6 +376,9 @@ class MermaidClass:
         for dtype, multiple, attr_name, required in raw_attrs:
             # TODO add special Type mapping
             attr_metadata = descriptions["attributes"][attr_name]
+
+            cls._process_attr_metadata(attr_metadata, objects)
+
             attr_dict = {"dtype": dtype, **attr_metadata}
 
             if multiple:
@@ -384,3 +403,14 @@ class MermaidClass:
         return cls(
             name=name, attributes=attributes, docstring=descriptions.get("docstring")
         )
+
+    @staticmethod
+    def _process_attr_metadata(attr_metadata: Dict, objects: List[str]):
+
+        for name, value in attr_metadata.items():
+            if name.lower() == "default":
+
+                if isinstance(value, str) and any(obj in value for obj in objects):
+                    attr_metadata[name] = value
+                else:
+                    attr_metadata[name] = check_numeric(value)
