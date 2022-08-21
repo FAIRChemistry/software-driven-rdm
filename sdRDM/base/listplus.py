@@ -18,6 +18,10 @@ class ListPlus(List[Any]):
             else:
                 self.append(arg)
 
+    def append(self, *args):
+        for arg in args:
+            super().append(arg)
+
     def get(self, query: str, attr: str = "id"):
         """Given an a query, returns all objects that match
 
