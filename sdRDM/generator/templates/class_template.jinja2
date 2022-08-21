@@ -5,7 +5,11 @@ class {{name}}({% if inherit is not none %}
 
                 
     {% if docstring is not none %}"""{{ docstring }}"""{% endif %}
-
+    
+    id: str = Field(
+            description="Unique identifier of the given object.",
+            default_factory=IDGenerator("{{name.lower()}}INDEX")
+    )
     {% for attribute in attributes -%}
     {{ attribute }}
     {% endfor -%}

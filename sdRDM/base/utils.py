@@ -1,8 +1,22 @@
+import re
+
 from lxml import etree
 from inspect import Signature, Parameter
 
 from sdRDM.tools.utils import snake_to_camel
 
+class IDGenerator:
+    def __init__(self, pattern: str):
+        self.pattern = pattern.replace(r"\d", "INDEX")
+        self.index = 0
+    
+    def __call__(self):
+        return self.generate_id()
+    
+    def generate_id(self):
+        id = re.sub(r"\[?INDEX\]?[+|*|?]?", str(self.index), self.pattern)
+        self.index += 1
+        return id
 
 def build_xml(obj):
     node = etree.Element(snake_to_camel(obj.__class__.__name__))
