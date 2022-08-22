@@ -38,20 +38,37 @@ class DataModel(pydantic.BaseModel):
     __node__: Optional[Node] = PrivateAttr(default=None)
 
     # ! Getters
-    def get(self, path: str):
+    def get(
+        self, path: str, attribute: Optional[str] = None, target: Optional[str] = None
+    ):
         """Traverses the data model tree by a path or key and returns its content.
 
         Args:
             path (str): _description_
         """
 
-        if not path.startswith("/"):
+        if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
         model = Nob(self.to_dict(warn=False))
+        path = model.find(path)
 
-        for path in model.find(path):
-            return self._traverse_model_by_path(self, path)
+        if attribute is None and target is None:
+            return self._traverse_model_by_path(self, path[0])
+        else:
+            object = self._traverse_model_by_path(self, path[0])
+
+            if isinstance(object, ListPlus):
+                result = object.get(query=target, attr=attribute)  # type: ignore
+                
+                if len(result) == 1:
+                    return result[0]
+                else:
+                    return result
+
+            else:
+                if hasattr(object, attribute) and getattr(object, attribute) == target:
+                    return object
 
     def _traverse_model_by_path(self, object, path):
         """Traverses a give sdRDM model by using a path"""
@@ -65,6 +82,18 @@ class DataModel(pydantic.BaseModel):
             return object
         else:
             return self._traverse_model_by_path(object, path[1::])
+
+    def paths(self, leaves=False):
+        """Returns all possible paths of the data model. Can also be reduced to just leaves."""
+
+        # Get JSON representation
+        model = Nob(self.to_dict(warn=False))
+
+        if leaves:
+            return model.leaves
+        else:
+            return model.paths
+        
 
     # ! Exporters
     def to_dict(self, exclude_none=True, warn=True):
@@ -239,7 +268,7 @@ class DataModel(pydantic.BaseModel):
         lib = cls.from_git(url=url, commit=commit)
 
         # Use the internal librar to parse the file
-        return getattr(lib, root).from_dict(dataset)  # type: ignore
+        return getattr(lib, root).from_dict(dataset), lib  # type: ignore
 
     @staticmethod
     def _is_json(json_string: str):
