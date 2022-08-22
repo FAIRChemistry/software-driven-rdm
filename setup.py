@@ -20,7 +20,8 @@ setup(
         "pyyaml",
         "anytree",
         "typing_utils",
-        "joblib"
+        "joblib",
+        "nob",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
