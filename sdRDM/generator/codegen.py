@@ -1,4 +1,7 @@
+import ast
+from copy import deepcopy
 import glob
+from hashlib import new
 import os
 import re
 import jinja2
@@ -14,6 +17,7 @@ from sdRDM.generator.mermaidclass import MermaidClass
 from sdRDM.generator.mermaidenum import MermaidEnum
 from sdRDM.generator.schemagen import generate_schema, Format
 from sdRDM.generator import templates as jinja_templates
+from sdRDM.generator.utils import preserve_custom_functions
 
 FORMAT_MAPPING: Dict[str, Format] = {"md": Format.MARKDOWN}
 
@@ -252,22 +256,24 @@ def _render_class(cls_obj, dirpath, classes, url, commit):
 
     path = os.path.join(dirpath, cls_obj.fname + ".py")
 
+    if isinstance(cls_obj, MermaidClass):
+        rendered_class = _render_data_class(cls_obj, classes, url, commit)
+    elif isinstance(cls_obj, MermaidEnum):
+        rendered_class = cls_obj.render()
+    else:
+        raise TypeError(f"Class object of type '{type(cls_obj)}' is not supported.")
+
+    if os.path.exists(path):
+        rendered_class = preserve_custom_functions(rendered_class, path)
+
     with open(path, "w") as file:
-
-        if isinstance(cls_obj, MermaidClass):
-            rendered_class = _render_data_class(cls_obj, dirpath, classes, url, commit)
-        elif isinstance(cls_obj, MermaidEnum):
-            rendered_class = cls_obj.render()
-        else:
-            raise TypeError(f"Class object of type '{type(cls_obj)}' is not supported.")
-
         file.write(rendered_class)
 
     # Call black to format everything
-    subprocess.run([sys.executable, "-m", "black", "-q", path])
+    subprocess.run([sys.executable, "-m", "black", "-q", "--preview", path])
 
 
-def _render_data_class(cls_obj, dirpath, classes, url, commit):
+def _render_data_class(cls_obj, classes, url, commit):
     """Renders a given functional data class to a string that will be written to a file"""
 
     # Check if there are any sub classes in the attributes
