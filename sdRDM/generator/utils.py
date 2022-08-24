@@ -128,7 +128,7 @@ def _format_classes(new_module, previous_module):
 def _sort_class_body(element) -> int:
     """Sorts bodies of classes according to Expressions > Annotations > Methods"""
 
-    if isinstance(element, ast.Expression):
+    if isinstance(element, (ast.Expression, ast.Expr)):
         return ClassOrder.DOCSTRING.value
     elif isinstance(element, ast.AnnAssign):
         if not element.target.id.startswith("__"):
