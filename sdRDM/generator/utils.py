@@ -51,6 +51,9 @@ def preserve_custom_functions(rendered_class: str, path: str) -> str:
 def _stylize_class(rendered: str):
     """Inserts newlines to render the code more readable"""
     
+    if "Enum" in rendered:
+        return rendered
+    
     nu_render = []
     for line in rendered.split("\n"):
         if bool(re.findall(r"[Field|PrivateAttr]", line)) and ": " in line:
@@ -135,6 +138,8 @@ def _sort_class_body(element) -> int:
             return ClassOrder.ATTRIBUTES.value
         else:
             return ClassOrder.PRIV_ATTRIBUTES.value
+    elif isinstance(element, ast.Assign):
+        return ClassOrder.ATTRIBUTES.value
     elif isinstance(element, ast.FunctionDef):
         return ClassOrder.METHODS.value
     else:
@@ -155,8 +160,6 @@ def _format_imports(new_module, previous_model):
 
     used_imports = set()
     nu_body = []
-    
-    print(types)
     
     for element in previous_model.body:
         
