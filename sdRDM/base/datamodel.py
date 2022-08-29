@@ -13,7 +13,7 @@ from enum import Enum
 from lxml import etree
 from nob import Nob
 from pydantic import PrivateAttr, root_validator, validator
-from typing import Dict, Iterable, Optional
+from typing import Dict, Optional
 
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import build_xml
@@ -60,7 +60,7 @@ class DataModel(pydantic.BaseModel):
 
             if isinstance(object, ListPlus):
                 result = object.get(query=target, attr=attribute)  # type: ignore
-                
+
                 if len(result) == 1:
                     return result[0]
                 else:
@@ -93,7 +93,6 @@ class DataModel(pydantic.BaseModel):
             return model.leaves
         else:
             return model.paths
-        
 
     # ! Exporters
     def to_dict(self, exclude_none=True, warn=True):
@@ -302,11 +301,7 @@ class DataModel(pydantic.BaseModel):
         return cls._extract_modules(lib)
 
     @classmethod
-    def from_git(
-        cls,
-        url: str,
-        commit: Optional[str] = None,
-    ):
+    def from_git(cls, url: str, commit: Optional[str] = None, only_classes: bool = False):
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -319,7 +314,10 @@ class DataModel(pydantic.BaseModel):
         """
 
         # Build and import the library
-        lib = build_library_from_git_specs(url=url, commit=commit)
+        lib = build_library_from_git_specs(url=url, commit=commit, only_classes=only_classes)
+
+        if only_classes:
+            return lib
 
         return cls._extract_modules(lib)
 

@@ -39,6 +39,7 @@ def generate_schema(handle, out: str, format: Format):
         compositions=parser.compositions,
         classes=parser.objs,
         enums=parser.enums,
+        externals=parser.external_objects,
     )
 
     # Create dirs if not already created
@@ -60,10 +61,15 @@ def generate_schema(handle, out: str, format: Format):
 
 def write_metadata(parser: SchemaParser) -> str:
     module_objs = {"docstring": parser.module_docstring}
-    
+
     # Add List of Enums to check for defaults
     module_objs["enums"] = [enum["name"] for enum in parser.enums]
-    
+
+    # Add List of external Object
+    module_objs["external"] = {
+        name: obj_adress for name, obj_adress in parser.external_objects.items()
+    }
+
     for obj in parser.objs:
         attr_meta = {}
         for attr in obj["attributes"]:
@@ -83,6 +89,5 @@ def write_metadata(parser: SchemaParser) -> str:
             "attributes": attr_meta,
             "docstring": obj.get("docstring"),
         }
-
 
     return json.dumps(module_objs, indent=2)

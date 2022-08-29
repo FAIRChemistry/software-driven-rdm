@@ -24,4 +24,12 @@ classDiagram
         {%- endfor %}
     }
     {% endfor %}
+
+
+    {%- for name, adress in externals.items() %}
+    class {{name}} {
+        << External Object >>
+        +Repository {{adress}}
+    }
+    {% endfor %}
 ```

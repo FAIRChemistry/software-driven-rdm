@@ -1,6 +1,8 @@
+import glob
 import importlib
 import os
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -8,7 +10,7 @@ import tempfile
 from functools import lru_cache
 from typing import Optional
 
-from sdRDM.generator.codegen import generate_python_api
+CACHE_SIZE = 20
 
 
 class ObjectNode:
@@ -27,8 +29,10 @@ class ObjectNode:
         return repr(self.cls)
 
 
-@lru_cache(maxsize=5)
-def build_library_from_git_specs(url: str, commit: Optional[str] = None):
+@lru_cache(maxsize=CACHE_SIZE)
+def build_library_from_git_specs(
+    url: str, commit: Optional[str] = None, only_classes: bool = False
+):
     """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
     This function will clone the repository into a temporary directory and
@@ -38,7 +42,11 @@ def build_library_from_git_specs(url: str, commit: Optional[str] = None):
     Args:
         url (str): Link to the git repository. Use the URL ending with ".git".
         commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
+        only_classes (bool): Returns the raw strings rather than the initialized files
     """
+
+    # Import generator to prevent circular import
+    from sdRDM.generator.codegen import generate_python_api
 
     with tempfile.TemporaryDirectory() as tmpdirname:
 
@@ -53,9 +61,17 @@ def build_library_from_git_specs(url: str, commit: Optional[str] = None):
         # Generate API to parse the file
         lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
         api_loc = os.path.join(tmpdirname, lib_name)
-        generate_python_api(
-            path=schema_loc, out=tmpdirname, name=lib_name, url=url, commit=commit
+        cls_defs = generate_python_api(
+            path=schema_loc,
+            out=tmpdirname,
+            name=lib_name,
+            url=url,
+            commit=commit,
+            only_classes=only_classes,
         )
+
+        if only_classes:
+            return cls_defs
 
         return _import_library(api_loc=api_loc, lib_name=lib_name)
 
@@ -80,7 +96,7 @@ def _fetch_from_git(url: str, path: str, cwd: str, commit: Optional[str] = None)
         return commit.decode("utf-8").strip()
 
 
-@lru_cache(maxsize=5)
+@lru_cache(maxsize=CACHE_SIZE)
 def _import_library(api_loc: str, lib_name: str):
     spec = importlib.util.spec_from_file_location(  # type: ignore
         lib_name, os.path.join(api_loc, "core", "__init__.py")

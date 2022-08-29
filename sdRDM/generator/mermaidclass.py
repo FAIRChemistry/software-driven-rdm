@@ -343,8 +343,8 @@ class MermaidClass:
                 # to individually import the classes
                 self.imports.add(f"from .{dtype.lower()} import {dtype}")
 
-    def __repr__(self) -> str:
-        return yaml.safe_dump({self.name: self.attributes})
+    # def __repr__(self) -> str:
+    #     return yaml.safe_dump({self.name: self.attributes})
 
     @classmethod
     def parse(cls, mermaid_cls, module_meta):
@@ -356,7 +356,11 @@ class MermaidClass:
 
         # Get the attribute metadata
         descriptions = module_meta[name]
-        objects = list(module_meta.keys()) + list(module_meta["enums"])
+        objects = (
+            list(module_meta.keys())
+            + list(module_meta["enums"])
+            + list(module_meta["external"])
+        )
 
         if not name:
             raise ValueError(

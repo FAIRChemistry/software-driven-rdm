@@ -1,7 +1,4 @@
-import ast
-from copy import deepcopy
 import glob
-from hashlib import new
 import os
 import re
 import jinja2
@@ -9,17 +6,21 @@ import json
 import subprocess
 import sys
 
-from joblib import Parallel, delayed
-from typing import Dict, Optional
 from importlib import resources as pkg_resources
+from joblib import Parallel, delayed
+from operator import itemgetter
+from typing import Dict, Optional
 
 from sdRDM.generator.mermaidclass import MermaidClass
 from sdRDM.generator.mermaidenum import MermaidEnum
+from sdRDM.generator.mermaidexternal import MermaidExternal
+from sdRDM.tools.gitutils import build_library_from_git_specs
 from sdRDM.generator.schemagen import generate_schema, Format
 from sdRDM.generator import templates as jinja_templates
 from sdRDM.generator.utils import preserve_custom_functions
 
 FORMAT_MAPPING: Dict[str, Format] = {"md": Format.MARKDOWN}
+GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.]*[.git]?)"
 
 
 def generate_python_api(
@@ -28,6 +29,7 @@ def generate_python_api(
     name: str,
     url: Optional[str] = None,
     commit: Optional[str] = None,
+    only_classes: bool = False,
 ):
 
     # Create library directory
@@ -55,6 +57,9 @@ def generate_python_api(
     else:
         raise TypeError(f"Given path '{path}' is neither a file nor a directory.")
 
+    # Store the class definitions to return those
+    cls_defs = {}
+
     for file in specifications:
         extension = os.path.basename(file).split(".")[-1]
 
@@ -68,14 +73,17 @@ def generate_python_api(
         )
 
         # Generate the API
-        write_module(
+        cls_defs = write_module(
             schema=mermaid_path,
             descriptions_path=metadata_path,
             out=core_path,
             is_single=is_single,
             url=url,
             commit=commit,
+            only_classes=only_classes,
         )
+
+    return cls_defs
 
 
 def write_module(
@@ -85,7 +93,8 @@ def write_module(
     is_single: bool = False,
     commit: Optional[str] = None,
     url: Optional[str] = None,
-) -> None:
+    only_classes: bool = False,
+) -> Optional[Dict[str, MermaidClass]]:
     """Renders and writes a module based on a Mermaid schema
 
     Steps:
@@ -111,13 +120,16 @@ def write_module(
     # (1) Get class definitions
     class_defs = get_class_definitions(schema, descriptions)
 
+    if only_classes:
+        return class_defs
+
     # (2) Build dependency tree
     tree = create_dependency_tree(open(schema).read())
 
     # (3) Render, write and re-format classes
     write_class(tree=tree, classes=class_defs, dirpath=path, url=url, commit=commit)
 
-    # (3) Finally, write the __init__ file
+    # (5) Finally, write the __init__ file
     init_path = os.path.join(path, "__init__.py")
     with open(init_path, "w") as f:
         module_init = render_dunder_init(
@@ -133,7 +145,6 @@ def get_class_definitions(path: str, descriptions) -> Dict[str, MermaidClass]:
 
     cls_string = open(path).read()
     classes = cls_string.split("class ")[1::]
-
     definitions = {}
     for cls_def in classes:
 
@@ -141,12 +152,49 @@ def get_class_definitions(path: str, descriptions) -> Dict[str, MermaidClass]:
             name = cls_def.split("{")[0].strip()
             values = cls_def.split("        +")[1:-1]
             cls_def = MermaidEnum(name=name, values=values)
+        elif "<< External Object >>" in cls_def:
+            cls_def = _process_external_object(cls_def, definitions)
         else:
             cls_def = MermaidClass.parse(cls_def, descriptions)
 
         definitions[cls_def.name] = cls_def
 
     return definitions
+
+
+def _process_external_object(cls_def: str, definitions: Dict):
+    """Processes an external object that has been supplied as a link to a GitHub repository"""
+
+    # Get metadata and class definitions
+    name = cls_def.split("{")[0].strip()
+    repo = re.findall(GITHUB_TYPE_PATTERN, cls_def)[0]
+    cls_defs = build_library_from_git_specs(url=repo, only_classes=True)
+    target = cls_defs[name]
+
+    # Fetch all the sub data types to include these into the build
+    dtypes = _get_object_types(cls_def=target, definitions=cls_defs)
+
+    # Add all definitions to the current APIs
+    definitions.update(
+        {cls_def.name: cls_def for cls_def in map(cls_defs.get, list(dtypes))}
+    )
+
+    return target
+
+
+def _get_object_types(cls_def, definitions, dtypes=None):
+    if dtypes is None:
+        dtypes = set()
+
+    for attr in cls_def.attributes.values():
+        dtype = re.sub(r"List|Dict|\[|\]", "", attr["dtype"])
+        if dtype in definitions:
+            dtypes.add(dtype)
+            _get_object_types(
+                cls_def=definitions[dtype], definitions=definitions, dtypes=dtypes
+            )
+
+    return dtypes
 
 
 def create_dependency_tree(mermaid: str):
@@ -233,6 +281,13 @@ def _write_classes(cls_obj, classes: dict, dirpath: str, url, commit):
         # Enums do not possess sub classes so they can be directly rendered
         _render_class(cls_obj, dirpath, classes=classes, url=url, commit=commit)
         return
+    elif isinstance(cls_obj, MermaidExternal):
+        # Write external objects to the generated software
+        path = os.path.join(dirpath, f"{cls_obj.fname}.py")
+        with open(path, "w") as f:
+            f.write(cls_obj.render())
+
+        return
 
     # First, check if all arbitrary types exist
     # if not render them to a file
@@ -255,7 +310,6 @@ def _render_class(cls_obj, dirpath, classes, url, commit):
     """Renders imports, attributes and methods of a class"""
 
     path = os.path.join(dirpath, cls_obj.fname + ".py")
-
     if isinstance(cls_obj, MermaidClass):
         rendered_class = _render_data_class(cls_obj, classes, url, commit)
     elif isinstance(cls_obj, MermaidEnum):
@@ -302,6 +356,8 @@ def _set_optional_classes_as_default_factories(cls_obj, classes):
         if dtype not in classes:
             continue
         elif isinstance(classes[dtype], MermaidEnum):
+            continue
+        elif isinstance(classes[dtype], MermaidExternal):
             continue
 
         # Check if the datatype has only optional values

@@ -16,6 +16,7 @@ OPTION_PATTERN = r"([A-Za-z\_]*)\s?\:\s(.*)?"
 SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
 OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
 LINKED_TYPE_PATTERN = r"\[([A-Za-z0-9\s\,]*)\]\([\#A-Za-z0-9\s\,]*\)"
+GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.]*[.git]?)"
 
 MANDATORY_OPTIONS = ["description", "type"]
 FORBIDDEN_NAMES = ["yield", "list", "dict", "return", "def", "class"]
@@ -48,6 +49,7 @@ class MarkdownParser(SchemaParser):
     obj: Dict = field(default_factory=dict)
     objs: List = field(default_factory=list)
     enums: List = field(default_factory=list)
+    external_objects: Dict = field(default_factory=dict)
     inherits: List = field(default_factory=list)
     compositions: List = field(default_factory=list)
     module_docstring: List[str] = field(default_factory=list)
@@ -81,9 +83,6 @@ class MarkdownParser(SchemaParser):
             elif re.findall(OPTION_PATTERN, line):
                 parser.state = State.INSIDE_ATTRIBUTE
 
-            elif not line.startswith("-") and parser.state == State.INSIDE_ATTRIBUTE:
-                parser.state = State.NEW_MODULE
-
             elif re.findall(ENUM_PATTERN, line):
                 parser.state = State.NEW_ENUM
 
@@ -96,6 +95,9 @@ class MarkdownParser(SchemaParser):
             ):
                 parser.enums.append(parser.enum)
                 del parser.enum
+                parser.state = State.NEW_MODULE
+
+            elif not line.startswith("-") and parser.state == State.INSIDE_ATTRIBUTE:
                 parser.state = State.NEW_MODULE
 
             parser.parse_line(line, index)
@@ -167,7 +169,7 @@ class MarkdownParser(SchemaParser):
 
         elif self.state is State.INSIDE_ATTRIBUTE:
             # Parses a line containing attribute options
-            # Example: 'Type: string' or 'xml: attribute'
+            # Example: 'Type: string' or 'XML: attribute'
 
             self._parse_attribute_part(line)
 
@@ -249,7 +251,13 @@ class MarkdownParser(SchemaParser):
 
         elif key == "Type":
             # Non Markdown-linked types
-            types = [dtype.strip() for dtype in value.split(",")]
+            if "@" in line and "github.com" in line:
+                # Catch external objects
+                github_link, obj = self._fetch_external_object(line)
+                self.external_objects[obj] = github_link[0]
+                types = [obj]
+            else:
+                types = [dtype.strip() for dtype in value.split(",")]
 
             if len(types) > 1:
                 value = f"Union[{','.join(types)}]"
@@ -325,3 +333,24 @@ class MarkdownParser(SchemaParser):
             self.objs.append(self.obj.copy())
 
         super().__setattr__(key, value)
+
+    def _fetch_external_object(self, type: str):
+
+        splitted: List = type.split("@")
+        pattern = re.compile(GITHUB_TYPE_PATTERN)
+
+        if len(splitted) == 2:
+            repo_link, obj = splitted[0], splitted[1]
+        else:
+            if bool(pattern.match(type)):
+                raise ValueError(
+                    f"GitHub URL missing the object specification using '@' - Example 'type@OBJECT'"
+                )
+            elif type.startswith("http") and not bool(bool(pattern.match(type))):
+                raise ValueError(f"Given URL '{type}' is not a valid GitHub type.")
+            else:
+                raise ValueError(
+                    f"Given Type is '{type}' is neither a valid GitHub link nor object specification"
+                )
+
+        return pattern.findall(repo_link), obj
