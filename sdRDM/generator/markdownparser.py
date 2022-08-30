@@ -16,7 +16,7 @@ OPTION_PATTERN = r"([A-Za-z\_]*)\s?\:\s(.*)?"
 SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
 OBJECT_NAME_PATTERN = r"^\#{2,3}\s*([A-Za-z]*)\s*"
 LINKED_TYPE_PATTERN = r"\[([A-Za-z0-9\s\,]*)\]\([\#A-Za-z0-9\s\,]*\)"
-GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.]*[.git]?)"
+GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.\_]*[.git]?)"
 
 MANDATORY_OPTIONS = ["description", "type"]
 FORBIDDEN_NAMES = ["yield", "list", "dict", "return", "def", "class"]

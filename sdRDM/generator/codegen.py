@@ -20,7 +20,7 @@ from sdRDM.generator import templates as jinja_templates
 from sdRDM.generator.utils import preserve_custom_functions
 
 FORMAT_MAPPING: Dict[str, Format] = {"md": Format.MARKDOWN}
-GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.]*[.git]?)"
+GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.\_]*[.git]?)"
 
 
 def generate_python_api(
@@ -187,7 +187,7 @@ def _get_object_types(cls_def, definitions, dtypes=None):
         dtypes = set()
 
     for attr in cls_def.attributes.values():
-        dtype = re.sub(r"List|Dict|\[|\]", "", attr["dtype"])
+        dtype = re.sub(r"List|Dict|Optional|\[|\]", "", attr["dtype"])
         if dtype in definitions:
             dtypes.add(dtype)
             _get_object_types(
