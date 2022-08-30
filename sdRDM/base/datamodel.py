@@ -162,7 +162,7 @@ class DataModel(pydantic.BaseModel):
 
     def yaml(self):
         return yaml.dump(
-            self.to_dict(), Dumper=YAMLDumper, default_flow_style=False, sort_keys=True
+            self.to_dict(), Dumper=YAMLDumper, default_flow_style=False, sort_keys=False
         )
 
     def xml(self, to_string=True):
@@ -301,7 +301,9 @@ class DataModel(pydantic.BaseModel):
         return cls._extract_modules(lib)
 
     @classmethod
-    def from_git(cls, url: str, commit: Optional[str] = None, only_classes: bool = False):
+    def from_git(
+        cls, url: str, commit: Optional[str] = None, only_classes: bool = False
+    ):
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -314,7 +316,9 @@ class DataModel(pydantic.BaseModel):
         """
 
         # Build and import the library
-        lib = build_library_from_git_specs(url=url, commit=commit, only_classes=only_classes)
+        lib = build_library_from_git_specs(
+            url=url, commit=commit, only_classes=only_classes
+        )
 
         if only_classes:
             return lib
