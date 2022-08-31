@@ -264,6 +264,9 @@ class MarkdownParser(SchemaParser):
             else:
                 value = types[0]
 
+        elif key.lower() == "multiple" and value == "False":
+            return
+
         self.attr[key.lower()] = value
 
     def _check_compositions(self):
