@@ -7,6 +7,7 @@ from importlib import resources as pkg_resources
 from typing import Dict, List, Optional
 
 from sdRDM.generator import templates as jinja_templates
+from sdRDM.generator.mermaidenum import MermaidEnum
 from sdRDM.tools.utils import check_numeric
 
 DTYPE_PATTERN = r"List\[|Optional\[|\]"
@@ -275,6 +276,9 @@ class MermaidClass:
 
             # Fetch the target class
             add_class = classes[add_class]
+
+            if isinstance(add_class, MermaidEnum):
+                continue
 
             # Check and add any typing from the
             # foreign class definition
