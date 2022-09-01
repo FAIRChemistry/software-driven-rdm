@@ -18,10 +18,12 @@ setup(
         "black",
         "typer",
         "pyyaml",
+        "toml",
         "anytree",
         "typing_utils",
         "joblib",
         "nob",
+        "validators",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
