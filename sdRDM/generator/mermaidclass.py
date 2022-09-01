@@ -20,8 +20,10 @@ class DataTypes(Enum):
     # TODO Add lookup to PyDantic Types
 
     string = ("str", None)
+    str = ("str", None)
     float = ("float", None)
     int = ("int", None)
+    integer = ("int", None)
     bytes = ("bytes", None)
     posfloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
     PositiveFloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
@@ -29,6 +31,7 @@ class DataTypes(Enum):
     date = ("datetime", "from datetime import datetime")
     datetime = ("datetime", "from datetime import datetime")
     bool = ("bool", None)
+    boolean = ("bool", None)
 
     @classmethod
     def get_value_list(cls):
