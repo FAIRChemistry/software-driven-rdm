@@ -1,6 +1,7 @@
 import yaml
+import toml
 
-from anytree import LevelOrderGroupIter
+from anytree import LevelOrderIter
 from typing import Union
 from typing_utils import get_origin
 
@@ -57,26 +58,43 @@ def build_guide_tree(obj, parent=None, outer=None):
     return obj_tree
 
 
-def generate_template(obj, out: str) -> None:
+def generate_template(obj, out: str, simple: bool = True) -> None:
     """Generates a template for linking two datasets."""
 
-    template = {"__model__": obj.__name__}
-    for nodes in LevelOrderGroupIter(obj.create_tree()[0]):
-        for node in nodes:
-            path = _get_path(node.path)
+    template = {
+        "__model__": obj.__name__,
+        "__sources__": {
+            "LibName": "URL to the library",
+        },
+    }
 
-            if isinstance(node, ClassNode) and path:
-                attr_template = {n.name: "Enter target" for n in node.children}
+    # Add attributes of root objects
+    template[obj.__name__] = {
+        n.name: "Enter target"
+        for n in obj.create_tree()[0].children
+        if isinstance(n, AttributeNode) and not n.__dict__.get("outer_type")
+    }
+
+    for node in LevelOrderIter(obj.create_tree()[0]):
+        path = _get_path(node.path)
+
+        if isinstance(node, ClassNode) and path:
+            attr_template = {n.name: "Enter target" for n in node.children}
+
+            if simple:
+                template[path] = attr_template
+            else:
                 template[path] = [
                     {
-                        "attribute": "ObjectAttribute",
-                        "pattern": r"[A-Za-z0-9]",
+                        "attribute": "Name of the target to check for",
+                        "pattern": r".*",
                         "targets": attr_template,
                     }
                 ]
 
     with open(out, "w") as f:
-        f.write(yaml.dump(template, Dumper=YAMLDumper))
+        # f.write(yaml.dump(template, Dumper=YAMLDumper, sort_keys=False))
+        f.write(toml.dumps(template))
 
 
 def _get_path(path):

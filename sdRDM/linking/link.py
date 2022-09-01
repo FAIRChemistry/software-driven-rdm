@@ -1,5 +1,7 @@
 import importlib
 import re
+import toml
+import validators
 import yaml
 
 from typing import Dict, List, Optional, Union
@@ -31,7 +33,14 @@ def convert_data_model(obj, option: str, path: Optional[str] = None):
 
     # Read template, if given
     if path:
-        template = yaml.safe_load(open(path))
+        if path.lower().endswith(".yaml") or path.lower().endswith(".yml"):
+            template = yaml.safe_load(open(path))
+        elif path.lower().endswith("toml"):
+            template = toml.load(open(path))
+        else:
+            raise TypeError(
+                f"Linking template format of '{path.split('.')[-1]}' is not supported. Please consider using TOML or YAML."
+            )
     else:
         template = {}
 
@@ -90,37 +99,30 @@ def _extract_roots_from_template(template: Dict) -> Dict:
         roots (dict): Target tree(s) to map to.
     """
 
+    from sdRDM.base.datamodel import DataModel
+
     roots = {}
 
-    for option in template.values():
-        if not isinstance(option, list):
-            if not "targets" in option:
-                continue
+    # Get sources defined in the templates
+    for name, address in template["__sources__"].items():
 
-            # Parse non-class targets
-            roots.update(_get_target_roots(option["targets"]))
-            continue
+        if validators.url(address):
+            if "@" in address:
+                # Get specific tags
+                address, tag = address.split("@")
+                print(address, tag)
+            else:
+                # If not given, lets leave this at None
+                tag = None
 
-        for sub_option in option:
-            if not "targets" in sub_option:
-                continue
+            lib = DataModel.from_git(url=address, tag=tag)
 
-            # Parse class targets
-            roots.update(_get_target_roots(sub_option["targets"]))
+        else:
+            lib = importlib.import_module(address)
+
+        roots[name] = build_guide_tree(getattr(lib, name))
 
     return roots
-
-
-def _get_target_roots(targets) -> Dict:
-    """Extract root classes from single option fields."""
-    root_classes = {}
-
-    for target in targets.values():
-        lib, root, *_ = target.split(".")
-        lib = importlib.import_module(lib)
-        root_classes[root] = build_guide_tree(getattr(lib, root))
-
-    return root_classes
 
 
 def _convert_tree(obj, roots, option, template, obj_index=0, attr_path="", target={}):
@@ -141,6 +143,8 @@ def _convert_tree(obj, roots, option, template, obj_index=0, attr_path="", targe
         option (str): Export option that holds target destination.
         obj_index (int, optional): Index that is used for 'multiple' objects. Defaults to 0.
     """
+
+    object_name = obj.__class__.__name__
 
     for attribute, field in obj.__fields__.items():
         field_options = field.field_info.extra
@@ -186,28 +190,34 @@ def _convert_tree(obj, roots, option, template, obj_index=0, attr_path="", targe
 
         else:
             if attribute in target:
-
-                _, root, *path = target[attribute].split(".")
+                root, *path = target[attribute].split(".")
                 node = roots[root]
                 _assign_primitive_data_to_node(path, node, value, index=obj_index)
 
             elif option in field_options:
-
                 _, root, *path = field_options[option].split(".")
                 nu_index = f"{attr_path}.{obj_index}"
                 node = roots[root]
                 _assign_primitive_data_to_node(path, node, value, index=nu_index)
 
-            else:
-                return None
+            elif object_name in template:
+                root, *path = template[object_name][attribute].split(".")
+                node = roots[root]
+                _assign_primitive_data_to_node(path, node, value, index=obj_index)
 
 
 def _check_matching_target(obj, path, template):
     """Checks whether one of the targets defined in a template apply and returns it."""
     targets = template.get(path)
 
-    if not targets:
+    if targets is None:
         return {}
+    elif isinstance(targets, dict) and not any(
+        [isinstance(options, dict) for options in targets.values()]
+    ):
+        # Return empty target if the source template is not specified with
+        # a filter/regex pattern
+        return targets
 
     matches = []
 
