@@ -64,7 +64,7 @@ def generate_python_api(
         extension = os.path.basename(file).split(".")[-1]
 
         if extension not in FORMAT_MAPPING:
-            pass
+            continue
 
         # Generate schemata
         format_type = FORMAT_MAPPING[extension]
