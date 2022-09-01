@@ -13,7 +13,7 @@ from enum import Enum
 from lxml import etree
 from nob import Nob
 from pydantic import PrivateAttr, root_validator, validator
-from typing import Dict, Optional
+from typing import Dict, Optional, IO
 
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import build_xml
@@ -207,10 +207,12 @@ class DataModel(pydantic.BaseModel):
         return convert_data_model(obj=self, option=option, path=linking_template)
 
     @classmethod
-    def generate_linking_template(cls, path: str = "linking_template.yaml"):
+    def generate_linking_template(
+        cls, path: str = "linking_template.toml", simple: bool = True
+    ):
         """Generates a template that can be used to link between two data models."""
 
-        generate_template(cls, path)
+        generate_template(cls, path, simple)
 
     # ! Inherited Initializers
     @classmethod
@@ -222,8 +224,8 @@ class DataModel(pydantic.BaseModel):
         return cls.from_dict(json.loads(json_string))
 
     @classmethod
-    def from_json(cls, path: str):
-        return cls.from_dict(json.load(open(path)))
+    def from_json(cls, handler: IO):
+        return cls.from_dict(json.load(handler))
 
     @classmethod
     def from_xml_string(cls, xml_string: str):
@@ -236,7 +238,7 @@ class DataModel(pydantic.BaseModel):
 
     # ! Dynamic initializers
     @classmethod
-    def parse(cls, path: str):
+    def parse(cls, handler: IO):
         """Reads an arbitrary format and infers the corresponding object model to load the data.
 
         This function is used to open legacy files or any other file where the software
@@ -248,7 +250,7 @@ class DataModel(pydantic.BaseModel):
         """
 
         # Read the file
-        raw_dataset = open(path).read()
+        raw_dataset = handler.read()
 
         # Detect base
         if cls._is_json(raw_dataset):
@@ -302,7 +304,11 @@ class DataModel(pydantic.BaseModel):
 
     @classmethod
     def from_git(
-        cls, url: str, commit: Optional[str] = None, only_classes: bool = False
+        cls,
+        url: str,
+        commit: Optional[str] = None,
+        tag: Optional[str] = None,
+        only_classes: bool = False,
     ):
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
@@ -313,11 +319,12 @@ class DataModel(pydantic.BaseModel):
         Args:
             url (str): Link to the git repository. Use the URL ending with ".git".
             commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
+            tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         """
 
         # Build and import the library
         lib = build_library_from_git_specs(
-            url=url, commit=commit, only_classes=only_classes
+            url=url, commit=commit, tag=tag, only_classes=only_classes
         )
 
         if only_classes:
