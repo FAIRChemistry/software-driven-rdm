@@ -5,6 +5,7 @@ import os
 import pydantic
 import random
 import tempfile
+import validators
 import yaml
 import warnings
 
@@ -321,6 +322,16 @@ class DataModel(pydantic.BaseModel):
             commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
             tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         """
+        
+        if not validators.url(url):
+            raise ValueError(
+                f"Given URL '{url}' is not a valid URL."
+            )
+            
+        if not validators.sha256(commit):
+            raise ValueError(
+                f"Given commit '{commit}' is not a valid SHA-256."
+            )
 
         # Build and import the library
         lib = build_library_from_git_specs(
