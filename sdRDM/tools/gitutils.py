@@ -31,7 +31,10 @@ class ObjectNode:
 
 @lru_cache(maxsize=CACHE_SIZE)
 def build_library_from_git_specs(
-    url: str, commit: Optional[str] = None, only_classes: bool = False
+    url: str,
+    commit: Optional[str] = None,
+    tag: Optional[str] = None,
+    only_classes: bool = False,
 ):
     """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
@@ -42,6 +45,7 @@ def build_library_from_git_specs(
     Args:
         url (str): Link to the git repository. Use the URL ending with ".git".
         commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
+        tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         only_classes (bool): Returns the raw strings rather than the initialized files
     """
 
@@ -52,7 +56,7 @@ def build_library_from_git_specs(
 
         # Fetch from github
         commit = _fetch_from_git(
-            url=url, path=tmpdirname, cwd=os.getcwd(), commit=commit
+            url=url, path=tmpdirname, cwd=os.getcwd(), commit=commit, tag=tag
         )
 
         # Write specification
@@ -76,13 +80,27 @@ def build_library_from_git_specs(
         return _import_library(api_loc=api_loc, lib_name=lib_name)
 
 
-def _fetch_from_git(url: str, path: str, cwd: str, commit: Optional[str] = None):
+def _fetch_from_git(
+    url: str,
+    path: str,
+    cwd: str,
+    commit: Optional[str] = None,
+    tag: Optional[str] = None,
+):
     """Calls git in the backend and clones the repository"""
 
-    subprocess.call(["git", "clone", url, path])
+    if tag:
+        # Clone from a given tag
+        subprocess.call(["git", "clone", "--branch", tag, url, path])
+    else:
+        # Clone from main head
+        subprocess.call(["git", "clone", url, path])
 
+    # Navigate to the cloned repo
     os.chdir(path)
-    if commit:
+
+    if commit and not tag:
+        # Checkout a specific commit if no tag yet a sha256 is given
         subprocess.call(["git", "config", "--global", "advice.detachedHead", "false"])
         subprocess.call(["git", "checkout", commit])
         os.chdir(cwd)
