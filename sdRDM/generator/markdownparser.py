@@ -10,7 +10,7 @@ from sdRDM.generator.abstractparser import SchemaParser
 MODULE_PATTERN = r"^#{1}\s"
 OBJECT_PATTERN = r"^#{3}\s"
 ENUM_PATTERN = r"^#{4}\s"
-ENUM_VALUE_PATTERN = r"[A-Z0-9a-z]*\s?\=\s?[A-Z0-9a-z]*"
+ENUM_VALUE_PATTERN = r"[A-Z0-9a-z]*\s?\=\s?.*"
 ATTRIBUTE_PATTERN = r"- __([A-Za-z0-9\_]*)(\*?)__"
 OPTION_PATTERN = r"([A-Za-z\_]*)\s?\:\s(.*)?"
 SUPER_PATTERN = r"\[\_([A-Za-z0-9]*)\_\]"
@@ -95,6 +95,9 @@ class MarkdownParser(SchemaParser):
             ):
                 parser.enums.append(parser.enum)
                 del parser.enum
+                parser.state = State.NEW_MODULE
+
+            elif line.startswith("```") and parser.state == State.NEW_ENUM_VALUE:
                 parser.state = State.NEW_MODULE
 
             elif not line.startswith("-") and parser.state == State.INSIDE_ATTRIBUTE:
