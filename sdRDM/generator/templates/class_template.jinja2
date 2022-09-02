@@ -8,7 +8,8 @@ class {{name}}({% if inherit is not none %}
     
     id: str = Field(
             description="Unique identifier of the given object.",
-            default_factory=IDGenerator("{{name.lower()}}INDEX")
+            default_factory=IDGenerator("{{name.lower()}}INDEX"),
+            xml="@id"
     )
     {% for attribute in attributes -%}
     {{ attribute }}

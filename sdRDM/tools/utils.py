@@ -7,8 +7,25 @@ class YAMLDumper(yaml.Dumper):
         return super(YAMLDumper, self).increase_indent(flow, False)
 
 
-def snake_to_camel(word: str) -> str:
-    return "".join(x.capitalize() or "_" for x in word.split("_"))
+def snake_to_camel(word: str, pascal: bool = True) -> str:
+
+    if "_" not in word:
+        # Return names that are already camel
+        if pascal and word[0].isupper():
+            return word
+        elif not pascal and all(char.isupper() for char in word):
+            return word.lower()
+        else:
+            return f"{word[0].lower()}{word[1::]}"
+
+    pascal_case = "".join(x.capitalize() or "_" for x in word.split("_"))
+
+    if pascal:
+        "PASCAL"
+        return pascal_case
+    else:
+        "CAMEL"
+        return f"{pascal_case[0].lower()}{pascal_case[1::]}"
 
 
 def camel_to_snake(name: str) -> str:
