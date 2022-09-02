@@ -4,6 +4,7 @@ import os
 import pydantic
 import random
 import tempfile
+import toml
 import validators
 import yaml
 import warnings
@@ -13,7 +14,7 @@ from enum import Enum
 from lxml import etree
 from nob import Nob
 from pydantic import PrivateAttr, root_validator, validator
-from typing import Dict, Optional, IO
+from typing import Dict, Optional, IO, Union
 
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import build_xml
@@ -189,7 +190,7 @@ class DataModel(pydantic.BaseModel):
 
         dd.io.save(path, self.to_dict())
 
-    def convert_to(self, option: str = "", linking_template: Optional[str] = None):
+    def convert_to(self, option: str = "", template: Union[str, None, Dict] = None):
         """
         Converts a given data model to another model that has been specified
         in the attributes metadata. This will create a new object model from
@@ -210,7 +211,19 @@ class DataModel(pydantic.BaseModel):
             option (str): Key of the attribute metadata, where the destination is stored.
         """
 
-        return convert_data_model(obj=self, option=option, path=linking_template)
+        if isinstance(template, str):
+            if template.lower().endswith(".yaml") or template.lower().endswith(".yml"):
+                template = yaml.safe_load(open(template))
+            elif template.lower().endswith("toml"):
+                template = toml.load(open(template))
+            else:
+                raise TypeError(
+                    f"Linking template format of '{template.split('.')[-1]}' is not supported. Please consider using TOML or YAML."
+                )
+        elif template is None:
+            template = {}
+
+        return convert_data_model(obj=self, option=option, template=template)
 
     @classmethod
     def generate_linking_template(
@@ -304,7 +317,9 @@ class DataModel(pydantic.BaseModel):
             # Generate API to parse the file
             lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
             api_loc = os.path.join(tmpdirname, lib_name)
-            generate_python_api(path=path, out=tmpdirname, name=lib_name, use_formatter=False)
+            generate_python_api(
+                path=path, out=tmpdirname, name=lib_name, use_formatter=False
+            )
 
             lib = _import_library(api_loc, lib_name)
 
@@ -334,17 +349,17 @@ class DataModel(pydantic.BaseModel):
             raise ValueError(f"Given URL '{url}' is not a valid URL.")
 
         # Build and import the library
-        lib = build_library_from_git_specs(
+        lib, links = build_library_from_git_specs(
             url=url, commit=commit, tag=tag, only_classes=only_classes
         )
 
         if only_classes:
             return lib
 
-        return cls._extract_modules(lib)
+        return cls._extract_modules(lib, links)
 
     @classmethod
-    def _extract_modules(cls, lib):
+    def _extract_modules(cls, lib, links):
         """Extracts root nodes and specified modules from a generated API"""
 
         # Get all classes present
@@ -363,15 +378,21 @@ class DataModel(pydantic.BaseModel):
         class ImportedModules:
             """Empty class used to store all sub classes"""
 
-            def __init__(self, classes, enums=None):
+            def __init__(self, classes, enums=None, links=None):
                 for name, node in classes.items():
-                    # Add all classes
-                    setattr(self, name, node.cls)
+                    if hasattr(node, "cls"):
+                        # Add all classes
+                        setattr(self, name, node.cls)
+                    elif isinstance(node, dict):
+                        # Add links if given
+                        setattr(self, name, node)
 
                 if enums:
                     self.enums = self.__class__(classes=enums)
+                if links:
+                    self.links = self.__class__(classes=links)
 
-        return ImportedModules(classes, enums)
+        return ImportedModules(classes, enums, links)
 
     @staticmethod
     def _find_root_objects(classes: Dict):

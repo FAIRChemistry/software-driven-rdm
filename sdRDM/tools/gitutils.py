@@ -1,9 +1,12 @@
+import glob
 import importlib
 import os
 import random
 import subprocess
 import sys
 import tempfile
+import toml
+import yaml
 
 from functools import lru_cache
 from typing import Optional, Union, Type, Dict
@@ -60,6 +63,21 @@ def build_library_from_git_specs(
         # Write specification
         schema_loc = os.path.join(tmpdirname, "specifications")
 
+        # Get possible linking templates
+        links = {}
+        for path in glob.glob(os.path.join(tmpdirname, "links", "*")):
+
+            if path.endswith("toml"):
+                linking_template = toml.load(open(path))
+            elif path.endswith("yaml") or path.endswith("yml"):
+                linking_template = yaml.safe_load(open(path))
+            else:
+                continue
+
+            # Add to templates
+            name = os.path.basename(path).split(".")[0]
+            links[name] = linking_template
+
         # Generate API to parse the file
         lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
         api_loc = os.path.join(tmpdirname, lib_name)
@@ -76,7 +94,7 @@ def build_library_from_git_specs(
         if only_classes:
             return cls_defs
 
-        return _import_library(api_loc=api_loc, lib_name=lib_name)
+        return _import_library(api_loc=api_loc, lib_name=lib_name), links
 
 
 def _fetch_from_git(
