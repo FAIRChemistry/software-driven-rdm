@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict
 from functools import lru_cache
 
 
@@ -10,7 +10,7 @@ class MermaidExternal:
         self.commit = commit
 
     @lru_cache(maxsize=20)
-    def render(self):
+    def get_cls_objs(self) -> Dict:
         """
         Renders a given external source of a data model to code.
         This method will fetch the data model and extract the relevant object.

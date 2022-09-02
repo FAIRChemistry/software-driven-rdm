@@ -110,7 +110,6 @@ def _extract_roots_from_template(template: Dict) -> Dict:
             if "@" in address:
                 # Get specific tags
                 address, tag = address.split("@")
-                print(address, tag)
             else:
                 # If not given, lets leave this at None
                 tag = None
