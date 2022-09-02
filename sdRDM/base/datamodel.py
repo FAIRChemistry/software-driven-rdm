@@ -1,6 +1,5 @@
 import inspect
 import json
-import deepdish as dd
 import os
 import pydantic
 import random
@@ -96,8 +95,8 @@ class DataModel(pydantic.BaseModel):
             return model.paths
 
     # ! Exporters
-    def to_dict(self, exclude_none=True, warn=True):
-        data = super().dict(exclude_none=exclude_none, by_alias=True)
+    def to_dict(self, exclude_none=True, warn=True, **kwargs):
+        data = super().dict(exclude_none=exclude_none, by_alias=True, **kwargs)
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
@@ -166,15 +165,19 @@ class DataModel(pydantic.BaseModel):
             self.to_dict(), Dumper=YAMLDumper, default_flow_style=False, sort_keys=False
         )
 
-    def xml(self, to_string=True):
-        tree = build_xml(self)
-        tree.attrib.update(
-            {
-                "repo": self.__repo__,  # type: ignore
-                "commit": self.__commit__,  # type: ignore
-                "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
-            }
-        )
+    def xml(self, pascal: bool = True):
+        tree = build_xml(self, pascal=pascal)
+
+        try:
+            tree.attrib.update(
+                {
+                    "repo": self.__repo__,  # type: ignore
+                    "commit": self.__commit__,  # type: ignore
+                    "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
+                }
+            )
+        except AttributeError:
+            pass
 
         return etree.tostring(
             tree, pretty_print=True, xml_declaration=True, encoding="UTF-8"
@@ -182,6 +185,8 @@ class DataModel(pydantic.BaseModel):
 
     def hdf5(self, path: str) -> None:
         """Writes the object instance to HDF5."""
+        import deepdish as dd
+
         dd.io.save(path, self.to_dict())
 
     def convert_to(self, option: str = "", linking_template: Optional[str] = None):
@@ -235,6 +240,8 @@ class DataModel(pydantic.BaseModel):
     @classmethod
     def from_hdf5(cls, path: str):
         """Reads a hdf5 file from path into the class model"""
+        import deepdish as dd
+
         return cls.from_dict(dd.io.load(path))
 
     # ! Dynamic initializers
@@ -297,7 +304,7 @@ class DataModel(pydantic.BaseModel):
             # Generate API to parse the file
             lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
             api_loc = os.path.join(tmpdirname, lib_name)
-            generate_python_api(path=path, out=tmpdirname, name=lib_name)
+            generate_python_api(path=path, out=tmpdirname, name=lib_name, use_formatter=False)
 
             lib = _import_library(api_loc, lib_name)
 
@@ -322,16 +329,9 @@ class DataModel(pydantic.BaseModel):
             commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
             tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         """
-        
+
         if not validators.url(url):
-            raise ValueError(
-                f"Given URL '{url}' is not a valid URL."
-            )
-            
-        if not validators.sha256(commit):
-            raise ValueError(
-                f"Given commit '{commit}' is not a valid SHA-256."
-            )
+            raise ValueError(f"Given URL '{url}' is not a valid URL.")
 
         # Build and import the library
         lib = build_library_from_git_specs(

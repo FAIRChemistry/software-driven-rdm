@@ -1,15 +1,17 @@
 import glob
 import os
 import re
+import itertools
+from urllib.parse import uses_fragment
 import jinja2
 import json
 import subprocess
 import sys
 
+from anytree import Node, LevelOrderGroupIter
 from importlib import resources as pkg_resources
 from joblib import Parallel, delayed
-from operator import itemgetter
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from sdRDM.generator.mermaidclass import MermaidClass
 from sdRDM.generator.mermaidenum import MermaidEnum
@@ -30,6 +32,7 @@ def generate_python_api(
     url: Optional[str] = None,
     commit: Optional[str] = None,
     only_classes: bool = False,
+    use_formatter: bool = True,
 ):
 
     # Create library directory
@@ -81,6 +84,7 @@ def generate_python_api(
             url=url,
             commit=commit,
             only_classes=only_classes,
+            use_formatter=use_formatter,
         )
 
     return cls_defs
@@ -90,6 +94,7 @@ def write_module(
     schema: str,
     descriptions_path: str,
     out: str,
+    use_formatter: bool,
     is_single: bool = False,
     commit: Optional[str] = None,
     url: Optional[str] = None,
@@ -118,16 +123,23 @@ def write_module(
     os.makedirs(path, exist_ok=True)
 
     # (1) Get class definitions
-    class_defs = get_class_definitions(schema, descriptions)
+    class_defs = _get_class_definitions(schema, descriptions)
 
     if only_classes:
         return class_defs
 
     # (2) Build dependency tree
-    tree = create_dependency_tree(open(schema).read())
+    roots = _create_dependency_tree(open(schema).read())
 
     # (3) Render, write and re-format classes
-    write_class(tree=tree, classes=class_defs, dirpath=path, url=url, commit=commit)
+    _write_class(
+        roots=roots,
+        classes=class_defs,
+        dirpath=path,
+        url=url,
+        commit=commit,
+        use_formatter=use_formatter,
+    )
 
     # (5) Finally, write the __init__ file
     init_path = os.path.join(path, "__init__.py")
@@ -137,10 +149,11 @@ def write_module(
         )
         f.write(module_init)
 
-    subprocess.run([sys.executable, "-m", "black", "-q", init_path])
+    if use_formatter:
+        subprocess.run([sys.executable, "-m", "black", "-q", init_path])
 
 
-def get_class_definitions(path: str, descriptions) -> Dict[str, MermaidClass]:
+def _get_class_definitions(path: str, descriptions) -> Dict[str, MermaidClass]:
     """Retrieves the individual class definitions from a mermaid diagram"""
 
     cls_string = open(path).read()
@@ -176,7 +189,11 @@ def _process_external_object(cls_def: str, definitions: Dict):
 
     # Add all definitions to the current APIs
     definitions.update(
-        {cls_def.name: cls_def for cls_def in map(cls_defs.get, list(dtypes))}
+        {
+            cls_def.name: cls_def
+            for cls_def in map(cls_defs.get, list(dtypes))
+            if cls_def is not None
+        }
     )
 
     return target
@@ -197,7 +214,7 @@ def _get_object_types(cls_def, definitions, dtypes=None):
     return dtypes
 
 
-def create_dependency_tree(mermaid: str):
+def _create_dependency_tree(mermaid: str):
     """Creates a dependency tree for the data model"""
 
     # Parse the raw mermaid file to extract all inheritances (<--)
@@ -205,32 +222,18 @@ def create_dependency_tree(mermaid: str):
     relations = relation_regex.findall(mermaid)
     results = {}
 
-    while len(relations) > 0:
+    # Create a set of all occuring classes that happen to be
+    # involved into inheritance
+    cls_nodes = {name: Node(name=name) for name in set(itertools.chain(*relations))}
 
-        # Create a tree from relations
-        nodes = {}
-        root = next(
-            iter(
-                set(start for start, _ in relations) - set(end for _, end in relations)
-            )
-        )
-        for start, end in relations:
-            nodes.setdefault(start, {})[end] = nodes.setdefault(end, {})
+    # Build inheritance tree
+    for parent, child in relations:
+        cls_nodes[child].parent = cls_nodes[parent]
 
-        result = {root: nodes[root]}
+    # Get all root nodes
+    roots = list(filter(lambda node: node.is_root, cls_nodes.values()))
 
-        # Get all those classes that have already been found
-        # in the first iteration of the tree building
-        used_classes = [name for name in get_keys(result)]
-
-        # Remove all those relations that included the root
-        relations = list(
-            filter(lambda relation: relation[1] not in used_classes, relations)
-        )
-
-        results.update(result)
-
-    return results
+    return roots
 
 
 def get_keys(dictionary):
@@ -244,11 +247,13 @@ def get_keys(dictionary):
     return keys
 
 
-def write_class(tree: dict, classes: dict, dirpath: str, url, commit):
+def _write_class(
+    roots: List[Node], classes: Dict, dirpath: str, url, commit, use_formatter
+):
     """Writes all classes in a parallel manner"""
 
     _distribute_inheritance(
-        tree=tree,
+        roots=roots,
         classes=classes,
     )
 
@@ -257,36 +262,43 @@ def write_class(tree: dict, classes: dict, dirpath: str, url, commit):
         "dirpath": dirpath,
         "url": url,
         "commit": commit,
+        "use_formatter": use_formatter,
     }
 
-    Parallel(n_jobs=-1)(
-        delayed(_write_classes)(cls_obj=cls_obj, **kwargs)
-        for cls_obj in classes.values()
-    )
+    # Parallel(n_jobs=-1)(
+    #     delayed(_write_classes)(cls_obj=cls_obj, **kwargs)
+    #     for cls_obj in classes.values()
+    # )
+
+    [_write_classes(cls_obj=cls_obj, **kwargs) for cls_obj in classes.values()]
 
 
 def _distribute_inheritance(
-    tree: dict,
-    classes: dict,
+    roots: List[Node],
+    classes: Dict,
 ):
     """Parses the dependency tree and assigns class that is to inherit"""
-    for cls_name, sub_cls in tree.items():
-        for cls in sub_cls.keys():
-            classes[cls].inherit = classes[cls_name]
+    for root in roots:
+        for level in LevelOrderGroupIter(root):
+            if all(node.is_root for node in level):
+                continue
+
+            for node in level:
+                classes[node.name].inherit = classes[node.parent.name]
 
 
-def _write_classes(cls_obj, classes: dict, dirpath: str, url, commit):
+def _write_classes(cls_obj, classes: dict, dirpath: str, url, commit, use_formatter):
 
     if isinstance(cls_obj, MermaidEnum):
         # Enums do not possess sub classes so they can be directly rendered
-        _render_class(cls_obj, dirpath, classes=classes, url=url, commit=commit)
-        return
-    elif isinstance(cls_obj, MermaidExternal):
-        # Write external objects to the generated software
-        path = os.path.join(dirpath, f"{cls_obj.fname}.py")
-        with open(path, "w") as f:
-            f.write(cls_obj.render())
-
+        _render_class(
+            cls_obj,
+            dirpath,
+            classes=classes,
+            url=url,
+            commit=commit,
+            use_formatter=use_formatter,
+        )
         return
 
     # First, check if all arbitrary types exist
@@ -303,10 +315,17 @@ def _write_classes(cls_obj, classes: dict, dirpath: str, url, commit):
         cls_obj.imports.add(f"from .{sub_class.fname} import {sub_class.name}")
 
     # Finally, render the given class
-    _render_class(cls_obj, dirpath, classes=classes, url=url, commit=commit)
+    _render_class(
+        cls_obj,
+        dirpath,
+        classes=classes,
+        url=url,
+        commit=commit,
+        use_formatter=use_formatter,
+    )
 
 
-def _render_class(cls_obj, dirpath, classes, url, commit):
+def _render_class(cls_obj, dirpath, classes, url, commit, use_formatter):
     """Renders imports, attributes and methods of a class"""
 
     path = os.path.join(dirpath, cls_obj.fname + ".py")
@@ -324,7 +343,8 @@ def _render_class(cls_obj, dirpath, classes, url, commit):
         file.write(rendered_class)
 
     # Call black to format everything
-    subprocess.run([sys.executable, "-m", "black", "-q", "--preview", path])
+    if use_formatter:
+        subprocess.run([sys.executable, "-m", "black", "-q", "--preview", path])
 
 
 def _render_data_class(cls_obj, classes, url, commit):

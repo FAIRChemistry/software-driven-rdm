@@ -1,14 +1,12 @@
-import glob
 import importlib
 import os
 import random
-import re
 import subprocess
 import sys
 import tempfile
 
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, Union, Type, Dict
 
 CACHE_SIZE = 20
 
@@ -35,7 +33,7 @@ def build_library_from_git_specs(
     commit: Optional[str] = None,
     tag: Optional[str] = None,
     only_classes: bool = False,
-):
+) -> Union[Dict, Type]:
     """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
     This function will clone the repository into a temporary directory and
@@ -72,6 +70,7 @@ def build_library_from_git_specs(
             url=url,
             commit=commit,
             only_classes=only_classes,
+            use_formatter=False,
         )
 
         if only_classes:
@@ -108,10 +107,10 @@ def _fetch_from_git(
         return commit
 
     else:
-        commit = subprocess.check_output(["git", "rev-parse", "HEAD"])
+        head_commit: bytes = subprocess.check_output(["git", "rev-parse", "HEAD"])
         os.chdir(cwd)
 
-        return commit.decode("utf-8").strip()
+        return head_commit.decode("utf-8").strip()
 
 
 @lru_cache(maxsize=CACHE_SIZE)
