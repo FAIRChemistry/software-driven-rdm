@@ -34,7 +34,8 @@ class ClassNode(Node):
         cls = self.import_class()
 
         if all(node.value == {} for node in self.children):
-            return {0: cls(**{node.name: None for node in self.children})}
+            return {0: None}
+            # return {0: cls(**{node.name: None for node in self.children})}
         else:
             indices = self._get_unique_indices()
             return {index: cls(**self._get_kwargs(index=index)) for index in indices}
@@ -84,10 +85,16 @@ class ClassNode(Node):
 
                 # Check if all sub classes are empty
                 is_empty = all(
-                    sub_cls.dict(exclude_none=True) == {} for sub_cls in cls.values()
+                    sub_cls.dict(exclude_none=True, exclude={"id"}) == {}
+                    if sub_cls is not None
+                    else True
+                    for sub_cls in cls.values()
                 )
 
-                if parent.outer_type.__name__ == "list":
+                if (
+                    parent.outer_type is not None
+                    and parent.outer_type.__name__ == "list"
+                ):
                     # Check for list processing
                     if is_empty:
                         parent.value = {0: []}

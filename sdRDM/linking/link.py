@@ -10,7 +10,7 @@ from sdRDM.linking.utils import build_guide_tree
 from anytree import findall
 
 
-def convert_data_model(obj, option: str, path: Optional[str] = None):
+def convert_data_model(obj, option: str, template: Dict = {}):
     """
     Converts a given data model to another model that has been specified
     in the attributes metadata. This will create a new object model from
@@ -30,19 +30,6 @@ def convert_data_model(obj, option: str, path: Optional[str] = None):
     Args:
         option (str): Key of the attribute metadata, where the destination is stored.
     """
-
-    # Read template, if given
-    if path:
-        if path.lower().endswith(".yaml") or path.lower().endswith(".yml"):
-            template = yaml.safe_load(open(path))
-        elif path.lower().endswith("toml"):
-            template = toml.load(open(path))
-        else:
-            raise TypeError(
-                f"Linking template format of '{path.split('.')[-1]}' is not supported. Please consider using TOML or YAML."
-            )
-    else:
-        template = {}
 
     # Create target roots and map data
     roots = {
@@ -144,10 +131,12 @@ def _convert_tree(obj, roots, option, template, obj_index=0, attr_path="", targe
     """
 
     object_name = obj.__class__.__name__
-
     for attribute, field in obj.__fields__.items():
         field_options = field.field_info.extra
         value = getattr(obj, attribute)
+
+        if value is None:
+            continue
 
         if not isinstance(value, list) and hasattr(field.type_, "__fields__"):
             target = _check_matching_target(
@@ -199,7 +188,7 @@ def _convert_tree(obj, roots, option, template, obj_index=0, attr_path="", targe
                 node = roots[root]
                 _assign_primitive_data_to_node(path, node, value, index=nu_index)
 
-            elif object_name in template:
+            elif object_name in template and attribute in template[object_name]:
                 root, *path = template[object_name][attribute].split(".")
                 node = roots[root]
                 _assign_primitive_data_to_node(path, node, value, index=obj_index)
