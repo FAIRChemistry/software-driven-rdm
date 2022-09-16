@@ -24,6 +24,7 @@ setup(
         "joblib",
         "nob",
         "validators",
+        "sqlalchemy",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
