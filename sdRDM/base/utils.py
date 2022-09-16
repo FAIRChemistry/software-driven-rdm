@@ -1,37 +1,64 @@
 import re
 
+from datetime import date, datetime
+from typing import get_origin
 from lxml import etree
 from inspect import Signature, Parameter
+from sqlalchemy.orm import relationship
+from sqlalchemy import (
+    Column,
+    Date,
+    Float,
+    Integer,
+    String,
+    Boolean,
+    BigInteger,
+    ForeignKey,
+)
 
 from sdRDM.tools.utils import snake_to_camel
 from sdRDM.base.listplus import ListPlus
+
+SQL_DATATYPES = {
+    str: String,
+    int: Integer,
+    float: Float,
+    bool: Boolean,
+    datetime: Date,
+    date: Date,
+}
+
 
 class IDGenerator:
     def __init__(self, pattern: str):
         self.pattern = pattern.replace(r"\d", "INDEX")
         self.index = 0
-    
+        self.__name__ = "IDGenerator"
+
     def __call__(self):
         return self.generate_id()
-    
+
     def generate_id(self):
         id = re.sub(r"\[?INDEX\]?[+|*|?]?", str(self.index), self.pattern)
         self.index += 1
         return id
 
+
 def build_xml(obj, pascal: bool = True):
-    node = etree.Element(snake_to_camel(obj.__class__.__name__, pascal=pascal),  attrib={}, nsmap={})
+    node = etree.Element(
+        snake_to_camel(obj.__class__.__name__, pascal=pascal), attrib={}, nsmap={}
+    )
 
     for name, field in obj.__fields__.items():
         dtype = field.type_
         outer = field.outer_type_
         xml_option = field.field_info.extra.get("xml")
         value = obj.__dict__[name]
-        
+
         if value is None:
             # Skip None values
             continue
-        
+
         if not xml_option:
             # If not specified in Markdown
             xml_option = snake_to_camel(name, pascal=pascal)
@@ -48,29 +75,27 @@ def build_xml(obj, pascal: bool = True):
                 composite_node = etree.Element(xml_option, attrib={}, nsmap={})
                 for sub_obj in value:
                     composite_node.append(build_xml(sub_obj, pascal=pascal))
-                
+
                 if len(composite_node) > 0:
-                    node.append(composite_node)    
-                
+                    node.append(composite_node)
+
             else:
                 if _is_empty(value):
                     continue
-                
+
                 node.append(build_xml(value, pascal=pascal))
 
         elif isinstance(value, ListPlus):
             # Turn lists of native types into sub-elements
             composite_node = etree.Element(xml_option, attrib={}, nsmap={})
-            
+
             if not value:
                 # Skip empty lists
                 continue
 
             for v in value:
                 try:
-                    element = etree.Element(
-                        xml_option, attrib={}, nsmap={}
-                    )
+                    element = etree.Element(xml_option, attrib={}, nsmap={})
                 except KeyError:
                     element = etree.Element(xml_option, attrib={}, nsmap={})
                 element.text = str(v)
@@ -89,41 +114,135 @@ def build_xml(obj, pascal: bool = True):
 
     return node
 
+
 def _is_empty(value):
     """Checks whether a given class object is completely empty"""
     values = value.dict(exclude={"id", "__source__"}, exclude_none=True)
     return not any([key for key, v in values.items() if v])
 
+
 def forge_signature(cls):
     """Changes the signature of a class to include forbidden names such as 'yield'.
-    
+
     Since PyDantic aliases are also applied to the signature, forbidden names
     such as 'yield' are impossible. This decorator will turn add an underscore
     while the exports aligns to the alias.
-    
+
     """
-        
+
     parameters = _construct_signature(cls)
     cls.__signature__ = Signature(parameters=parameters)
-        
+
     return cls
+
 
 def _construct_signature(cls):
     """Helper function to extract parameters"""
-    
+
     parameters = []
-    
+
     for name, parameter in cls.__signature__.parameters.items():
 
         if f"{name}_" in cls.__fields__:
             name = f"{name}_"
 
-        parameters.append(Parameter(
-            name=name,
-            kind=parameter.kind,
-            default=parameter.default,
-            annotation=parameter.annotation
-        ))
-        
+        parameters.append(
+            Parameter(
+                name=name,
+                kind=parameter.kind,
+                default=parameter.default,
+                annotation=parameter.annotation,
+            )
+        )
+
     return parameters
-    
+
+
+def object_to_orm(obj, base, foreign_key=None, backref=None, tablename=None):
+    """Converts a Pydantic object to an SQL table"""
+
+    tablename = tablename if tablename is not None else obj.__name__
+    attributes = {
+        "__tablename__": tablename,
+        "object_id": Column(
+            BigInteger().with_variant(Integer, "sqlite"), primary_key=True
+        ),
+    }
+
+    if foreign_key is None:
+        # If no foreign key is given, pass the current tablename
+        # reference to the object_id attribute
+        foreign_key = f"{tablename}.object_id"
+    else:
+        # If a foreign key is given, integrate this one into the ORM
+        # This in general applies to one-to-many relationships
+        attributes[foreign_key.split(".")[0]] = Column(Integer, ForeignKey(foreign_key))
+
+    if backref:
+        # If a backref is given, then there is a one-to-one relations
+        # which includes a back-population from both tables
+        attributes[backref.lower()] = relationship(backref, back_populates=tablename)
+
+    for name, field in obj.__fields__.items():
+        inner_dtype = field.type_
+        outer_dtype = field.outer_type_
+        is_list = get_origin(outer_dtype) == list
+
+        if hasattr(inner_dtype, "__fields__"):
+
+            if is_list:
+                # If its a list it is considered a one to many relationship
+                # and thus the FK is put on the sub objects table
+                attributes[name] = relationship(field.type_.__name__, lazy=True)
+                object_to_orm(
+                    obj=field.type_, base=base, foreign_key=foreign_key, tablename=name
+                )
+            else:
+                # If it is just a single sub-object we can reference
+                # the FK in this table
+                attributes[f"{name}_id"] = Column(
+                    Integer, ForeignKey(f"{name.lower()}.object_id")
+                )
+                attributes[name] = relationship(
+                    field.type_.__name__,
+                    lazy=True,
+                    back_populates=tablename,
+                    uselist=False,
+                )
+
+                object_to_orm(
+                    obj=field.type_, base=base, backref=tablename, tablename=name
+                )
+
+        else:
+            if is_list:
+                attributes[name] = relationship(name, lazy=True)
+                attributes[foreign_key.split(".")[0]] = Column(
+                    Integer, ForeignKey(foreign_key)
+                )
+                type(
+                    name,
+                    (base,),
+                    {
+                        "__tablename__": name,
+                        "object_id": Column(
+                            BigInteger().with_variant(Integer, "sqlite"),
+                            primary_key=True,
+                        ),
+                        tablename: Column(
+                            Integer, ForeignKey(f"{tablename}.object_id")
+                        ),
+                        name: Column(
+                            SQL_DATATYPES[inner_dtype],
+                            nullable=False if field.required else True,
+                        ),
+                    },
+                )
+            else:
+                attributes[name] = Column(
+                    SQL_DATATYPES[inner_dtype],
+                    nullable=False if field.required else True,
+                )
+
+    # Add the table as a new type
+    type(tablename, (base,), attributes)

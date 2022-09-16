@@ -14,10 +14,11 @@ from enum import Enum
 from lxml import etree
 from nob import Nob
 from pydantic import PrivateAttr, root_validator, validator
+from sqlalchemy.orm import declarative_base
 from typing import Dict, Optional, IO, Union
 
 from sdRDM.base.listplus import ListPlus
-from sdRDM.base.utils import build_xml
+from sdRDM.base.utils import build_xml, object_to_orm
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.linking.utils import build_guide_tree, generate_template
@@ -34,6 +35,7 @@ class DataModel(pydantic.BaseModel):
         validate_assignment = True
         use_enum_values = True
         allow_population_by_field_name = True
+        orm_mode = True
 
     # * Private attributes
     __node__: Optional[Node] = PrivateAttr(default=None)
@@ -226,6 +228,15 @@ class DataModel(pydantic.BaseModel):
         return convert_data_model(obj=self, option=option, template=template)
 
     @classmethod
+    def build_orm(cls):
+        """Builds an ORM model to build a database and fetch from"""
+
+        Base = declarative_base()
+        object_to_orm(cls, Base)
+
+        return Base
+
+    @classmethod
     def generate_linking_template(
         cls, path: str = "linking_template.toml", simple: bool = True
     ):
@@ -323,7 +334,7 @@ class DataModel(pydantic.BaseModel):
 
             lib = _import_library(api_loc, lib_name)
 
-        return cls._extract_modules(lib)
+        return cls._extract_modules(lib=lib, links={})
 
     @classmethod
     def from_git(
@@ -448,16 +459,6 @@ class DataModel(pydantic.BaseModel):
         print(render.by_attr("name"))
 
     # ! Validators
-    @root_validator(pre=True)
-    def turn_into_extended_list(cls, values):
-        """Validator used to convert any list into a ListPlus. On root level."""
-
-        for field, value in values.items():
-            if isinstance(value, list):
-                values[field] = ListPlus(*value, in_setup=True)
-
-        return values
-
     @validator("*")
     def turn_individual_value_into_extended_list(cls, value):
         """Validator used to convert any list into a ListPlus."""
