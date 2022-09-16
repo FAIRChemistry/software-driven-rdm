@@ -161,7 +161,7 @@ class DataModel(pydantic.BaseModel):
         return self._convert_to_lists(element, exclude_none)
 
     def json(self, indent: int = 2):
-        return json.dumps(self.to_dict(), indent=indent)
+        return json.dumps(self.to_dict(), indent=indent, default=str)
 
     def yaml(self):
         return yaml.dump(
