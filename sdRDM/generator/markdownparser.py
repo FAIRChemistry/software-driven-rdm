@@ -123,7 +123,8 @@ class MarkdownParser(SchemaParser):
             # Parses name whenever a new module is encountered
             # Sets state to INSIDE_MODULE to catch the docstring
 
-            self.module_name = line.replace("#", "").strip()
+            if not "```" in line.strip():
+                self.module_name = line.replace("#", "").strip()
             self.state = State.INSIDE_MODULE
 
         elif self.state is State.INSIDE_MODULE:
