@@ -100,6 +100,7 @@ class MermaidClass:
                     attr["dtype"] = f"Optional[{dtype}]"
 
                 attr["default"] = "None"
+
                 self.imports.add("from typing import Optional")
 
         return attributes

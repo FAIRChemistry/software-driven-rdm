@@ -1,5 +1,5 @@
 {{name}}: {{dtype}} = Field(
-    {% if required is true and 'default' not in metadata.keys() %}...,{% endif %}
+    {% if required is true and 'default' not in metadata.keys() and 'default_factory' not in metadata.keys() %}...,{% endif %}
     {% for key, value in metadata.items() %}
     {{key}}={{value}},
     {% endfor %}
