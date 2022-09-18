@@ -427,7 +427,7 @@ class DataModel(pydantic.BaseModel):
         return [root.cls for root in roots]
 
     # ! Databases
-    def to_dataverse(self, linking_template: Optional[str] = None):
+    def to_dataverse(self, template: Optional[str] = None):
         """
         Converts a dataset to it Datavere specifications and returns a Dataset object,
         which can be uploaded to Dataverse.
@@ -435,7 +435,7 @@ class DataModel(pydantic.BaseModel):
 
         from easyDataverse import Dataset
 
-        blocks = self.convert_to("dataverse", linking_template=linking_template)
+        blocks = self.convert_to("dataverse", template=template)
 
         if not blocks:
             raise ValueError("Couldnt convert, no mapping towards Dataverse specified.")
