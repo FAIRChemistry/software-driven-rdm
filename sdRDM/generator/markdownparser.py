@@ -280,11 +280,17 @@ class MarkdownParser(SchemaParser):
 
         dtypes = self.attr["type"].replace("Union[", "").replace("]", "")
         for dtype in dtypes.split(","):
-            dtype = dtype.strip()
+            dtype = self._strip_references(dtype)
+
             if dtype not in DataTypes.__members__:
                 self.compositions.append(
                     {"module": dtype, "container": self.obj["name"]}
                 )
+
+    @staticmethod
+    def _strip_references(dtype: str):
+        """Removes reference syntax for composition entries to maintain Mermaid functionality"""
+        return dtype.replace("@", "").split(".")[0]
 
     def _add_attribute_to_obj(self):
         """Adds an attribute to an object only IF the mandatory fields are given.

@@ -1,3 +1,4 @@
+from audioop import mul
 import re
 import yaml
 import jinja2
@@ -44,6 +45,7 @@ class MermaidClass:
         self.docstring = docstring
         self.imports = set()
         self.sub_classes = []
+        self.references = []
         self.adders = {}
         self.inherit = None
 
@@ -108,11 +110,12 @@ class MermaidClass:
     def _map_attribute_dtypes(self, attributes):
         """Converts attribute data types to Python types"""
 
-        for attr in attributes.values():
+        for name, attr in attributes.items():
 
             dtypes = attr["dtype"].replace("Union[", "").replace("]", "")
 
             for dtype in dtypes.split(","):
+
                 if dtype in DataTypes.__members__:
                     dtype, dependency = DataTypes[dtype].value
 
@@ -123,6 +126,33 @@ class MermaidClass:
                     else:
                         # Make sure that 'string' is converted to 'str'
                         attr["dtype"] = attr["dtype"].replace("string", "str")
+
+                elif dtype.startswith("@"):
+                    # Process given references in the format '@[object].[attribute]'
+                    reference = dtype.replace("@", "").split(".")
+
+                    if len(reference) == 1:
+                        # ID is the default value to fetch from the reference
+                        reference.append("id")
+
+                    self.references.append(
+                        {
+                            "object": reference[0],
+                            "target": reference[-1],
+                            "attribute": name,
+                        }
+                    )
+
+                    # Add the object as a dependency
+                    # dependency = f"from .{reference[0].lower()} import {reference[0]}"
+                    dependency = None
+
+                    # Set the dtype and import Union
+                    attr["dtype"] = f"Union[str, '{reference[0]}']"
+
+                    self.imports.add("from typing import Union")
+                    self.imports.add("from pydantic import validator")
+
                 else:
                     self.sub_classes.append(dtype)
                     dependency = None
@@ -264,7 +294,7 @@ class MermaidClass:
         )
 
     def _render_add_methods(self, classes):
-        """Renders add methods for all composite elements"""
+        """Renders add methods for all ßü´ä´e elements"""
 
         add_template = jinja2.Template(
             pkg_resources.read_text(jinja_templates, "add_method_template.jinja2")
@@ -306,7 +336,8 @@ class MermaidClass:
 
             signature = sorted(
                 signature,
-                key=lambda x: "default" in x or x["multiple"],
+                key=lambda x: "default" in x
+                or repr(x["multiple"]) == "True",  # TODO FIX THIS BETTER
             )
 
             methods.append(
@@ -351,8 +382,14 @@ class MermaidClass:
                 # to individually import the classes
                 self.imports.add(f"from .{dtype.lower()} import {dtype}")
 
-    # def __repr__(self) -> str:
-    #     return yaml.safe_dump({self.name: self.attributes})
+    def _render_reference_validators(self):
+        """Renders all given references as validators"""
+
+        reference_template = jinja2.Template(
+            pkg_resources.read_text(jinja_templates, "reference_template.jinja2")
+        )
+
+        return "\n".join([reference_template.render(**ref) for ref in self.references])
 
     @classmethod
     def parse(cls, mermaid_cls, module_meta):
@@ -379,7 +416,7 @@ class MermaidClass:
 
         # Get all attributes and types
         attrib_regex = re.compile(
-            r"\+([a-zA-Z0-9\[\]\,]*)(\[.*?\])? ([a-zA-Z0-9|\_]*)(\*?)"
+            r"\+([a-zA-Z0-9\[\]\,\@\.]*)(\[.*?\])? ([a-zA-Z0-9|\_]*)(\*?)"
         )
         raw_attrs = attrib_regex.findall(mermaid_cls)
 
@@ -391,17 +428,12 @@ class MermaidClass:
 
             cls._process_attr_metadata(attr_metadata, objects)
 
-            attr_dict = {"dtype": dtype, **attr_metadata}
-
-            if multiple:
-                attr_dict["multiple"] = True
-            else:
-                attr_dict["multiple"] = False
-
-            if required:
-                attr_dict["required"] = True
-            else:
-                attr_dict["required"] = False
+            attr_dict = {
+                "dtype": dtype,
+                "multiple": bool(multiple),
+                "required": bool(required),
+                **attr_metadata,
+            }
 
             attributes[attr_name] = attr_dict
 
@@ -418,10 +450,9 @@ class MermaidClass:
 
     @staticmethod
     def _process_attr_metadata(attr_metadata: Dict, objects: List[str]):
-
+        """Helper function used to include specialized processes to options"""
         for name, value in attr_metadata.items():
             if name.lower() == "default":
-
                 if isinstance(value, str) and any(obj in value for obj in objects):
                     attr_metadata[name] = value
                 else:

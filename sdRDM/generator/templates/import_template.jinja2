@@ -1,7 +1,7 @@
 {%- for import in package_imports -%}
 {{import}}
 {% endfor %}
-from typing import Optional
+from typing import Optional, Union
 from pydantic import PrivateAttr
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import forge_signature, IDGenerator

@@ -132,7 +132,7 @@ def write_module(
     roots = _create_dependency_tree(open(schema).read())
 
     # (3) Render, write and re-format classes
-    _write_class(
+    _prepare_and_write_classes(
         roots=roots,
         classes=class_defs,
         dirpath=path,
@@ -159,6 +159,7 @@ def _get_class_definitions(path: str, descriptions) -> Dict[str, MermaidClass]:
     cls_string = open(path).read()
     classes = cls_string.split("class ")[1::]
     definitions = {}
+
     for cls_def in classes:
 
         if "<< Enumeration >>" in cls_def:
@@ -247,7 +248,7 @@ def get_keys(dictionary):
     return keys
 
 
-def _write_class(
+def _prepare_and_write_classes(
     roots: List[Node], classes: Dict, dirpath: str, url, commit, use_formatter
 ):
     """Writes all classes in a parallel manner"""
@@ -360,11 +361,12 @@ def _render_data_class(cls_obj, classes, url, commit):
     )
     add_methods = cls_obj._render_add_methods(classes=classes)
     imports = cls_obj._render_imports(inherits=cls_obj.inherit)
+    references = cls_obj._render_reference_validators()
 
     if add_methods:
-        return f"{imports}\n{attributes}\n{add_methods}"
+        return f"{imports}\n{attributes}\n{add_methods}\n{references}"
     else:
-        return f"{imports}\n{attributes}"
+        return f"{imports}\n{attributes}\n{references}"
 
 
 def _set_optional_classes_as_default_factories(cls_obj, classes):

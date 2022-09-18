@@ -209,14 +209,27 @@ def _get_cls_types(cls_obj):
 
         if isinstance(element, ast.AnnAssign):
             if hasattr(element.annotation, "slice"):
-                types.add(element.annotation.slice.id)
+                try:
+                    types.add(element.annotation.slice.id)
+                except AttributeError:
+                    # Preserve imports from Union Types
+                    for dtype in element.annotation.slice.elts:
+                        if hasattr(dtype, "id"):
+                            types.add(dtype.id)
 
         elif isinstance(element, ast.FunctionDef):
             for arg in element.args.args:
                 annotation = arg.annotation
 
                 if annotation and hasattr(annotation, "slice"):
-                    types.add(arg.annotation.slice.id)
+                    try:
+                        types.add(arg.annotation.slice.id)
+                    except AttributeError:
+                        # Preserve imports from Union Types
+                        for dtype in arg.annotation.slice.elts:
+                            if hasattr(dtype, "id"):
+                                types.add(dtype.id)
+                            
                 elif annotation:
                     types.add(annotation.id)
 

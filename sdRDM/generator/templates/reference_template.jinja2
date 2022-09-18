@@ -1,0 +1,12 @@
+    @validator("{{attribute}}", pre=True)
+    def get_{{attribute}}_reference(cls, value):
+        """Extracts the ID from a given object to create a reference"""
+
+        from .{{object.lower()}} import {{object}}
+        
+        if not isinstance(value, ({{object}}, str)):
+            raise TypeError(f"Expected '{{object}}' or 'str' got '{type(value).__name__}' instead.")
+        elif isinstance(value, {{object}}):
+            return value.{% if target %}{{target}}{% else %}id{% endif %}
+        elif isinstance(value, str):
+            return value
