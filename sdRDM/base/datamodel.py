@@ -13,7 +13,7 @@ from anytree import RenderTree, Node
 from enum import Enum
 from lxml import etree
 from nob import Nob
-from pydantic import PrivateAttr, root_validator, validator
+from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
 from typing import Dict, Optional, IO, Union
 
@@ -22,6 +22,7 @@ from sdRDM.base.utils import build_xml, object_to_orm
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.linking.utils import build_guide_tree, generate_template
+from sdRDM.database.utils import add_to_database
 from sdRDM.tools.utils import YAMLDumper
 from sdRDM.tools.gitutils import (
     ObjectNode,
@@ -227,6 +228,10 @@ class DataModel(pydantic.BaseModel):
 
         return convert_data_model(obj=self, option=option, template=template)
 
+    def to_sql(self, loc: str):
+        """Adds data to a complementary SQL database"""
+        add_to_database(self, loc)
+    
     @classmethod
     def build_orm(cls):
         """Builds an ORM model to build a database and fetch from"""

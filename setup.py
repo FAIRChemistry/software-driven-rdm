@@ -25,6 +25,7 @@ setup(
         "nob",
         "validators",
         "sqlalchemy",
+        "sqlalchemy-utils",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
