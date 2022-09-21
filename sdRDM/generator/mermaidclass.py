@@ -201,6 +201,8 @@ class MermaidClass:
             required = attr.get("required")
             dtype = attr.get("dtype")
 
+            if dtype == self.name:
+                dtype = f"'{dtype}'"
             attr.pop("required")
             attr.pop("dtype")
             attr.pop("multiple")
