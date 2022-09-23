@@ -15,13 +15,20 @@ class AttributeNode(Node):
 
 class ClassNode(Node):
     def __init__(
-        self, name, parent=None, module=None, class_name=None, outer_type=None
+        self,
+        name,
+        parent=None,
+        module=None,
+        class_name=None,
+        outer_type=None,
+        constants={},
     ):
         super().__init__(name, parent)
 
         self.module = module
         self.class_name = class_name
         self.outer_type = outer_type
+        self.constants = constants
 
     def import_class(self):
         """Imports the class that is described in this node"""
@@ -33,23 +40,48 @@ class ClassNode(Node):
 
         cls = self.import_class()
 
-        if all(node.value == {} for node in self.children):
+        if all([self._is_empty(node.value) for node in self.children]):
             return {0: None}
             # return {0: cls(**{node.name: None for node in self.children})}
         else:
             indices = self._get_unique_indices()
             return {index: cls(**self._get_kwargs(index=index)) for index in indices}
 
+    @staticmethod
+    def _is_empty(value):
+        if value == {}:
+            return True
+        elif not all([bool(entry) for entry in list(value.values())]):
+            return True
+        return False
+
     def _get_kwargs(self, index=0):
         """Generates list of keyword arguments used to set up a sub class"""
 
+        # Get all constants from the template
+        path = (
+            ".".join([node.name for node in self.path if node.name[0].islower()]) + "."
+        )
+
+        if path == ".":
+            path = ""
+
+        attributes = [f"{path}{node.name}" for node in self.children]
+        constants = {
+            target.split(".")[-1]: value
+            for target, value in self.constants.items()
+            if target in attributes
+        }
+
         kwargs = {}
+
         for child in self.children:
             if index in child.value:
                 value = child.value[index]
-                kwargs[child.name] = value
+                if value is not None:
+                    kwargs[child.name] = value
 
-        return kwargs
+        return {**kwargs, **constants}
 
     def _get_unique_indices(self):
         """Gets all keys in a nodes value dictionary"""

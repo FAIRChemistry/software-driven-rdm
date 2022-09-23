@@ -32,15 +32,16 @@ def convert_data_model(obj, option: str, template: Dict = {}):
     """
 
     # Create target roots and map data
+    libs = {}
     roots = {
-        **_extract_roots_from_template(template=template),
+        **_extract_roots_from_template(template=template, libs=libs),
         **_extract_roots(obj=obj, option=option),
     }
 
     # Transfer data towards the target roots
     _convert_tree(obj=obj, option=option, roots=roots, template=template)
 
-    return [root.build() for root in roots.values()]
+    return [(root.build(), libs[root.name]) for root in roots.values()]
 
 
 def _extract_roots(obj, option: str, roots: Dict = {}, template: Dict = {}):
@@ -73,7 +74,7 @@ def _extract_roots(obj, option: str, roots: Dict = {}, template: Dict = {}):
     return roots
 
 
-def _extract_roots_from_template(template: Dict) -> Dict:
+def _extract_roots_from_template(template: Dict, libs: Dict) -> Dict:
     """
     Parses the provided linking template and extracts
     the libraries needed for executing the given option.
@@ -90,6 +91,11 @@ def _extract_roots_from_template(template: Dict) -> Dict:
 
     roots = {}
 
+    if "__constants__" in template:
+        constants = template["__constants__"]
+    else:
+        constants = {}
+
     # Get sources defined in the templates
     for name, address in template["__sources__"].items():
 
@@ -102,11 +108,17 @@ def _extract_roots_from_template(template: Dict) -> Dict:
                 tag = None
 
             lib = DataModel.from_git(url=address, tag=tag)
+            libs[name] = lib
 
         else:
             lib = importlib.import_module(address)
 
-        roots[name] = build_guide_tree(getattr(lib, name))
+        if name in constants:
+            local_const = constants[name]
+        else:
+            local_const = {}
+
+        roots[name] = build_guide_tree(getattr(lib, name), constants=local_const)
 
     return roots
 
@@ -139,42 +151,68 @@ def _convert_tree(obj, roots, option, template, obj_index=0, attr_path="", targe
             continue
 
         if not isinstance(value, list) and hasattr(field.type_, "__fields__"):
-            target = _check_matching_target(
+            matches = _check_matching_target(
                 obj=value,
                 path=f"{attr_path}.{attribute}".strip("."),
                 template=template,
             )
 
-            _convert_tree(
-                obj=value,
-                roots=roots,
-                option=option,
-                obj_index=obj_index,
-                template=template,
-                attr_path=f"{attr_path}.{attribute}".strip("."),
-                target=target,
-            )
+            if isinstance(matches, dict):
+                # TODO Refactor this
+                _convert_tree(
+                    obj=value,
+                    roots=roots,
+                    option=option,
+                    obj_index=obj_index,
+                    template=template,
+                    attr_path=f"{attr_path}.{attribute}".strip("."),
+                    target=matches,
+                )
+            else:
+                for match in matches:
+                    _convert_tree(
+                        obj=value,
+                        roots=roots,
+                        option=option,
+                        obj_index=obj_index,
+                        template=template,
+                        attr_path=f"{attr_path}.{attribute}".strip("."),
+                        target=match["targets"],
+                    )
 
         elif isinstance(value, list) and _only_classes(value):
             wrap_type = _get_wrapping_type(field)
             if wrap_type == "list":
                 for i, sub_obj in enumerate(value):
 
-                    target = _check_matching_target(
+                    matches = _check_matching_target(
                         obj=value[i],
                         path=f"{attr_path}.{attribute}".strip("."),
                         template=template,
                     )
 
-                    _convert_tree(
-                        obj=sub_obj,
-                        roots=roots,
-                        option=option,
-                        obj_index=obj_index + i,
-                        template=template,
-                        attr_path=f"{attr_path}.{attribute}".strip("."),
-                        target=target,
-                    )
+                    if isinstance(matches, dict):
+                        # TODO Refactor this
+                        _convert_tree(
+                            obj=sub_obj,
+                            roots=roots,
+                            option=option,
+                            obj_index=obj_index + i,
+                            template=template,
+                            attr_path=f"{attr_path}.{attribute}".strip("."),
+                            target=matches,
+                        )
+                    else:
+                        for match in matches:
+                            _convert_tree(
+                                obj=sub_obj,
+                                roots=roots,
+                                option=option,
+                                obj_index=obj_index + i,
+                                template=template,
+                                attr_path=f"{attr_path}.{attribute}".strip("."),
+                                target=match["targets"],
+                            )
 
         else:
             if attribute in target:
@@ -215,6 +253,8 @@ def _check_matching_target(obj, path, template):
 
         if bool(re.match(pattern, str(match_attr))):
             matches.append(target)
+
+    return matches
 
     if len(matches) > 1:
         raise ValueError(

@@ -11,7 +11,7 @@ from sdRDM.tools.utils import YAMLDumper
 DEFAULT_MAPPINGS = {"list": list, "dict": dict}
 
 
-def build_guide_tree(obj, parent=None, outer=None):
+def build_guide_tree(obj, parent=None, outer=None, constants={}):
     """Creates a binary tree representation from the underlying data model.
 
     Args:
@@ -29,6 +29,7 @@ def build_guide_tree(obj, parent=None, outer=None):
         module=obj.__module__,
         class_name=obj.__name__,
         outer_type=outer,
+        constants=constants
     )
 
     for name, field in obj.__fields__.items():
@@ -53,7 +54,7 @@ def build_guide_tree(obj, parent=None, outer=None):
 
         for dtype in inner_type:
             if hasattr(dtype, "__fields__") and dtype.__name__ != obj_tree.name:
-                build_guide_tree(dtype, current_parent, outer=outer_type)
+                build_guide_tree(dtype, current_parent, outer=outer_type, constants=constants)
 
     return obj_tree
 
@@ -93,7 +94,11 @@ def generate_template(obj, out: str, simple: bool = True) -> None:
                 ]
 
     with open(out, "w") as f:
-        # f.write(yaml.dump(template, Dumper=YAMLDumper, sort_keys=False))
+
+        if not simple:
+            f.write(yaml.dump(template, Dumper=YAMLDumper, sort_keys=False))
+            return
+
         f.write(toml.dumps(template))
 
 
