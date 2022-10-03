@@ -231,7 +231,7 @@ class DataModel(pydantic.BaseModel):
     def to_sql(self, loc: str):
         """Adds data to a complementary SQL database"""
         add_to_database(self, loc)
-    
+
     @classmethod
     def build_orm(cls):
         """Builds an ORM model to build a database and fetch from"""
@@ -292,6 +292,8 @@ class DataModel(pydantic.BaseModel):
         # Detect base
         if cls._is_json(raw_dataset):
             dataset = json.loads(raw_dataset)
+        if cls._is_yaml(raw_dataset):
+            dataset = yaml.safe_load(raw_dataset)
         else:
             raise TypeError("Base format is unknown!")
 
@@ -312,6 +314,14 @@ class DataModel(pydantic.BaseModel):
     def _is_json(json_string: str):
         try:
             json.loads(json_string)
+        except ValueError as e:
+            return False
+        return True
+
+    @staticmethod
+    def _is_yaml(yaml_string: str):
+        try:
+            yaml.safe_load(yaml_string)
         except ValueError as e:
             return False
         return True
