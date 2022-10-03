@@ -1,6 +1,5 @@
 from audioop import mul
 import re
-import yaml
 import jinja2
 
 from enum import Enum
@@ -9,34 +8,11 @@ from typing import Dict, List, Optional
 
 from sdRDM.generator import templates as jinja_templates
 from sdRDM.generator.mermaidenum import MermaidEnum
+from sdRDM.generator.datatypes import DataTypes
 from sdRDM.tools.utils import check_numeric
 
 DTYPE_PATTERN = r"List\[|Optional\[|\]"
 BUILTINS = ["str", "float", "int", "datetime", "none", "bool", "bytes"]
-
-
-class DataTypes(Enum):
-    """Holds Data Type mappings"""
-
-    # TODO Add lookup to PyDantic Types
-
-    string = ("str", None)
-    str = ("str", None)
-    float = ("float", None)
-    int = ("int", None)
-    integer = ("int", None)
-    bytes = ("bytes", None)
-    posfloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
-    PositiveFloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
-    positivefloat = ("PositiveFloat", "from pydantic.types import PositiveFloat")
-    date = ("datetime", "from datetime import datetime")
-    datetime = ("datetime", "from datetime import datetime")
-    bool = ("bool", None)
-    boolean = ("bool", None)
-
-    @classmethod
-    def get_value_list(cls):
-        return [member.value[0] for member in cls.__members__.values()]
 
 
 class MermaidClass:

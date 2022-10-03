@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Dict, List
 
-from sdRDM.generator.mermaidclass import DataTypes
+from sdRDM.generator.datatypes import DataTypes
 from sdRDM.generator.abstractparser import SchemaParser
 
 MODULE_PATTERN = r"^#{1}\s"
