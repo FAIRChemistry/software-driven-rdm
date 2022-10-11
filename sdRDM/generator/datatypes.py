@@ -10,6 +10,8 @@ class DataTypes(Enum):
     int = ("int", None)
     integer = ("int", None)
     bytes = ("bytes", None)
+    EmailStr = ("EmailStr", "from pydantic import EmailStr")
+    Email = ("EmailStr", "from pydantic import EmailStr")
     HttpUrl = ("HttpUrl", "from pydantic import HttpUrl")
     HttpURL = ("HttpUrl", "from pydantic import HttpUrl")
     httpurl = ("HttpUrl", "from pydantic import HttpUrl")
