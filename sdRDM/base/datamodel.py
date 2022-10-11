@@ -472,7 +472,7 @@ class DataModel(pydantic.BaseModel):
 
         dataset = Dataset()
         for block in blocks:
-            dataset.add_metadatablock(block)
+            dataset.add_metadatablock(block[0])
 
         return dataset
 

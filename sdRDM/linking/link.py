@@ -35,7 +35,7 @@ def convert_data_model(obj, option: str, template: Dict = {}):
     libs = {}
     roots = {
         **_extract_roots_from_template(template=template, libs=libs),
-        **_extract_roots(obj=obj, option=option),
+        **_extract_roots(obj=obj, option=option, libs=libs),
     }
 
     # Transfer data towards the target roots
@@ -44,7 +44,7 @@ def convert_data_model(obj, option: str, template: Dict = {}):
     return [(root.build(), libs[root.name]) for root in roots.values()]
 
 
-def _extract_roots(obj, option: str, roots: Dict = {}, template: Dict = {}):
+def _extract_roots(obj, option: str, libs: Dict, roots: Dict = {}, template: Dict = {}):
     """
     Parses metadata of all attributes present in this data model and
     extracts the libraries needed for executing the given option.
@@ -64,12 +64,13 @@ def _extract_roots(obj, option: str, roots: Dict = {}, template: Dict = {}):
         if option in field_options:
             lib, root, *_ = field_options[option].split(".")
             lib = importlib.import_module(lib)
+            libs[root] = lib
             roots[root] = build_guide_tree(getattr(lib, root))
 
         if hasattr(field, "__fields__"):
-            _extract_roots(obj=field, roots=roots, option=option)
+            _extract_roots(obj=field, roots=roots, option=option, libs=libs)
         elif hasattr(field.type_, "__fields__"):
-            _extract_roots(obj=field.type_, roots=roots, option=option)
+            _extract_roots(obj=field.type_, roots=roots, option=option, libs=libs)
 
     return roots
 
@@ -90,6 +91,9 @@ def _extract_roots_from_template(template: Dict, libs: Dict) -> Dict:
     from sdRDM.base.datamodel import DataModel
 
     roots = {}
+
+    if template == {}:
+        return {}
 
     if "__constants__" in template:
         constants = template["__constants__"]
