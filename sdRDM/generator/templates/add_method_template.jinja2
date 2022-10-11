@@ -3,22 +3,29 @@
         {%- for attr in signature %}
         {{attr.name}}: {{attr.dtype}} {% if 'default' in attr%}= {{attr.default}} {% elif attr.multiple is true %}= ListPlus(){% endif %},
         {%- endfor %}
+        id: Optional[str] = None
     ) -> None:
         """
         {{summary}}
 
         Args:
+            id (str): Unique identifier of the '{{ cls }}' object. Defaults to 'None'.
             {%- for attr in signature %}
             {{attr.name}} ({{ attr.dtype }}): {{ attr.description }}.{% if 'default' in attr %} Defaults to {{attr.default}}{% endif %}
             {%- endfor %}
         """
 
+        params = {
+            {%- for attr in signature %}
+            "{{attr.name}}": {{attr.name}},
+            {%- endfor %}
+        }
+
+        if id is not None:
+            params["id"] = id
+
         {{ snake_case }} = [
-            {{cls}}(
-                {%- for attr in signature %}
-                {{attr.name}}={{attr.name}},
-                {%- endfor %}
-            )
+            {{cls}}(**params)
         ]
 
         self.{{attribute}} = self.{{attribute}} + {{ snake_case }}
