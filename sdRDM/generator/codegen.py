@@ -388,9 +388,11 @@ def _set_optional_classes_as_default_factories(cls_obj, classes):
             for attr in classes[dtype].attributes.values()
         )
 
-        if is_optional and cls_obj.attributes[name].get("default"):
+        if is_optional is True and cls_obj.attributes[name].get("default") is None:
             cls_obj.attributes[name]["default_factory"] = dtype
             del cls_obj.attributes[name]["default"]
+        else:
+            cls_obj.attributes[name]["default"] = None
 
 
 def render_dunder_init(classes: dict, module_doc):
