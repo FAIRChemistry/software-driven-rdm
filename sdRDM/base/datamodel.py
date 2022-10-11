@@ -9,7 +9,7 @@ import validators
 import yaml
 import warnings
 
-from anytree import RenderTree, Node
+from anytree import RenderTree, Node, LevelOrderIter
 from enum import Enum
 from lxml import etree
 from nob import Nob
@@ -17,8 +17,9 @@ from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
 from typing import Dict, Optional, IO, Union
 
+from sdRDM.base.importemodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
-from sdRDM.base.utils import build_xml, object_to_orm
+from sdRDM.base.utils import build_xml, object_to_orm, generate_model
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.linking.utils import build_guide_tree, generate_template
@@ -87,8 +88,8 @@ class DataModel(pydantic.BaseModel):
         else:
             return self._traverse_model_by_path(object, path[1::])
 
-    def paths(self, leaves=False):
-        """Returns all possible paths of the data model. Can also be reduced to just leaves."""
+    def paths(self, leaves: bool = False):
+        """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
 
         # Get JSON representation
         model = Nob(self.to_dict(warn=False))
@@ -97,6 +98,26 @@ class DataModel(pydantic.BaseModel):
             return model.leaves
         else:
             return model.paths
+
+    @classmethod
+    def meta_paths(cls, leaves: bool = False):
+        """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
+
+        metapaths = set()
+        for node in LevelOrderIter(cls.create_tree()[0]):
+            if len(node.path) == 1:
+                continue
+
+            if leaves and node.is_leaf:
+                metapaths.add(
+                    "/".join([n.name for n in node.path if n.name[0].islower()])
+                )
+            elif not leaves:
+                metapaths.add(
+                    "/".join([n.name for n in node.path if n.name[0].islower()])
+                )
+
+        return sorted(metapaths, key=lambda path: len(path.split("/")))
 
     # ! Exporters
     def to_dict(self, exclude_none=True, warn=True, **kwargs):
@@ -263,6 +284,14 @@ class DataModel(pydantic.BaseModel):
         return cls.from_dict(json.load(handler))
 
     @classmethod
+    def from_yaml_string(cls, yaml_string: str):
+        return cls.from_dict(yaml.safe_load(yaml_string))
+
+    @classmethod
+    def from_yaml(cls, handler: IO):
+        return cls.from_dict(yaml.safe_load(handler))
+
+    @classmethod
     def from_xml_string(cls, xml_string: str):
         raise NotImplementedError()
 
@@ -299,16 +328,19 @@ class DataModel(pydantic.BaseModel):
 
         # Check if there is a source reference
         if "__source__" not in dataset:
-            raise ValueError("Source reference is missing!")
+            # If no source is given, just create a model
+            # from the blank dataset -> Can be incomplete
+            lib = generate_model(data=dataset, name="Root", base=cls)
+            return lib.Root.from_dict(dataset), lib
+        else:
+            # Get source and build libary
+            url = dataset.get("__source__")["repo"]
+            commit = dataset.get("__source__")["commit"]
+            root = dataset.get("__source__")["root"]
+            lib = cls.from_git(url=url, commit=commit)
 
-        # Get source and build libary
-        url = dataset.get("__source__")["repo"]
-        commit = dataset.get("__source__")["commit"]
-        root = dataset.get("__source__")["root"]
-        lib = cls.from_git(url=url, commit=commit)
-
-        # Use the internal librar to parse the file
-        return getattr(lib, root).from_dict(dataset), lib  # type: ignore
+            # Use the internal librar to parse the file
+            return getattr(lib, root).from_dict(dataset), lib  # type: ignore
 
     @staticmethod
     def _is_json(json_string: str):
@@ -401,23 +433,6 @@ class DataModel(pydantic.BaseModel):
             if inspect.isclass(obj) and issubclass(obj, Enum)
         }
 
-        class ImportedModules:
-            """Empty class used to store all sub classes"""
-
-            def __init__(self, classes, enums=None, links=None):
-                for name, node in classes.items():
-                    if hasattr(node, "cls"):
-                        # Add all classes
-                        setattr(self, name, node.cls)
-                    elif isinstance(node, dict):
-                        # Add links if given
-                        setattr(self, name, node)
-
-                if enums:
-                    self.enums = self.__class__(classes=enums)
-                if links:
-                    self.links = self.__class__(classes=links)
-
         return ImportedModules(classes, enums, links)
 
     @staticmethod
@@ -481,3 +496,7 @@ class DataModel(pydantic.BaseModel):
             return ListPlus(*value, in_setup=True)
         else:
             return value
+
+    # ! Overloads
+    def __repr__(self) -> str:
+        return self.yaml()
