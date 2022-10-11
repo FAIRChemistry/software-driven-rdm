@@ -1,9 +1,10 @@
 import re
 
 from datetime import date, datetime
-from typing import get_origin
+from typing import get_origin, Dict, List, Optional
 from lxml import etree
 from inspect import Signature, Parameter
+from pydantic import Field, create_model
 from sqlalchemy.orm import relationship
 from sqlalchemy import (
     Column,
@@ -15,7 +16,7 @@ from sqlalchemy import (
     BigInteger,
     ForeignKey,
 )
-
+from sdRDM.base.importemodules import ImportedModules
 from sdRDM.tools.utils import snake_to_camel
 from sdRDM.base.listplus import ListPlus
 
@@ -42,6 +43,55 @@ class IDGenerator:
         id = re.sub(r"\[?INDEX\]?[+|*|?]?", str(self.index), self.pattern)
         self.index += 1
         return id
+
+
+def generate_model(data: Dict, name: str, base, objs: Dict = {}, is_root: bool = True):
+    """Generates a model based on a given file without an existing schema.
+
+    Caution, these models can impose to be incomplete if the data given
+    only covers a fraction of the actual schema it was generated from.
+    This methods intent is to provide sdRDM's functionalities for parsing
+    data on the fly.
+
+    """
+
+    fields = {}
+    for field, content in data.items():
+
+        # Construct field definitions
+        # cls_def[field_name] = (dtype, Field(**field_meta))
+
+        field_params = {}
+        if isinstance(content, list) and all(
+            isinstance(entry, dict) for entry in content
+        ):
+            field_params["default_factory"] = list
+            dtype = List[
+                generate_model(
+                    data=content[0],
+                    name=field.capitalize(),
+                    base=base,
+                    objs=objs,
+                    is_root=False,
+                )
+            ]
+
+        elif isinstance(content, list):
+            field_params["default_factory"] = list
+            dtype = List[str]
+        else:
+            field_params["default"] = None
+            dtype = Optional[str]
+
+        fields[field] = (dtype, Field(**field_params))
+
+    # Finally create the corresponding object
+    objs[name] = create_model(name, __base__=base, **fields)
+
+    if is_root:
+        return ImportedModules(classes=objs)
+    else:
+        return objs[name]
 
 
 def build_xml(obj, pascal: bool = True):
