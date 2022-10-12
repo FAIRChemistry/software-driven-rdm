@@ -523,4 +523,4 @@ class DataModel(pydantic.BaseModel):
 
     # ! Overloads
     def __repr__(self) -> str:
-        return self.json()
+        return self.yaml()
