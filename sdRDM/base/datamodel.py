@@ -11,6 +11,7 @@ import warnings
 
 from anytree import RenderTree, Node, LevelOrderIter
 from enum import Enum
+import numpy as np
 from lxml import etree
 from nob import Nob
 from pydantic import PrivateAttr, validator
@@ -304,7 +305,7 @@ class DataModel(pydantic.BaseModel):
 
     # ! Dynamic initializers
     @classmethod
-    def parse(cls, handler: IO):
+    def parse(cls, path: str):
         """Reads an arbitrary format and infers the corresponding object model to load the data.
 
         This function is used to open legacy files or any other file where the software
@@ -315,14 +316,15 @@ class DataModel(pydantic.BaseModel):
             path (str): Path to the file to load.
         """
 
-        # Read the file
-        raw_dataset = handler.read()
-
         # Detect base
-        if cls._is_json(raw_dataset):
-            dataset = json.loads(raw_dataset)
-        if cls._is_yaml(raw_dataset):
-            dataset = yaml.safe_load(raw_dataset)
+        if cls._is_json(path):
+            dataset = json.loads(open(path).read())
+        elif cls._is_yaml(path):
+            dataset = yaml.safe_load(open(path).read())
+        elif cls._is_hdf5(path):
+            import deepdish as dd
+
+            dataset = dd.io.load(path)
         else:
             raise TypeError("Base format is unknown!")
 
@@ -343,19 +345,31 @@ class DataModel(pydantic.BaseModel):
             return getattr(lib, root).from_dict(dataset), lib  # type: ignore
 
     @staticmethod
-    def _is_json(json_string: str):
+    def _is_json(path: str):
         try:
-            json.loads(json_string)
+            json.loads(open(path).read())
         except ValueError as e:
             return False
         return True
 
     @staticmethod
-    def _is_yaml(yaml_string: str):
+    def _is_yaml(path: str):
         try:
-            yaml.safe_load(yaml_string)
+            yaml.safe_load(open(path).read())
         except ValueError as e:
             return False
+        return True
+
+    @staticmethod
+    def _is_hdf5(path: str):
+        import deepdish as dd
+        from tables.exceptions import HDF5ExtError
+
+        try:
+            dd.io.load(path)
+        except HDF5ExtError as e:
+            return False
+
         return True
 
     @classmethod
@@ -490,13 +504,23 @@ class DataModel(pydantic.BaseModel):
 
     # ! Validators
     @validator("*")
-    def turn_individual_value_into_extended_list(cls, value):
+    def convert_extended_list_and_numpy_strings(cls, value):
         """Validator used to convert any list into a ListPlus."""
         if isinstance(value, list):
-            return ListPlus(*value, in_setup=True)
+            return ListPlus(*[cls._convert_numpy_type(v) for v in value], in_setup=True)
+        elif isinstance(value, np.str_):
+            return str(value)
         else:
             return value
 
+    @staticmethod
+    def _convert_numpy_type(value):
+        """Helper function to convert numpy strings into builtin"""
+        if isinstance(value, np.str_):
+            return str(value)
+
+        return value
+
     # ! Overloads
     def __repr__(self) -> str:
-        return self.yaml()
+        return self.json()
