@@ -93,7 +93,7 @@ class MermaidClass:
             for dtype in dtypes.split(","):
 
                 if dtype in DataTypes.__members__:
-                    dtype, dependency = DataTypes[dtype].value
+                    dtype, dependencies = DataTypes[dtype].value
 
                     if "Union" not in attr["dtype"]:
                         # Make sure that native types are added
@@ -119,9 +119,9 @@ class MermaidClass:
                         }
                     )
 
-                    # Add the object as a dependency
-                    # dependency = f"from .{reference[0].lower()} import {reference[0]}"
-                    dependency = None
+                    # Add the object as a dependencies
+                    # dependencies = f"from .{reference[0].lower()} import {reference[0]}"
+                    dependencies = None
 
                     # Set the dtype and import Union
                     attr["dtype"] = f"Union[str, '{reference[0]}']"
@@ -131,11 +131,11 @@ class MermaidClass:
 
                 else:
                     self.sub_classes.append(dtype)
-                    dependency = None
+                    dependencies = None
 
-                if dependency is not None:
+                if dependencies is not None:
                     # Add possible dependencies
-                    self.imports.add(dependency)
+                    self.imports.update(dependencies)
 
         return attributes
 

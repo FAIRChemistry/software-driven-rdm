@@ -37,6 +37,7 @@ class DataModel(pydantic.BaseModel):
     class Config:
         validate_assignment = True
         use_enum_values = True
+        arbitrary_types_allowed = True
         allow_population_by_field_name = True
         orm_mode = True
 
@@ -124,10 +125,6 @@ class DataModel(pydantic.BaseModel):
     def to_dict(self, exclude_none=True, warn=True, **kwargs):
         data = super().dict(exclude_none=exclude_none, by_alias=True, **kwargs)
 
-        # Convert all ListPlus items back to normal lists
-        # to stay compliant to PyDantic
-        data = self._convert_to_lists(data, exclude_none)
-
         # Add source for reproducibility
         data["__source__"] = {"root": self.__class__.__name__}
 
@@ -154,6 +151,7 @@ class DataModel(pydantic.BaseModel):
         nu_data = {}
 
         for key, value in data.items():
+
             if isinstance(value, ListPlus):
                 if not value and exclude_none:
                     continue
@@ -178,13 +176,25 @@ class DataModel(pydantic.BaseModel):
     def _check_and_convert_sub(self, element, exclude_none):
         """Helper function used to trigger recursion on deeply nested lists."""
 
+        if isinstance(element, np.ndarray):
+            return element
+
         if element.__class__.__module__ == "builtins" and not isinstance(element, dict):
             return element
 
         return self._convert_to_lists(element, exclude_none)
 
     def json(self, indent: int = 2):
-        return json.dumps(self.to_dict(), indent=indent, default=str)
+        return json.dumps(self.to_dict(), indent=indent, default=self._json_dump)
+
+    @staticmethod
+    def _json_dump(value):
+        """Helper function to export nd-arrays in a proper way"""
+
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+
+        return str(value)
 
     def yaml(self):
         return yaml.dump(
@@ -520,7 +530,3 @@ class DataModel(pydantic.BaseModel):
             return str(value)
 
         return value
-
-    # ! Overloads
-    def __repr__(self) -> str:
-        return self.yaml()
