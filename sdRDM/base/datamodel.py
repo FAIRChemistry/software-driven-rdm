@@ -11,6 +11,7 @@ import warnings
 
 from anytree import RenderTree, Node, LevelOrderIter
 from enum import Enum
+from h5py._hl.files import File as H5File
 import numpy as np
 from lxml import etree
 from nob import Nob
@@ -20,7 +21,9 @@ from typing import Dict, Optional, IO, Union
 
 from sdRDM.base.importemodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
-from sdRDM.base.utils import build_xml, object_to_orm, generate_model
+from sdRDM.base.utils import object_to_orm, generate_model
+from sdRDM.base.ioutils.xml import write_xml
+from sdRDM.base.ioutils.hdf5 import write_hdf5
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.linking.utils import build_guide_tree, generate_template
@@ -202,7 +205,7 @@ class DataModel(pydantic.BaseModel):
         )
 
     def xml(self, pascal: bool = True):
-        tree = build_xml(self, pascal=pascal)
+        tree = write_xml(self, pascal=pascal)
 
         try:
             tree.attrib.update(
@@ -219,11 +222,9 @@ class DataModel(pydantic.BaseModel):
             tree, pretty_print=True, xml_declaration=True, encoding="UTF-8"
         ).decode("utf-8")
 
-    def hdf5(self, path: str) -> None:
+    def hdf5(self, file: Union[H5File, str]) -> None:
         """Writes the object instance to HDF5."""
-        import deepdish as dd
-
-        dd.io.save(path, self.to_dict())
+        write_hdf5(self, file)
 
     def convert_to(self, option: str = "", template: Union[str, None, Dict] = None):
         """

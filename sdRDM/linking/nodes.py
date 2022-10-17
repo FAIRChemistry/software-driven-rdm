@@ -99,15 +99,15 @@ class ClassNode(Node):
             sdRDM.DataModel: Instantiated tree of the data model
         """
 
-        self_copy = copy.deepcopy(self)
-        level_order = list(LevelOrderGroupIter(self_copy))[::-1]
+        # self_copy = copy.deepcopy(self)
+        level_order = list(LevelOrderGroupIter(self))[::-1]
 
         for level in level_order:
             if all(isinstance(node, AttributeNode) for node in level):
                 continue
 
             for node in level:
-                if node == self_copy:
+                if node == self:
                     # Stop the flow once the root node is reached
                     continue
 
@@ -138,4 +138,4 @@ class ClassNode(Node):
                     else:
                         parent.value = {0: list(cls.values())[0]}
 
-        return self_copy.instantiate()[0]
+        return self.instantiate()[0]
