@@ -128,6 +128,10 @@ class DataModel(pydantic.BaseModel):
     def to_dict(self, exclude_none=True, warn=True, **kwargs):
         data = super().dict(exclude_none=exclude_none, by_alias=True, **kwargs)
 
+        # Convert all ListPlus items back to normal lists
+        # to stay compliant to PyDantic
+        data = self._convert_to_lists(data, exclude_none)
+
         # Add source for reproducibility
         data["__source__"] = {"root": self.__class__.__name__}
 
