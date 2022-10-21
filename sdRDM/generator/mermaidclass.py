@@ -167,6 +167,8 @@ class MermaidClass:
         )
 
         for name, attr in self.attributes.items():
+            if name == "id":
+                continue
 
             # Make a copy of the attributes when rendering,
             # since we are dropping some items that are
@@ -311,6 +313,7 @@ class MermaidClass:
             # Get all attributes into the appropriate format
             signature = [
                 {"name": name, **attr} for name, attr in add_class_attrs.items()
+                if name != "id"
             ]
 
             signature = sorted(
