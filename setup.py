@@ -27,6 +27,7 @@ setup(
         "validators",
         "sqlalchemy",
         "sqlalchemy-utils",
+        "h5py",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
