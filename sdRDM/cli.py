@@ -1,7 +1,10 @@
-from typing import Optional
 import typer
+import os
 
-from sdRDM.generator.codegen import generate_python_api
+from typing import Optional
+from sdRDM.generator.codegen import FORMAT_MAPPING, generate_python_api
+from sdRDM.generator.schemagen import generate_schema
+
 
 app = typer.Typer()
 
@@ -35,6 +38,29 @@ def generate(
 @app.command()
 def link():
     pass
+
+
+@app.command()
+def schema(
+    path: str = typer.Option(..., help="Path to the schema definition"),
+    out: str = typer.Option(..., help="Directory where the file will be written to."),
+):
+    """Generate a Mermaid schema from a given Format.
+
+    Args:
+        path (str, optional): Path to the schema definition.
+        out (str, optional): Directory where the file will be written to.
+    """
+
+    # Set up and execute parser
+    extension = os.path.basename(path).split(".")[-1]
+
+    if extension not in FORMAT_MAPPING:
+        raise TypeError(f"Extension '{extension}' is unknown.")
+
+    # Generate schemata
+    format_type = FORMAT_MAPPING[extension]
+    generate_schema(open(path, "r"), out, format_type)
 
 
 if __name__ == "__main__":
