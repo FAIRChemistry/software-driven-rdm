@@ -94,7 +94,6 @@ class MarkdownParser(SchemaParser):
                 and parser.state == State.NEW_ENUM_VALUE
             ):
                 parser.enums.append(parser.enum)
-                del parser.enum
                 parser.state = State.NEW_MODULE
 
             elif line.startswith("```") and parser.state == State.NEW_ENUM_VALUE:
