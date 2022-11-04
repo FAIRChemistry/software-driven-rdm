@@ -59,8 +59,10 @@ def generate_model(data: Dict, name: str, base, objs: Dict = {}, is_root: bool =
         # cls_def[field_name] = (dtype, Field(**field_meta))
 
         field_params = {}
-        if isinstance(content, list) and all(
-            isinstance(entry, dict) for entry in content
+        if (
+            isinstance(content, list)
+            and content != []
+            and all(isinstance(entry, dict) for entry in content)
         ):
             field_params["default_factory"] = list
             dtype = List[
