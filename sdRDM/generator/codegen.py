@@ -164,7 +164,9 @@ def _get_class_definitions(path: str, descriptions) -> Dict[str, MermaidClass]:
 
         if "<< Enumeration >>" in cls_def:
             name = cls_def.split("{")[0].strip()
-            values = cls_def.split("        +")[1:-1]
+            values = cls_def.split("        +")[1::]
+            values[-1] = values[-1].rstrip("`").replace("}", "").strip()
+
             cls_def = MermaidEnum(name=name, values=values)
         elif "<< External Object >>" in cls_def:
             cls_def = _process_external_object(cls_def, definitions)
@@ -221,7 +223,6 @@ def _create_dependency_tree(mermaid: str):
     # Parse the raw mermaid file to extract all inheritances (<--)
     relation_regex = re.compile(r"([a-zA-Z]*) <-- ([a-zA-Z]*)")
     relations = relation_regex.findall(mermaid)
-    results = {}
 
     # Create a set of all occuring classes that happen to be
     # involved into inheritance
