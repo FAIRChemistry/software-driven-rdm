@@ -1,8 +1,7 @@
 import importlib
 import re
-import toml
 import validators
-import yaml
+import os
 
 from typing import Dict, List, Optional, Union
 
@@ -114,8 +113,12 @@ def _extract_roots_from_template(template: Dict, libs: Dict) -> Dict:
             lib = DataModel.from_git(url=address, tag=tag)
             libs[name] = lib
 
+        elif os.path.exists(address):
+            lib = DataModel.from_markdown(address)
+            libs[name] = lib
         else:
             lib = importlib.import_module(address)
+            libs[name] = lib
 
         if name in constants:
             local_const = constants[name]
