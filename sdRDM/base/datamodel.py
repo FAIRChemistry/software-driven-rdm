@@ -320,7 +320,7 @@ class DataModel(pydantic.BaseModel):
 
     # ! Dynamic initializers
     @classmethod
-    def parse(cls, path: str):
+    def parse(cls, path: Optional[str] = None, data: Optional[Dict] = None):
         """Reads an arbitrary format and infers the corresponding object model to load the data.
 
         This function is used to open legacy files or any other file where the software
@@ -332,16 +332,27 @@ class DataModel(pydantic.BaseModel):
         """
 
         # Detect base
-        if cls._is_json(path):
-            dataset = json.loads(open(path).read())
-        elif cls._is_yaml(path):
-            dataset = yaml.safe_load(open(path).read())
-        elif cls._is_hdf5(path):
-            import deepdish as dd
+        if path and data is None:
+            if cls._is_json(path):
+                dataset = json.loads(open(path).read())
+            elif cls._is_yaml(path):
+                dataset = yaml.safe_load(open(path).read())
+            elif cls._is_hdf5(path):
+                import deepdish as dd
 
-            dataset = dd.io.load(path)
+                dataset = dd.io.load(path)
+            else:
+                raise TypeError("Base format is unknown!")
+        elif data and path is None:
+            dataset = data
+        elif data and path:
+            raise ValueError(
+                f"Data and path have been specified. Please use only one of the arguments to parse live data ('data') or file data ('path')"
+            )
         else:
-            raise TypeError("Base format is unknown!")
+            raise ValueError(
+                f"Neither path nor data have been specified. Either of both should be specified."
+            )
 
         # Check if there is a source reference
         if "__source__" not in dataset:
