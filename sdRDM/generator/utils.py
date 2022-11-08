@@ -39,7 +39,7 @@ def preserve_custom_functions(rendered_class: str, path: str) -> str:
     # Turn the rendered class into an Abstract Syntax Tree and get the class
     new_module = ast.parse(rendered_class)
     previous_module = ast.parse(open(path).read())
-
+    
     # Format data model class
     _format_classes(new_module, previous_module)
 
@@ -84,6 +84,12 @@ def _format_classes(new_module, previous_module):
         for attr in new_class.body
         if isinstance(attr, ast.AnnAssign)
     }
+    
+    new_enums = {
+        enum.targets[0].id: enum
+        for enum in new_class.body
+        if isinstance(enum, ast.Assign)
+    }
 
     new_methods = {
         method.name: method
@@ -100,9 +106,15 @@ def _format_classes(new_module, previous_module):
     for element in previous_class.body:
         if isinstance(element, ast.AnnAssign):
             # If the attribute is part of the new module, add it
-
             if element.target.id in new_attributes:
                 del new_attributes[element.target.id]
+            else:
+                continue
+            
+        elif isinstance(element, ast.Assign):
+            # If the enum value is part of the new module, add it
+            if element.targets[0].id in new_enums:
+                del new_enums[element.targets[0].id]
             else:
                 continue
 
@@ -123,6 +135,7 @@ def _format_classes(new_module, previous_module):
     # Add the remaining attributes and methods
     nu_body += list(new_attributes.values())
     nu_body += list(new_methods.values())
+    nu_body += list(new_enums.values())
 
     # Set the new body for the class
     previous_class.body = sorted(nu_body, key=_sort_class_body)
