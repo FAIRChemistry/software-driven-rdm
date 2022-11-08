@@ -222,6 +222,7 @@ def _get_cls_types(cls_obj):
 
         if isinstance(element, ast.AnnAssign):
             if hasattr(element.annotation, "slice"):
+                # Parse nested types such as List[SomeType]
                 try:
                     types.add(element.annotation.slice.id)
                 except AttributeError:
@@ -229,6 +230,9 @@ def _get_cls_types(cls_obj):
                     for dtype in element.annotation.slice.elts:
                         if hasattr(dtype, "id"):
                             types.add(dtype.id)
+            else:
+                # Parse lone attributes
+                types.add(element.annotation.id)
 
         elif isinstance(element, ast.FunctionDef):
             for arg in element.args.args:
@@ -245,7 +249,7 @@ def _get_cls_types(cls_obj):
                             
                 elif annotation:
                     types.add(annotation.id)
-
+    
     return types
 
 def _sort_module(element):
