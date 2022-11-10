@@ -51,7 +51,7 @@ def _write_source(dataset, file: H5File):
         # Add Git info if given
         if dataset.__repo__: group.attrs["repo"] = dataset.__repo__,  # type: ignore
         group.attrs["commit"] = dataset.__commit__,  # type: ignore
-        group.attrs["url"] = dataset.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
+        group.attrs["url"] = dataset.__repo__.replace(".git", f"/tree/{dataset.__commit__}"),  # type: ignore
     except AttributeError:
         pass
     
