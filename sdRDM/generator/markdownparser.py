@@ -279,9 +279,7 @@ class MarkdownParser(SchemaParser):
 
         dtypes = self.attr["type"].replace("Union[", "").replace("]", "")
         for dtype in dtypes.split(","):
-            dtype = self._strip_references(dtype)
-
-            if dtype not in DataTypes.__members__:
+            if dtype not in DataTypes.__members__ and not dtype.startswith("@"):
                 self.compositions.append(
                     {"module": dtype, "container": self.obj["name"]}
                 )
