@@ -1,6 +1,5 @@
 ```mermaid
 classDiagram
-    direction LR
     {%- for inherit in inherits %}
     {{inherit.parent}} <-- {{inherit.child}}
     {%- endfor %}
