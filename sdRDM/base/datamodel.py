@@ -1,6 +1,7 @@
 import inspect
 import json
 import os
+import h5py
 import pydantic
 import random
 import tempfile
@@ -8,13 +9,15 @@ import toml
 import validators
 import yaml
 import warnings
-
-from anytree import RenderTree, Node, LevelOrderIter
-from enum import Enum
-from h5py._hl.files import File as H5File
 import numpy as np
-from lxml import etree
+
 from nob import Nob
+from enum import Enum
+from numpy.typing import NDArray
+from anytree import RenderTree, Node, LevelOrderIter
+from h5py._hl.files import File as H5File
+from h5py._hl.dataset import Dataset as H5Dataset
+from lxml import etree
 from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
 from typing import Dict, Optional, IO, Union
@@ -23,7 +26,7 @@ from sdRDM.base.importemodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import object_to_orm, generate_model
 from sdRDM.base.ioutils.xml import write_xml
-from sdRDM.base.ioutils.hdf5 import write_hdf5
+from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.linking.utils import build_guide_tree, generate_template
@@ -60,7 +63,7 @@ class DataModel(pydantic.BaseModel):
         if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
-        model = Nob(self.to_dict(warn=False))
+        model = Nob(self.to_dict(warn=False, convert_h5ds=False))
         path = model.find(path)
 
         if attribute is None and target is None:
@@ -125,12 +128,12 @@ class DataModel(pydantic.BaseModel):
         return sorted(metapaths, key=lambda path: len(path.split("/")))
 
     # ! Exporters
-    def to_dict(self, exclude_none=True, warn=True, **kwargs):
+    def to_dict(self, exclude_none=True, warn=True, convert_h5ds=True, **kwargs):
         data = super().dict(exclude_none=exclude_none, by_alias=True, **kwargs)
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
-        data = self._convert_to_lists(data, exclude_none)
+        data = self._convert_types(data, exclude_none, convert_h5ds)
 
         # Add source for reproducibility
         data["__source__"] = {"root": self.__class__.__name__}
@@ -152,7 +155,7 @@ class DataModel(pydantic.BaseModel):
 
         return data
 
-    def _convert_to_lists(self, data, exclude_none):
+    def _convert_types(self, data, exclude_none, convert_h5ds):
         """Converts als ListPlus items back to lists."""
 
         nu_data = {}
@@ -164,7 +167,7 @@ class DataModel(pydantic.BaseModel):
                     continue
 
                 nu_data[key] = [
-                    self._check_and_convert_sub(element, exclude_none)
+                    self._check_and_convert_sub(element, exclude_none, convert_h5ds)
                     for element in value
                 ]
 
@@ -172,15 +175,23 @@ class DataModel(pydantic.BaseModel):
                 if not value and exclude_none:
                     continue
 
-                if self._convert_to_lists(value, exclude_none):
-                    nu_data[key] = self._convert_to_lists(value, exclude_none)
+                if self._convert_types(value, exclude_none, convert_h5ds):
+                    nu_data[key] = self._convert_types(
+                        value, exclude_none, convert_h5ds
+                    )
+
+            elif isinstance(value, H5Dataset) and convert_h5ds:
+                nu_data[key] = value[:].tolist()
+
+            elif isinstance(value, np.ndarray):
+                nu_data[key] = value.tolist()
 
             else:
                 nu_data[key] = value
 
         return nu_data
 
-    def _check_and_convert_sub(self, element, exclude_none):
+    def _check_and_convert_sub(self, element, exclude_none, convert_h5ds):
         """Helper function used to trigger recursion on deeply nested lists."""
 
         if isinstance(element, np.ndarray):
@@ -189,7 +200,7 @@ class DataModel(pydantic.BaseModel):
         if element.__class__.__module__ == "builtins" and not isinstance(element, dict):
             return element
 
-        return self._convert_to_lists(element, exclude_none)
+        return self._convert_types(element, exclude_none, convert_h5ds)
 
     def json(self, indent: int = 2):
         return json.dumps(self.to_dict(), indent=indent, default=self._json_dump)
@@ -312,11 +323,9 @@ class DataModel(pydantic.BaseModel):
         raise NotImplementedError()
 
     @classmethod
-    def from_hdf5(cls, path: str):
-        """Reads a hdf5 file from path into the class model"""
-        import deepdish as dd
-
-        return cls.from_dict(dd.io.load(path))
+    def from_hdf5(cls, file: h5py.File):
+        """Reads a hdf5 file from path into the class model."""
+        return read_hdf5(cls, file)
 
     # ! Dynamic initializers
     @classmethod
