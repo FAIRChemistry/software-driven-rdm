@@ -3,6 +3,11 @@ import re
 
 from enum import Enum, auto
 
+# Constants
+REFERENCE_PATTERN = r"get_[A-Za-z0-9\_]*_reference"
+ADDER_PATTERN = r"add_to_[A-Za-z0-9\_]*"
+INHERITANCE_PATTERN = r"class [A-Za-z0-9\_\.]*\(([A-Za-z0-9\_\.]*)\)\:"
+
 class ModuleOrder(Enum):
     
     IMPORT_SDRDM = auto()
@@ -67,13 +72,14 @@ def _stylize_class(rendered: str):
 def _insert_new_lines(rendered: str):
     """Inserts new lines for imports"""
     rendered = rendered.replace("import sdRDM", "import sdRDM\n")
-    package_imps_index = rendered.find("from .")
+    split_index = rendered.find("@forge_signature")
 
-    return f"{rendered[0:package_imps_index]}\n{rendered[package_imps_index::]}"
+    return f"{rendered[0:split_index]}\n{rendered[split_index::]}"
 
 def _format_classes(new_module, previous_module):
     """Re-formats a given class to preserve custom functions that would otherwise be overwritten"""
 
+    # Return the new class from the module
     new_class = next(
         filter(lambda element: isinstance(element, ast.ClassDef), new_module.body)  # type: ignore
     )
@@ -120,8 +126,12 @@ def _format_classes(new_module, previous_module):
 
         elif isinstance(element, ast.FunctionDef):
             # If the method is part of the new module, add it
-            if "add_to_" not in element.name:
-                pass
+            if bool(re.match(ADDER_PATTERN, element.name)):
+                # Skip adder functions
+                continue
+            elif bool(re.match(REFERENCE_PATTERN, element.name)):
+                # Skip generated reference getters
+                continue
             elif element.name in new_methods:
                 if ast.unparse(element) != ast.unparse(new_methods[element.name]):
                     element = new_methods[element.name]
@@ -162,11 +172,15 @@ def _sort_class_body(element) -> int:
 def _format_imports(new_module, previous_model):
     """Formats given inputs and merges the new imports to the previous ones"""
 
+    # Get all imports
     new_imports = [
         element
         for element in new_module.body
         if isinstance(element, (ast.ImportFrom, ast.Import))
     ]
+    
+     # Check if inheritance is given
+    inherited_class = re.findall(INHERITANCE_PATTERN, ast.unparse(new_module))[0]
 
     types = _get_module_types(new_module)
     previous_model.body += new_imports
@@ -183,7 +197,9 @@ def _format_imports(new_module, previous_model):
             imp = ast.unparse(element)
             
             if "from ." in imp:
-                if element.names[0].name not in types:
+                if element.names[0].name == inherited_class:
+                    used_imports.add(ast.unparse(element))
+                elif element.names[0].name not in types:
                     continue
                 elif imp not in used_imports:
                     # Add unique import
