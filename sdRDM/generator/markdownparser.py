@@ -131,7 +131,7 @@ class MarkdownParser(SchemaParser):
 
             if not hasattr(self, "module_docstring"):
                 self.module_docstring = [line]
-            else:
+            elif not line.strip().startswith("-"):
                 self.module_docstring.append(line)
 
         elif self.state is State.NEW_OBJECT:
