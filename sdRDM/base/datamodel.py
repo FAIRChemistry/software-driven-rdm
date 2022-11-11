@@ -329,7 +329,12 @@ class DataModel(pydantic.BaseModel):
 
     # ! Dynamic initializers
     @classmethod
-    def parse(cls, path: Optional[str] = None, data: Optional[Dict] = None):
+    def parse(
+        cls,
+        path: Optional[str] = None,
+        data: Optional[Dict] = None,
+        root_name: str = "Root",
+    ):
         """Reads an arbitrary format and infers the corresponding object model to load the data.
 
         This function is used to open legacy files or any other file where the software
@@ -367,8 +372,9 @@ class DataModel(pydantic.BaseModel):
         if "__source__" not in dataset:
             # If no source is given, just create a model
             # from the blank dataset -> Can be incomplete
-            lib = generate_model(data=dataset, name="Root", base=cls)
-            return lib.Root.from_dict(dataset), lib
+            lib = generate_model(data=dataset, name=root_name, base=cls)
+            root = getattr(lib, root_name)
+            return root.from_dict(dataset), lib
         else:
             # Get source and build libary
             url = dataset.get("__source__")["repo"]

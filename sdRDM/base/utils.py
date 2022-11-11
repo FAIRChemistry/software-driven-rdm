@@ -55,9 +55,6 @@ def generate_model(data: Dict, name: str, base, objs: Dict = {}, is_root: bool =
     fields = {}
     for field, content in data.items():
 
-        # Construct field definitions
-        # cls_def[field_name] = (dtype, Field(**field_meta))
-
         field_params = {}
         if (
             isinstance(content, list)
