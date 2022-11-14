@@ -112,7 +112,10 @@ def _format_classes(new_module, previous_module):
     for element in previous_class.body:
         if isinstance(element, ast.AnnAssign):
             # If the attribute is part of the new module, add it
-            if element.target.id in new_attributes:
+            if (
+                element.target.id in new_attributes
+                and ast.unparse(element) == ast.unparse(new_attributes[element.target.id])
+            ):
                 del new_attributes[element.target.id]
             else:
                 continue
