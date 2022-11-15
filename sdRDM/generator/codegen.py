@@ -205,6 +205,8 @@ def _process_external_object(cls_def: str, definitions: Dict):
 def _get_object_types(cls_def, definitions, dtypes=None):
     if dtypes is None:
         dtypes = set()
+    elif isinstance(cls_def, MermaidEnum):
+        return set()
 
     for attr in cls_def.attributes.values():
         dtype = re.sub(r"List|Dict|Optional|\[|\]", "", attr["dtype"])
