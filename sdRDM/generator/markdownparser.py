@@ -58,9 +58,7 @@ class MarkdownParser(SchemaParser):
     def parse(cls, handle):
 
         # Open the markdown file, clean it and set up the parser
-        markdown_f = handle.readlines()
-        # lines = [line.rstrip() for line in markdown_f if line.rstrip()]
-        lines = markdown_f
+        lines = [line for line in handle.readlines() if line != "\n"]
         parser = cls()
 
         # Perform parsing
