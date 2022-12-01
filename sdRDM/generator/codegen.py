@@ -10,7 +10,6 @@ import sys
 
 from anytree import Node, LevelOrderGroupIter
 from importlib import resources as pkg_resources
-from joblib import Parallel, delayed
 from typing import Dict, List, Optional
 
 from sdRDM.generator.mermaidclass import MermaidClass
@@ -268,11 +267,6 @@ def _prepare_and_write_classes(
         "commit": commit,
         "use_formatter": use_formatter,
     }
-
-    # Parallel(n_jobs=-1)(
-    #     delayed(_write_classes)(cls_obj=cls_obj, **kwargs)
-    #     for cls_obj in classes.values()
-    # )
 
     [_write_classes(cls_obj=cls_obj, **kwargs) for cls_obj in classes.values()]
 
