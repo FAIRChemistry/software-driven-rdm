@@ -1,7 +1,7 @@
 import re
 
 from datetime import date, datetime
-from typing import get_origin, Dict, List, Optional
+from typing import Any, get_origin, Dict, List, Optional
 from inspect import Signature, Parameter
 from pydantic import Field, create_model
 from sqlalchemy.orm import relationship
@@ -42,7 +42,14 @@ class IDGenerator:
         return id
 
 
-def generate_model(data: Dict, name: str, base, objs: Dict = {}, is_root: bool = True):
+def generate_model(
+    data: Dict,
+    name: str,
+    base,
+    attr_replace: str,
+    objs: Dict = {},
+    is_root: bool = True,
+):
     """Generates a model based on a given file without an existing schema.
 
     Caution, these models can impose to be incomplete if the data given
@@ -69,15 +76,32 @@ def generate_model(data: Dict, name: str, base, objs: Dict = {}, is_root: bool =
                     base=base,
                     objs=objs,
                     is_root=False,
+                    attr_replace=attr_replace,
                 )  # type: ignore
             ]
-
+        elif isinstance(content, dict):
+            dtype = generate_model(
+                data=content,
+                name=field.capitalize(),
+                base=base,
+                objs=objs,
+                is_root=False,
+                attr_replace=attr_replace,
+            )  # type: ignore
         elif isinstance(content, list):
             field_params["default_factory"] = list
-            dtype = List[str]
+            dtype = List[Any]
         else:
             field_params["default"] = None
-            dtype = Optional[str]
+            dtype = Optional[Any]
+
+        # Perform attribute replacement
+        new_name = re.sub(attr_replace, "", field)
+        new_name = new_name.replace("-", "_")
+
+        if new_name != field:
+            field_params["alias"] = field
+            field = new_name
 
         fields[field] = (dtype, Field(**field_params))
 

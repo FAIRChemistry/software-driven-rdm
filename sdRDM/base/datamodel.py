@@ -13,7 +13,6 @@ import numpy as np
 
 from nob import Nob
 from enum import Enum
-from numpy.typing import NDArray
 from anytree import RenderTree, Node, LevelOrderIter
 from h5py._hl.files import File as H5File
 from h5py._hl.dataset import Dataset as H5Dataset
@@ -171,7 +170,7 @@ class DataModel(pydantic.BaseModel):
                     for element in value
                 ]
 
-            elif isinstance(value, dict):
+            elif isinstance(value, (dict)):
                 if not value and exclude_none:
                     continue
 
@@ -334,6 +333,7 @@ class DataModel(pydantic.BaseModel):
         path: Optional[str] = None,
         data: Optional[Dict] = None,
         root_name: str = "Root",
+        attr_replace: str = "",
     ):
         """Reads an arbitrary format and infers the corresponding object model to load the data.
 
@@ -343,6 +343,9 @@ class DataModel(pydantic.BaseModel):
 
         Args:
             path (str): Path to the file to load.
+            data (Dict): Dataset in dict format.
+            root_name (str): Name of the root element. Defaults to 'Root'
+            attr_replace (str): When the given data model keys contain a pattern to replace for readability. Defaults to empty string.
         """
 
         # Detect base
@@ -372,7 +375,12 @@ class DataModel(pydantic.BaseModel):
         if "__source__" not in dataset:
             # If no source is given, just create a model
             # from the blank dataset -> Can be incomplete
-            lib = generate_model(data=dataset, name=root_name, base=cls)
+            lib = generate_model(
+                data=dataset,
+                name=root_name,
+                base=cls,
+                attr_replace=attr_replace,
+            )
             root = getattr(lib, root_name)
             return root.from_dict(dataset), lib
         else:

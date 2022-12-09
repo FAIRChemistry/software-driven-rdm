@@ -2,7 +2,6 @@ import glob
 import os
 import re
 import itertools
-from urllib.parse import uses_fragment
 import jinja2
 import json
 import subprocess
