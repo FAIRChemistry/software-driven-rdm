@@ -84,7 +84,7 @@ def build_library_from_git_specs(
             links[name] = linking_template
 
         # Generate API to parse the file
-        lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
+        lib_name = f"sdRDM-Library-{random.randint(0, 30)}"
         api_loc = os.path.join(tmpdirname, lib_name)
         cls_defs = generate_python_api(
             path=schema_loc,
