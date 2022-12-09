@@ -1,3 +1,4 @@
+import git
 import glob
 import importlib
 import os
@@ -56,9 +57,13 @@ def build_library_from_git_specs(
     with tempfile.TemporaryDirectory() as tmpdirname:
 
         # Fetch from github
-        commit = _fetch_from_git(
-            url=url, path=tmpdirname, cwd=os.getcwd(), commit=commit, tag=tag
-        )
+        repo = git.Repo.clone_from(url, tmpdirname)
+
+        # Checkout branches, tags or commit
+        if commit:
+            repo.git.checkout(commit)
+        elif tag:
+            repo.git.checkout(tag)
 
         # Write specification
         schema_loc = os.path.join(tmpdirname, "specifications")
@@ -86,7 +91,7 @@ def build_library_from_git_specs(
             out=tmpdirname,
             name=lib_name,
             url=url,
-            commit=commit,
+            commit=str(repo.commit()),
             only_classes=only_classes,
             use_formatter=False,
         )
@@ -95,40 +100,6 @@ def build_library_from_git_specs(
             return cls_defs
 
         return _import_library(api_loc=api_loc, lib_name=lib_name), links
-
-
-def _fetch_from_git(
-    url: str,
-    path: str,
-    cwd: str,
-    commit: Optional[str] = None,
-    tag: Optional[str] = None,
-):
-    """Calls git in the backend and clones the repository"""
-
-    if tag:
-        # Clone from a given tag
-        subprocess.call(["git", "clone", "--branch", tag, url, path])
-    else:
-        # Clone from main head
-        subprocess.call(["git", "clone", url, path])
-
-    # Navigate to the cloned repo
-    os.chdir(path)
-
-    if commit and not tag:
-        # Checkout a specific commit if no tag yet a sha256 is given
-        subprocess.call(["git", "config", "--global", "advice.detachedHead", "false"])
-        subprocess.call(["git", "checkout", commit])
-        os.chdir(cwd)
-
-        return commit
-
-    else:
-        head_commit: bytes = subprocess.check_output(["git", "rev-parse", "HEAD"])
-        os.chdir(cwd)
-
-        return head_commit.decode("utf-8").strip()
 
 
 @lru_cache(maxsize=CACHE_SIZE)

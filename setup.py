@@ -28,6 +28,7 @@ setup(
         "sqlalchemy",
         "sqlalchemy-utils",
         "h5py",
+        "GitPython",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
