@@ -1,3 +1,4 @@
+import builtins
 import yaml
 import toml
 
@@ -9,6 +10,11 @@ from sdRDM.linking.nodes import AttributeNode, ClassNode
 from sdRDM.tools.utils import YAMLDumper
 
 DEFAULT_MAPPINGS = {"list": list, "dict": dict}
+BUILTIN_TYPES = tuple(
+    getattr(builtins, t)
+    for t in dir(builtins)
+    if isinstance(getattr(builtins, t), type)
+)
 
 
 def build_guide_tree(obj, parent=None, outer=None, constants={}):
@@ -29,15 +35,15 @@ def build_guide_tree(obj, parent=None, outer=None, constants={}):
         module=obj.__module__,
         class_name=obj.__name__,
         outer_type=outer,
-        constants=constants
+        constants=constants,
     )
 
     for name, field in obj.__fields__.items():
         inner_type = field.type_
-        outer_type = field.outer_type_.__dict__.get("__origin__")
+        outer_type = field.outer_type_
 
-        if outer_type and outer_type.__module__ == "builtins":
-            value = DEFAULT_MAPPINGS[outer_type.__name__]()
+        if outer_type and _is_iterable(outer_type):
+            value = DEFAULT_MAPPINGS[outer_type.__origin___]()
         else:
             value = None
 
@@ -54,9 +60,20 @@ def build_guide_tree(obj, parent=None, outer=None, constants={}):
 
         for dtype in inner_type:
             if hasattr(dtype, "__fields__") and dtype.__name__ != obj_tree.name:
-                build_guide_tree(dtype, current_parent, outer=outer_type, constants=constants)
+                build_guide_tree(
+                    dtype, current_parent, outer=outer_type, constants=constants
+                )
 
     return obj_tree
+
+
+def _is_iterable(data_type):
+    """Checks whether the given typing.XYZ is of type List or Dict"""
+
+    if not hasattr(data_type, "__origin__"):
+        return False
+    elif isinstance(data_type.__origin__, (list, dict)):
+        return True
 
 
 def generate_template(obj, out: str, simple: bool = True) -> None:
