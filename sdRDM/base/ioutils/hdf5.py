@@ -2,6 +2,7 @@ import os
 import numpy as np
 
 from anytree import findall
+from datetime import date, datetime
 from numpy.typing import NDArray
 from typing import Union
 
@@ -95,6 +96,11 @@ def _write_source(dataset, file: H5File):
 
 def _write_attr(name, value, h5obj: Union[H5File, H5Group]):
     """Writes an attribute to an HDF5 root or group"""
+
+    if isinstance(value, (date, datetime)):
+        # HDF5 does not like date types
+        value = str(value)
+
     h5obj.attrs[name] = value
 
 
