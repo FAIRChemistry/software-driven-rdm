@@ -139,7 +139,7 @@ def write_module(
         use_formatter=use_formatter,
     )
 
-    # (5) Finally, write the __init__ file
+    # Finally, write the __init__ file
     init_path = os.path.join(path, "__init__.py")
     with open(init_path, "w") as f:
         module_init = render_dunder_init(
