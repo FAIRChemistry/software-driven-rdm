@@ -6,19 +6,10 @@ from enum import Enum
 from importlib import resources as pkg_resources
 
 from sdRDM.generator import templates as jinja_templates
-from sdRDM.generator.abstractparser import SchemaParser
-from sdRDM.generator.markdownparser import MarkdownParser
+from sdRDM.markdown.markdownparser import MarkdownParser
 
 
-class Format(Enum):
-
-    MARKDOWN = "md"
-
-
-PARSER_MAPPING = {Format.MARKDOWN: MarkdownParser}
-
-
-def generate_schema(handle, out: str, format: Format):
+def generate_schema(out: str, parser: MarkdownParser):
     """
     Converts a markdown specification file to a Mermaid Class Definition and metadata that
     in turn can be used to generate an API from.
@@ -28,12 +19,10 @@ def generate_schema(handle, out: str, format: Format):
         out (str): Destination of the resulting Mermaid and Metadata JSON file
     """
 
-    # Set up and execute parser
-    parser: SchemaParser = PARSER_MAPPING[format].parse(handle)
-
     template = jinja2.Template(
         pkg_resources.read_text(jinja_templates, "mermaid_class.jinja2")
     )
+
     mermaid_string = template.render(
         inherits=parser.inherits,
         compositions=parser.compositions,
@@ -59,7 +48,7 @@ def generate_schema(handle, out: str, format: Format):
     return mermaid_path, metadata_path
 
 
-def write_metadata(parser: SchemaParser) -> str:
+def write_metadata(parser) -> str:
     module_objs = {"docstring": parser.module_docstring}
 
     # Add List of Enums to check for defaults

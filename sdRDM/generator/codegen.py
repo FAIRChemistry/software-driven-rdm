@@ -11,15 +11,15 @@ from anytree import Node, LevelOrderGroupIter
 from importlib import resources as pkg_resources
 from typing import Dict, List, Optional
 
+from sdRDM.tools.gitutils import build_library_from_git_specs
+from sdRDM.markdown.markdownparser import MarkdownParser
 from sdRDM.generator.mermaidclass import MermaidClass
 from sdRDM.generator.mermaidenum import MermaidEnum
 from sdRDM.generator.mermaidexternal import MermaidExternal
-from sdRDM.tools.gitutils import build_library_from_git_specs
-from sdRDM.generator.schemagen import generate_schema, Format
+from sdRDM.generator.schemagen import generate_schema
 from sdRDM.generator import templates as jinja_templates
 from sdRDM.generator.utils import preserve_custom_functions
 
-FORMAT_MAPPING: Dict[str, Format] = {"md": Format.MARKDOWN}
 GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.\_]*[.git]?)"
 
 
@@ -62,16 +62,12 @@ def generate_python_api(
     cls_defs = {}
 
     for file in specifications:
-        extension = os.path.basename(file).split(".")[-1]
 
-        if extension not in FORMAT_MAPPING:
-            continue
+        # Parse markdown file
+        parser = MarkdownParser.parse(open(file, "r"))
 
         # Generate schemata
-        format_type = FORMAT_MAPPING[extension]
-        mermaid_path, metadata_path = generate_schema(
-            open(file, "r"), schema_path, format_type
-        )
+        mermaid_path, metadata_path = generate_schema(schema_path, parser)
 
         # Generate the API
         cls_defs = write_module(

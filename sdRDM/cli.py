@@ -52,15 +52,7 @@ def schema(
         out (str, optional): Directory where the file will be written to.
     """
 
-    # Set up and execute parser
-    extension = os.path.basename(path).split(".")[-1]
-
-    if extension not in FORMAT_MAPPING:
-        raise TypeError(f"Extension '{extension}' is unknown.")
-
-    # Generate schemata
-    format_type = FORMAT_MAPPING[extension]
-    generate_schema(open(path, "r"), out, format_type)
+    generate_schema(open(path, "r"), out)
 
 
 if __name__ == "__main__":
