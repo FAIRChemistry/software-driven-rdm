@@ -78,7 +78,9 @@ class MarkdownParser:
             self.stack[-1]["attributes"][-1]["type"] = dtype
             self.external_objects.update(exts)
             self.compositions += [
-                {"container": self.stack[-1]["name"], "module": comp} for comp in comps
+                {"container": self.stack[-1]["name"], "module": comp}
+                for comp in comps
+                if comp is not None
             ]
 
         elif token == MarkdownTokens.ATTRDESCRIPTION.value and content:
@@ -86,6 +88,9 @@ class MarkdownParser:
 
         elif token == MarkdownTokens.REQUIRED.value:
             self.stack[-1]["attributes"][-1]["required"] = True
+
+        elif token == MarkdownTokens.PARENT.value:
+            self.inherits.append({"parent": content, "child": self.stack[-1]["name"]})
 
         # ENUM Handling
         elif token == MarkdownTokens.ENUM.value:

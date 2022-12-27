@@ -19,8 +19,8 @@ classDiagram
     {%- for enum in enums %}
     class {{enum.name}} {
         << Enumeration >>
-        {%- for value in enum.mappings %}
-        +{{value}}
+        {%- for mapping in enum.mappings %}
+        +{{mapping.key}}
         {%- endfor %}
     }
     {% endfor %}

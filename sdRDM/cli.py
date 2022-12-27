@@ -2,7 +2,8 @@ import typer
 import os
 
 from typing import Optional
-from sdRDM.generator.codegen import FORMAT_MAPPING, generate_python_api
+from sdRDM.markdown.markdownparser import MarkdownParser
+from sdRDM.generator.codegen import generate_python_api
 from sdRDM.generator.schemagen import generate_schema
 
 
@@ -51,8 +52,8 @@ def schema(
         path (str, optional): Path to the schema definition.
         out (str, optional): Directory where the file will be written to.
     """
-
-    generate_schema(open(path, "r"), out)
+    parser = MarkdownParser.parse(open(path, "r"))
+    generate_schema(out, parser)
 
 
 if __name__ == "__main__":
