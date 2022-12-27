@@ -2,7 +2,7 @@ import re
 
 from typing import Optional, IO
 
-from .rules import MarkdownTokens
+from .tokens import MarkdownTokens
 from .tokenizer import tokenize_markdown_model
 from .utils import process_types
 
