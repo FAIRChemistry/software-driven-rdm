@@ -55,3 +55,4 @@ class MarkdownTokens(Enum):
     PARENT = "PARENT"
     MAPPING = "MAPPING"
     REQUIRED = "REQUIRED"
+    MULTIPLE = "MULTIPLE"

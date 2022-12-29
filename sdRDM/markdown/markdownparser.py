@@ -2,6 +2,8 @@ import re
 
 from typing import Optional, IO
 
+from sdRDM.validator import validate_markdown_model, pretty_print_report
+
 from .tokens import MarkdownTokens
 from .tokenizer import tokenize_markdown_model
 from .utils import process_types
@@ -32,6 +34,17 @@ class MarkdownParser:
         lines = "".join([line for line in handle.readlines() if line != "\n"])
         tokenized = tokenize_markdown_model(lines)
 
+        # Validate model
+        handle.seek(0)
+        is_valid, report = validate_markdown_model(handle=handle)
+
+        if not is_valid:
+            pretty_print_report(report, tokenized)
+            raise ValueError(
+                f"Given Markdown model is not valid. Please see the report above."
+            )
+            
+
         for token, content in tokenized:
             # Process tokens one by one
             parser.process_token_line(token=token, content=content)
@@ -59,6 +72,10 @@ class MarkdownParser:
                 }
             )
 
+        elif token == MarkdownTokens.PARENT.value:
+            self.inherits.append({"parent": content, "child": self.stack[-1]["name"]})
+
+        # ATTRIBUTE Handling
         elif token == MarkdownTokens.ATTRIBUTE.value and content:
             self.stack[-1]["attributes"].append(
                 {
@@ -67,10 +84,6 @@ class MarkdownParser:
                     "description": "Not description given.",
                 }
             )
-
-        elif token == MarkdownTokens.OPTION.value and content:
-            key, value = re.split(r"\s?\:\s?", content)
-            self.stack[-1]["attributes"][-1][key.lower()] = value
 
         elif token == MarkdownTokens.TYPE.value and content:
             dtype, comps, exts = process_types(content)
@@ -89,8 +102,12 @@ class MarkdownParser:
         elif token == MarkdownTokens.REQUIRED.value:
             self.stack[-1]["attributes"][-1]["required"] = True
 
-        elif token == MarkdownTokens.PARENT.value:
-            self.inherits.append({"parent": content, "child": self.stack[-1]["name"]})
+        elif token == MarkdownTokens.MULTIPLE.value:
+            self.stack[-1]["attributes"][-1]["required"] = True
+
+        elif token == MarkdownTokens.OPTION.value and content:
+            key, value = re.split(r"\s?\:\s?", content)
+            self.stack[-1]["attributes"][-1][key.lower()] = value
 
         # ENUM Handling
         elif token == MarkdownTokens.ENUM.value:

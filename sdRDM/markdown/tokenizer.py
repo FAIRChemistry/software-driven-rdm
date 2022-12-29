@@ -26,7 +26,7 @@ def tupelize(line: str) -> Tuple[Optional[str], Optional[str]]:
         if len(splitted) == 1:
             return (splitted[0], None)
         else:
-            return (splitted[0], splitted[1])
+            return (splitted[0], splitted[1].strip())
     else:
         return ("DESCRIPTION", line)
 
