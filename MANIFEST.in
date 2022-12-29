@@ -1,1 +1,2 @@
 include sdRDM/generator/templates/*
+include sdRDM/config/*
