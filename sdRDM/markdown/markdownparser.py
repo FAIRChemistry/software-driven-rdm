@@ -6,7 +6,7 @@ from sdRDM.validator import validate_markdown_model, pretty_print_report
 
 from .tokens import MarkdownTokens
 from .tokenizer import tokenize_markdown_model
-from .utils import process_types
+from .utils import process_type
 
 
 class MarkdownParser:
@@ -43,7 +43,6 @@ class MarkdownParser:
             raise ValueError(
                 f"Given Markdown model is not valid. Please see the report above."
             )
-            
 
         for token, content in tokenized:
             # Process tokens one by one
@@ -66,7 +65,7 @@ class MarkdownParser:
                 {
                     "name": content,
                     "type": "object",
-                    "docstring": "",
+                    "docstring": None,
                     "attributes": [],
                     "mappings": [],
                 }
@@ -81,20 +80,23 @@ class MarkdownParser:
                 {
                     "name": content,
                     "required": False,
+                    "multiple": False,
                     "description": "Not description given.",
+                    "type": [],
                 }
             )
 
         elif token == MarkdownTokens.TYPE.value and content:
-            dtype, comps, exts = process_types(content)
 
-            self.stack[-1]["attributes"][-1]["type"] = dtype
+            dtype, is_composite, exts = process_type(content)
+
+            self.stack[-1]["attributes"][-1]["type"].append(dtype)
             self.external_objects.update(exts)
-            self.compositions += [
-                {"container": self.stack[-1]["name"], "module": comp}
-                for comp in comps
-                if comp is not None
-            ]
+
+            if is_composite:
+                self.compositions += [
+                    {"container": self.stack[-1]["name"], "module": dtype}
+                ]
 
         elif token == MarkdownTokens.ATTRDESCRIPTION.value and content:
             self.stack[-1]["attributes"][-1]["description"] = content
@@ -103,7 +105,7 @@ class MarkdownParser:
             self.stack[-1]["attributes"][-1]["required"] = True
 
         elif token == MarkdownTokens.MULTIPLE.value:
-            self.stack[-1]["attributes"][-1]["required"] = True
+            self.stack[-1]["attributes"][-1]["multiple"] = True
 
         elif token == MarkdownTokens.OPTION.value and content:
             key, value = re.split(r"\s?\:\s?", content)

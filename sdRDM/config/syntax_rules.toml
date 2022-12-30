@@ -16,7 +16,7 @@ order = 2
 [ATTRIBUTE]
 order = 2
 exclusive = true
-mandatory = [ "TYPE!", "ATTRDESCRIPTION!" ]
+mandatory = [ "TYPE", "ATTRDESCRIPTION!" ]
 optional = [ "PARENT", "REQUIRED", "OPTION", "MULTIPLE" ]
 forbidden = [ "yield", "list", "dict", "return", "def", "class" ]
 

@@ -1,6 +1,6 @@
 import re
 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Any
 from .tokens import REPLACEMENTS, MarkdownTokens
 
 
@@ -15,10 +15,19 @@ def tokenize_markdown_model(
     # Remove unused lines
     tokenized = filter(str.strip, model_string.split("\n"))
 
-    return list(map(tupelize, tokenized)) + [("ENDOFMODEL", None)]
+    model = []
+    for line in tokenized:
+        token, value = tupelize(line)
+
+        if token == MarkdownTokens.TYPE.value:
+            model += [(token, dtype) for dtype in value]
+        else:
+            model += [(token, value)]
+
+    return model + [("ENDOFMODEL", None)]
 
 
-def tupelize(line: str) -> Tuple[Optional[str], Optional[str]]:
+def tupelize(line: str) -> Tuple[Optional[str], Any]:
     """Takes a raw token and content string and turns it into a tuple"""
 
     if has_token(line):
@@ -26,9 +35,20 @@ def tupelize(line: str) -> Tuple[Optional[str], Optional[str]]:
         if len(splitted) == 1:
             return (splitted[0], None)
         else:
+            if splitted[0] == MarkdownTokens.TYPE.value:
+                # Special case: Handle multiple data types
+                return (splitted[0], check_type_token_exception(splitted[-1]))
+
             return (splitted[0], splitted[1].strip())
     else:
         return ("DESCRIPTION", line)
+
+
+def check_type_token_exception(type: str) -> List[str]:
+    """Due to the option of possible multiple types for an attribute,
+    these need to be handled exclusively.
+    """
+    return [t.strip() for t in type.split(",")]
 
 
 def has_token(line: str):

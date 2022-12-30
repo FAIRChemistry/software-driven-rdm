@@ -6,56 +6,39 @@ from sdRDM.generator.datatypes import DataTypes
 GITHUB_TYPE_PATTERN = r"(http[s]?://[www.]?github.com/[A-Za-z0-9\/\-\.\_]*[.git]?)"
 
 
-def process_types(type_string: str):
+def process_type(dtype: str) -> Tuple[str, bool, Dict]:
     """High-level function that processes given types"""
 
-    # Check for multiple types
-    dtypes = type_string.split(",")
-
     # Check for compositions
-    compositions = list(map(get_sub_class_type, dtypes))
+    is_composite = get_compositions(dtype)
 
     # Check for external types
-    externals = check_and_process_github_types(dtypes)
+    _, externals = check_and_process_github_type(dtype)
 
-    if len(dtypes) > 1:
-        # Turn into union for multiple types
-        dtype = f"Union[{', '.join(dtypes)}]"
-    else:
-        dtype = dtypes[0]
-
-    return dtype, compositions, externals
+    return dtype, is_composite, externals
 
 
-def get_sub_class_type(dtype: str) -> Optional[str]:
+def get_compositions(dtype: str) -> bool:
     """Checks whether the given type is supported or another class"""
 
-    # Check for GitHub Types
+    # Check for GitHub Types -> Should be included in compositions
     cls, _ = process_github_type(dtype)
 
-    if cls is not None:
-        dtype = cls
-
-    if dtype not in DataTypes.__members__:
-        return dtype
+    return cls not in DataTypes.__members__
 
 
-def check_and_process_github_types(dtypes: List[str]) -> Dict:
+def check_and_process_github_type(dtype: str) -> Tuple[str, Dict[str, str]]:
     """Checks and processes external resources from another model"""
 
-    externals = {}
+    cls, address = process_github_type(dtype)
 
-    for i, dtype in enumerate(dtypes):
+    if cls is None and address is None:
+        return dtype, {}
 
-        cls, address = process_github_type(dtype)
+    assert cls, "External class is not existant"
+    assert address, "External address is not existant"
 
-        if cls is None and address is None:
-            continue
-
-        externals[cls] = address
-        dtypes[i] = cls
-
-    return externals
+    return cls, {cls: address}
 
 
 def process_github_type(dtype: str) -> Tuple[Optional[str], Optional[str]]:
