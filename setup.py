@@ -2,7 +2,7 @@ import setuptools
 from setuptools import setup
 
 setup(
-    name="sdRDM",
+    name="software-driven-RDM",
     version="0.0.3",
     author="Range, Jan",
     author_email="jan.range@simtech.uni-stuttgart.de",
