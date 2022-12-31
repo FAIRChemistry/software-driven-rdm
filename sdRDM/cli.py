@@ -4,7 +4,7 @@ import os
 from typing import Optional
 from sdRDM.markdown.markdownparser import MarkdownParser
 from sdRDM.generator.codegen import generate_python_api
-from sdRDM.generator.schemagen import generate_schema
+from sdRDM.generator.schemagen import generate_mermaid_schema
 
 
 app = typer.Typer()
@@ -33,7 +33,7 @@ def generate(
     if not all([url, commit]):
         url, commit = None, None
 
-    generate_python_api(path=path, out=out, name=name, commit=commit, url=url)
+    generate_python_api(path=path, dirpath=out, libname=name, commit=commit, url=url)
 
 
 @app.command()
@@ -44,7 +44,8 @@ def link():
 @app.command()
 def schema(
     path: str = typer.Option(..., help="Path to the schema definition"),
-    out: str = typer.Option(..., help="Directory where the file will be written to."),
+    out: str = typer.Option("." , help="Directory where the file will be written to."),
+    name: str = typer.Option(..., help="Name of the schema"),
 ):
     """Generate a Mermaid schema from a given Format.
 
@@ -53,7 +54,7 @@ def schema(
         out (str, optional): Directory where the file will be written to.
     """
     parser = MarkdownParser.parse(open(path, "r"))
-    generate_schema(out, parser)
+    generate_mermaid_schema(out, name, parser)
 
 
 if __name__ == "__main__":
