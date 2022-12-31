@@ -12,6 +12,7 @@ import warnings
 import numpy as np
 
 from nob import Nob
+from dotted_dict import DottedDict
 from enum import Enum
 from anytree import RenderTree, Node, LevelOrderIter
 from h5py._hl.files import File as H5File
@@ -19,7 +20,7 @@ from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
 from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
-from typing import Dict, Optional, IO, Union
+from typing import List, Dict, Optional, IO, Union, get_args
 
 from sdRDM.base.importemodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
@@ -48,6 +49,21 @@ class DataModel(pydantic.BaseModel):
 
     # * Private attributes
     __node__: Optional[Node] = PrivateAttr(default=None)
+    __types__: DottedDict = PrivateAttr(default=dict)
+
+    def __init__(self, **data):
+        super().__init__(**data)
+
+        self.__types__ = DottedDict()
+        for name, field in self.__fields__.items():
+            args = get_args(field.type_)
+
+            if not args and hasattr(field.type_, "__fields__"):
+                self.__types__[name] = field.type_
+            elif args:
+                self.__types__[name] = tuple(
+                    [subtype for subtype in args if hasattr(subtype, "__fields__")]
+                )
 
     # ! Getters
     def get(
