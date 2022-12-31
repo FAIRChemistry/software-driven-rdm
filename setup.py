@@ -2,7 +2,7 @@ import setuptools
 from setuptools import setup
 
 setup(
-    name="software-driven-RDM",
+    name="sdRDM",
     version="0.0.3",
     author="Range, Jan",
     author_email="jan.range@simtech.uni-stuttgart.de",
@@ -29,7 +29,9 @@ setup(
         "sqlalchemy-utils",
         "h5py",
         "GitPython",
-        "termcolor"
+        "termcolor",
+        "redbaron==0.9.2",
+        "dotted-dict==1.1.3",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
