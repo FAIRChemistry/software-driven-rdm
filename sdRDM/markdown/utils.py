@@ -24,7 +24,9 @@ def get_compositions(dtype: str) -> bool:
     # Check for GitHub Types -> Should be included in compositions
     cls, _ = process_github_type(dtype)
 
-    return cls not in DataTypes.__members__
+    assert isinstance(cls, str), f"Given class name for '{dtype}' is empty"
+
+    return cls.strip() not in DataTypes.__members__
 
 
 def check_and_process_github_type(dtype: str) -> Tuple[str, Dict[str, str]]:
@@ -32,7 +34,7 @@ def check_and_process_github_type(dtype: str) -> Tuple[str, Dict[str, str]]:
 
     cls, address = process_github_type(dtype)
 
-    if cls is None and address is None:
+    if address is None:
         return dtype, {}
 
     assert cls, "External class is not existant"
@@ -45,7 +47,7 @@ def process_github_type(dtype: str) -> Tuple[Optional[str], Optional[str]]:
     """Processes a given GitHub link"""
 
     if not "@" in dtype:
-        return None, None
+        return dtype, None
 
         # Split the given link
     address, cls = dtype.split("@")
