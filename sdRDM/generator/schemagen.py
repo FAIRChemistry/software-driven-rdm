@@ -1,29 +1,22 @@
-import jinja2
-import json
 import os
 
-from enum import Enum
-from importlib import resources as pkg_resources
+from copy import deepcopy
+from jinja2 import Template
+from typing import Dict
 
-from sdRDM.generator import templates as jinja_templates
-from sdRDM.markdown.markdownparser import MarkdownParser
+from sdRDM.markdown import MarkdownParser
+from sdRDM.generator.classrender import combine_types
 
 
-def generate_schema(out: str, parser: MarkdownParser):
-    """
-    Converts a markdown specification file to a Mermaid Class Definition and metadata that
-    in turn can be used to generate an API from.
+def generate_mermaid_schema(path: str, libname: str, parser: MarkdownParser) -> None:
+    """Generates a mermaid schema for model inspection based on a markdown model"""
 
-    Args:
-        path (str): Path to the Markdown file
-        out (str): Destination of the resulting Mermaid and Metadata JSON file
-    """
+    parser = deepcopy(parser)
+    template = Template(open("./templates/mermaid_class.jinja2").read())
 
-    template = jinja2.Template(
-        pkg_resources.read_text(jinja_templates, "mermaid_class.jinja2")
-    )
+    list(map(convert_attributes, parser.objs))
 
-    mermaid_string = template.render(
+    rendered = template.render(
         inherits=parser.inherits,
         compositions=parser.compositions,
         classes=parser.objs,
@@ -31,52 +24,20 @@ def generate_schema(out: str, parser: MarkdownParser):
         externals=parser.external_objects,
     )
 
-    # Create dirs if not already created
-    os.makedirs(out, exist_ok=True)
+    path = os.path.join(path, f"{libname.lower().replace(' ', '')}_schema.md")
 
-    # Set paths for each file
-    name = parser.module_name
-    mermaid_path = os.path.join(out, f"{name}.md")
-    metadata_path = os.path.join(out, f"{name}_metadata.json")
-
-    with open(mermaid_path, "w") as file:
-        file.write(mermaid_string)
-
-    with open(metadata_path, "w") as file:
-        file.write(write_metadata(parser))
-
-    return mermaid_path, metadata_path
+    with open(path, "w") as f:
+        f.write(rendered)
 
 
-def write_metadata(parser) -> str:
-    module_objs = {"docstring": parser.module_docstring}
+def convert_attributes(object: Dict) -> None:
+    """Converts attributes for readable schema generation"""
 
-    # Add List of Enums to check for defaults
-    module_objs["enums"] = [enum["name"] for enum in parser.enums]
+    for index, attribute in enumerate(object["attributes"]):
+        object["attributes"][index]["type"] = (
+            combine_types(attribute["type"], attribute["multiple"])
+            .replace("Union[", "")
+            .replace("]]", "]")
+        )
 
-    # Add List of external Object
-    module_objs["external"] = {
-        name: obj_adress for name, obj_adress in parser.external_objects.items()
-    }
-
-    for obj in parser.objs:
-        attr_meta = {}
-        for attr in obj["attributes"]:
-
-            # Build new dictionary w/o mermaid attrs
-            attr_name = attr["name"]
-            mermaid_keys = [
-                "required",
-                "type",
-                "name",
-            ]
-            attr_meta[attr_name] = {
-                key: item for key, item in attr.items() if key not in mermaid_keys
-            }
-
-        module_objs[obj.get("name")] = {
-            "attributes": attr_meta,
-            "docstring": obj.get("docstring"),
-        }
-
-    return json.dumps(module_objs, indent=2)
+        object["attributes"][index]["required"] = "*" if attribute["required"] else ""
