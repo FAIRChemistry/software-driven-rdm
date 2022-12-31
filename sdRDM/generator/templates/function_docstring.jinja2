@@ -3,6 +3,6 @@
 
 Args:
     {%- for attr in signature %}
-    {{attr.name}} ({{ attr.dtype }}): {{ attr.description }}
+    {{attr.name}} ({{ attr.type }}): {{ attr.description }}
     {%- endfor %}
 """

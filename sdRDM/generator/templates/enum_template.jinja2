@@ -3,5 +3,5 @@ from enum import Enum
 class {{name}}(Enum):
 
     {% for mapping in mappings %}
-    {{mapping}}
+    {{mapping.key}} = {{mapping.value}}
     {%- endfor %}

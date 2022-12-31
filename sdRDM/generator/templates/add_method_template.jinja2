@@ -1,7 +1,7 @@
-    def add_to_{{ snake_case }}(
+    def add_{{ type }}_to_{{ snake_case }}(
         self,
         {%- for attr in signature %}
-        {{attr.name}}: {{attr.dtype}} {% if 'default' in attr%}= {{attr.default}} {% elif attr.multiple is true %}= ListPlus(){% endif %},
+        {{attr.name}}: {{attr.type}} {% if 'default' in attr%}= {{attr.default}} {% elif attr.multiple is true %}= ListPlus(){% endif %},
         {%- endfor %}
         id: Optional[str] = None
     ) -> None:

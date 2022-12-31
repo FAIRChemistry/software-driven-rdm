@@ -1,4 +1,8 @@
 import os
 
+{%- for class in classes %}
+from .core.{{class.fname}} import {{class.name}}
+{%- endfor %}
+
 __URL__ = "{{url}}"
 __COMMIT__ = "{{hash}}"
