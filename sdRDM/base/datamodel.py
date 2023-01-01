@@ -455,7 +455,7 @@ class DataModel(pydantic.BaseModel):
             lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
             api_loc = os.path.join(tmpdirname, lib_name)
             generate_python_api(
-                path=path, out=tmpdirname, name=lib_name, use_formatter=False
+                path=path, dirpath=tmpdirname, libname=lib_name, use_formatter=False
             )
 
             lib = _import_library(api_loc, lib_name)

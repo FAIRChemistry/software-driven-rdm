@@ -88,8 +88,8 @@ def build_library_from_git_specs(
         api_loc = os.path.join(tmpdirname, lib_name)
         cls_defs = generate_python_api(
             path=schema_loc,
-            out=tmpdirname,
-            name=lib_name,
+            dirpath=tmpdirname,
+            libname=lib_name,
             url=url,
             commit=str(repo.commit()),
             only_classes=only_classes,
