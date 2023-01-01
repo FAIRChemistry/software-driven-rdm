@@ -11,6 +11,7 @@ import yaml
 import warnings
 import numpy as np
 
+from io import StringIO
 from nob import Nob
 from dotted_dict import DottedDict
 from enum import Enum
@@ -25,7 +26,7 @@ from typing import List, Dict, Optional, IO, Union, get_args
 from sdRDM.base.importemodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import object_to_orm, generate_model
-from sdRDM.base.ioutils.xml import write_xml
+from sdRDM.base.ioutils.xml import write_xml, read_xml
 from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
@@ -334,8 +335,12 @@ class DataModel(pydantic.BaseModel):
         return cls.from_dict(yaml.safe_load(handler))
 
     @classmethod
+    def from_xml(cls, handler: IO):
+        return cls.from_dict(read_xml(handler.read().encode(), cls))
+
+    @classmethod
     def from_xml_string(cls, xml_string: str):
-        raise NotImplementedError()
+        return cls.from_dict(read_xml(xml_string.encode(), cls))
 
     @classmethod
     def from_hdf5(cls, file: h5py.File):
@@ -512,7 +517,7 @@ class DataModel(pydantic.BaseModel):
             if inspect.isclass(obj) and issubclass(obj, Enum)
         }
 
-        return ImportedModules(classes, enums, links)
+        return ImportedModules({**classes, "enums": enums, "links": links})
 
     @staticmethod
     def _find_root_objects(classes: Dict):
