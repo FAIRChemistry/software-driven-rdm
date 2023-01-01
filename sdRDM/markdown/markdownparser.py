@@ -1,6 +1,6 @@
 import re
 
-from typing import Optional, IO
+from typing import Optional, IO, Type
 
 from sdRDM.validator import validate_markdown_model, pretty_print_report
 
@@ -81,6 +81,7 @@ class MarkdownParser:
                     "name": content,
                     "required": False,
                     "multiple": False,
+                    "default": None,
                     "description": "Not description given.",
                     "type": [],
                 }
@@ -104,8 +105,14 @@ class MarkdownParser:
         elif token == MarkdownTokens.REQUIRED.value:
             self.stack[-1]["attributes"][-1]["required"] = True
 
+            if self.stack[-1]["attributes"][-1]["default"] is None:
+                del self.stack[-1]["attributes"][-1]["default"]
+
         elif token == MarkdownTokens.MULTIPLE.value:
             self.stack[-1]["attributes"][-1]["multiple"] = True
+
+            if "default" in self.stack[-1]["attributes"][-1]:
+                del self.stack[-1]["attributes"][-1]["default"]
 
         elif token == MarkdownTokens.OPTION.value and content:
             key, value = re.split(r"\s?\:\s?", content)
@@ -126,3 +133,16 @@ class MarkdownParser:
         elif token == MarkdownTokens.MAPPING.value and content:
             key, value = re.split(r"\s?\=\s?", content)
             self.stack[-1]["mappings"].append({"key": key, "value": value})
+
+    def add_model(self, parser: "MarkdownParser"):
+        """Adds another parser to the current one"""
+
+        assert isinstance(
+            parser, self.__class__
+        ), "Got wrong parser of type {parser.__class__.__name__}"
+
+        self.objs += parser.objs
+        self.enums += parser.enums
+        self.inherits += parser.inherits
+        self.compositions += parser.compositions
+        self.external_objects.update(parser.external_objects)

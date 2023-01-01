@@ -24,7 +24,7 @@ def render_object(
 
     # Clean and render imports
     imports = render_imports(object=object, objects=all_objects, inherits=inherits)
-    imports = clean_imports(imports, class_body)
+    # imports = clean_imports(imports, class_body)
 
     return f"{imports}\n\n{class_body}"
 
@@ -70,6 +70,7 @@ def render_attribute(attribute: Dict) -> str:
     )
 
     is_multiple = attribute.pop("multiple")
+    is_required = attribute["required"]
 
     if is_multiple:
         attribute["default_factory"] = "ListPlus"
@@ -77,12 +78,12 @@ def render_attribute(attribute: Dict) -> str:
     return template.render(
         name=attribute.pop("name"),
         required=attribute.pop("required"),
-        dtype=combine_types(attribute.pop("type"), is_multiple),
+        dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
         metadata=stringize_option_values(attribute),
     )
 
 
-def combine_types(dtypes: List[str], is_multiple: bool) -> str:
+def combine_types(dtypes: List[str], is_multiple: bool, is_required: bool) -> str:
     """Combines a list of types into a Union if more than one"""
 
     dtypes = [
@@ -90,7 +91,7 @@ def combine_types(dtypes: List[str], is_multiple: bool) -> str:
         for dtype in dtypes
     ]
 
-    return encapsulate_type(dtypes, is_multiple)
+    return encapsulate_type(dtypes, is_multiple, is_required)
 
 
 def stringize_option_values(attribute: Dict):
@@ -163,40 +164,61 @@ def assemble_signature(type: str, objects: List[Dict]) -> List[Dict]:
     except StopIteration:
         raise ValueError(f"Sub object '{type}' has no attributes.")
 
-    list(map(convert_type, sub_object_attrs))
-    sub_object_attrs.sort(
-        key=lambda attr: (
-            "default" in attr or attr["required"] is False or attr["multiple"] is True
-        )
-    )
+    sub_object_attrs = [convert_type(attribute) for attribute in sub_object_attrs]
 
-    return sub_object_attrs
+    return sorted(sub_object_attrs, key=sort_by_defaults, reverse=True)
 
 
-def convert_type(attribute: Dict) -> None:
+def sort_by_defaults(attribute: Dict) -> bool:
+    """Sorting key function to put attributes with defaults last"""
+
+    if attribute["multiple"] is True:
+        return False
+    elif attribute["required"] is False:
+        return False
+    elif "default" in attribute:
+        return False
+    elif "default_factors" in attribute:
+        return False
+    else:
+        return True
+
+
+def convert_type(attribute: Dict) -> Dict:
     """Turns argument types into correct typings"""
 
     type = attribute["type"]
+
+    if attribute["required"] is False and attribute["multiple"] is False:
+        attribute["default"] = None
 
     union_type = [
         DataTypes[subtype].value[0] if subtype in DataTypes.__members__ else subtype
         for subtype in type
     ]
 
-    attribute["type"] = encapsulate_type(union_type, attribute["multiple"])
+    attribute["type"] = encapsulate_type(
+        union_type, attribute["multiple"], attribute["required"]
+    )
+
+    return attribute
 
 
-def encapsulate_type(dtypes: List[str], is_multiple: bool) -> str:
+def encapsulate_type(dtypes: List[str], is_multiple: bool, is_required: bool) -> str:
     """Puts types if necessary within Union or List typing"""
 
     if len(dtypes) == 1:
         if is_multiple == True:
             return f"List[{dtypes[0]}]"
+        elif is_required is False:
+            return f"Optional[{dtypes[0]}]"
         else:
             return dtypes[0]
     else:
         if is_multiple == True:
             return f"List[Union[{', '.join(dtypes)}]]"
+        elif is_required is False:
+            return f"Optional[Union[{', '.join(dtypes)}]]"
         else:
             return f"Union[{', '.join(dtypes)}]"
 
@@ -216,7 +238,7 @@ def render_imports(object: Dict, objects: List[Dict], inherits: List[Dict]) -> s
         parent_type = inherit["parent"]
         all_types += gather_all_types(
             get_object(parent_type, objects)["attributes"], objects
-        )
+        ) + [parent_type]
 
     # Sort types into local and from imports
     all_types = list(set(all_types))
@@ -257,15 +279,8 @@ def gather_all_types(attributes: List[Dict], objects: List[Dict]) -> List[str]:
     for attribute in attributes:
         types += attribute["type"]
 
-        if attribute["multiple"]:
-            types += [
-                subtype
-                for nested_type in attribute["type"]
-                for subtype in gather_all_types(
-                    get_object(nested_type, objects)["attributes"], objects
-                )
-                if nested_type not in DataTypes.__members__
-            ]
+        for nested_type in attribute["type"]:
+            types += process_subtypes(nested_type, objects)
 
     return types
 
@@ -277,3 +292,20 @@ def get_object(name: str, objects: List[Dict]) -> Dict:
         return next(filter(lambda object: object["name"] == name, objects))
     except StopIteration:
         raise ValueError(f"Could not find object '{name}' in objects.")
+
+
+def process_subtypes(nested_type: str, objects: List[Dict]) -> List[str]:
+    """Processes types from nested attribute types"""
+
+    types = []
+
+    if nested_type in DataTypes.__members__:
+        return []
+
+    attributes = get_object(nested_type, objects)["attributes"]
+    subtypes = gather_all_types(attributes, objects)
+
+    for subtype in subtypes:
+        types.append(subtype)
+
+    return types
