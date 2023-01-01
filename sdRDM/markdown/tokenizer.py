@@ -17,7 +17,7 @@ def tokenize_markdown_model(
 
     model = []
     for line in tokenized:
-        token, value = tupelize(line)
+        token, value = tupelize(line.strip())
 
         if token == MarkdownTokens.TYPE.value:
             model += [(token, dtype) for dtype in value]
@@ -53,4 +53,4 @@ def check_type_token_exception(type: str) -> List[str]:
 
 def has_token(line: str):
     """Checks whether there is a token in the line"""
-    return any(line.startswith(token) for token in MarkdownTokens.__members__)
+    return any(line.strip().startswith(token) for token in MarkdownTokens.__members__)

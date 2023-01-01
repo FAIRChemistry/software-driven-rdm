@@ -35,7 +35,7 @@ def convert_attributes(object: Dict) -> None:
 
     for index, attribute in enumerate(object["attributes"]):
         object["attributes"][index]["type"] = (
-            combine_types(attribute["type"], attribute["multiple"])
+            combine_types(attribute["type"], attribute["multiple"], attribute["required"])
             .replace("Union[", "")
             .replace("]]", "]")
         )
