@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 
+from glob import glob
 from typing import List, Dict, Optional
 from sdRDM.markdown.markdownparser import MarkdownParser
 
@@ -19,7 +20,7 @@ def generate_python_api(
     commit: Optional[str] = None,
     only_classes: bool = False,
     use_formatter: bool = True,
-) -> None:
+) -> Optional[MarkdownParser]:
     """Generates a Python API based on a markdown model, which is parsed
     and code generated based on the specifications.
 
@@ -29,8 +30,16 @@ def generate_python_api(
         libname (str): Name of the libary which will be used as directory name.
     """
 
-    # Parse the markdown model
-    parser = MarkdownParser.parse(open(path))
+    # Check if there are multiple models
+    if os.path.isdir(path):
+        parser = MarkdownParser()
+        for file in glob(os.path.join(path, "*.md")):
+            parser.add_model(MarkdownParser.parse(open(file)))
+    else:
+        parser = MarkdownParser.parse(open(path))
+
+    if only_classes:
+        return parser
 
     # Create directory structure
     libpath = create_directory_structure(dirpath, libname)
@@ -42,9 +51,9 @@ def generate_python_api(
     core_init = render_core_init_file(parser.objs, parser.enums)
     save_rendered_to_file(core_init, os.path.join(libpath, "core", "__init__.py"))
 
-    lib_init = render_library_init_file(parser.objs, parser.enums)
+    lib_init = render_library_init_file(parser.objs, parser.enums, url, commit)
     save_rendered_to_file(lib_init, os.path.join(libpath, "__init__.py"))
-    
+
     # Write schema to library
     generate_mermaid_schema(os.path.join(libpath, "schemes"), libname, parser)
 
