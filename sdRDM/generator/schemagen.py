@@ -4,6 +4,9 @@ from copy import deepcopy
 from jinja2 import Template
 from typing import Dict
 
+from importlib import resources as pkg_resources
+
+from sdRDM.generator import templates as jinja_templates
 from sdRDM.markdown import MarkdownParser
 from sdRDM.generator.classrender import combine_types
 
@@ -12,7 +15,9 @@ def generate_mermaid_schema(path: str, libname: str, parser: MarkdownParser) -> 
     """Generates a mermaid schema for model inspection based on a markdown model"""
 
     parser = deepcopy(parser)
-    template = Template(open("./templates/mermaid_class.jinja2").read())
+    template = Template(
+        pkg_resources.read_text(jinja_templates, "mermaid_class.jinja2")
+    )
 
     list(map(convert_attributes, parser.objs))
 
@@ -35,7 +40,9 @@ def convert_attributes(object: Dict) -> None:
 
     for index, attribute in enumerate(object["attributes"]):
         object["attributes"][index]["type"] = (
-            combine_types(attribute["type"], attribute["multiple"], attribute["required"])
+            combine_types(
+                attribute["type"], attribute["multiple"], attribute["required"]
+            )
             .replace("Union[", "")
             .replace("]]", "]")
         )

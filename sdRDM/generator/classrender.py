@@ -115,7 +115,7 @@ def render_add_methods(object: Dict, objects: List[Dict]) -> List[str]:
         for type in attribute["type"]:
             if is_enum_type(type, objects):
                 continue
-            elif type in DataTypes.__members__:
+            elif type in DataTypes.__members__ or attribute["multiple"] is False:
                 continue
 
             add_methods.append(render_single_add_method(attribute, type, objects))
