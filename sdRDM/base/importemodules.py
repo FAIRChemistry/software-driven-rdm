@@ -1,9 +1,10 @@
 import textwrap
 
+from dotted_dict import DottedDict
 from typing import Dict, Optional
 
 
-class ImportedModules:
+class ImportedModules(DottedDict):
     """Empty class used to store all sub classes"""
 
     def __init__(
@@ -50,9 +51,14 @@ class ImportedModules:
         out_string = []
 
         for group in GROUPS:
+
+            if group not in self.__dict__ and group != "Objects":
+                continue
+
             prefix = (
                 f"\033[96m{group.capitalize()}\033[0m{' ' * (MAXINDENT - len(group))}"
             )
+
             wrapper = textwrap.TextWrapper(
                 initial_indent=prefix, width=100, subsequent_indent="        "
             )
@@ -65,12 +71,14 @@ class ImportedModules:
                         )
                     )
                 ]
+
             elif group == "enums":
                 out_string += [
                     wrapper.fill(
                         ", ".join([name for name in getattr(self, group).__dict__])
                     )
                 ]
+
             elif group == "links":
                 out_string += [
                     wrapper.fill(", ".join([name for name in getattr(self, group)]))
