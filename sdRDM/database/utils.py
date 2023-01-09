@@ -67,6 +67,8 @@ def _map_to_orm(obj, base, tablename=None):
                     setattr(sub_orm_obj, name, entry)
                     orm_collection.append(sub_orm_obj)
 
+        elif hasattr(value, "__fields__"):
+            setattr(orm_obj, name, _map_to_orm(value, base, tablename=name))
         else:
             setattr(orm_obj, name, value)
 
