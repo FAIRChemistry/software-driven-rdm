@@ -10,7 +10,7 @@ class ImportedModules(DottedDict):
     def __init__(
         self,
         classes,
-        enums: Optional["ImportedModules"] = None,
+        enums,
         links: Optional[Dict] = None,
         include_links: bool = True,
     ):
@@ -25,8 +25,7 @@ class ImportedModules(DottedDict):
                 # Add links if given
                 setattr(self, name, node)
 
-        if enums:
-            self.enums = self.__class__(classes=enums, include_links=False)
+        self.enums = DottedDict({name: enum.cls for name, enum in enums.items()})
 
         # Process links
         if include_links:
@@ -72,14 +71,12 @@ class ImportedModules(DottedDict):
                     )
                 ]
 
-            elif group == "enums":
+            elif group == "enums" and getattr(self, group):
                 out_string += [
-                    wrapper.fill(
-                        ", ".join([name for name in getattr(self, group).__dict__])
-                    )
+                    wrapper.fill(", ".join([name for name in getattr(self, group)]))
                 ]
 
-            elif group == "links":
+            elif group == "links" and getattr(self, group):
                 out_string += [
                     wrapper.fill(", ".join([name for name in getattr(self, group)]))
                 ]
