@@ -25,6 +25,7 @@ from typing import List, Dict, Optional, IO, Union, get_args
 
 from sdRDM.base.importemodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
+from sdRDM.base.referencecheck import is_compliant_to_references
 from sdRDM.base.utils import object_to_orm, generate_model
 from sdRDM.base.ioutils.xml import write_xml, read_xml
 from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
@@ -51,8 +52,10 @@ class DataModel(pydantic.BaseModel):
     # * Private attributes
     __node__: Optional[Node] = PrivateAttr(default=None)
     __types__: DottedDict = PrivateAttr(default=dict)
+    __parent__: Optional["DataModel"] = PrivateAttr(default=None)
 
     def __init__(self, **data):
+        # data = self.set_parents(data)
         super().__init__(**data)
 
         self.__types__ = DottedDict()
@@ -65,6 +68,34 @@ class DataModel(pydantic.BaseModel):
                 self.__types__[name] = tuple(
                     [subtype for subtype in args if hasattr(subtype, "__fields__")]
                 )
+
+    def set_parents(self, data) -> Dict:
+        """Adds a parent relation to all complex sub attributes"""
+
+        for name, value in data.items():
+            data[name] = self.set_parent_to_sub_field(value)
+
+        return data
+
+    def set_parent_to_sub_field(self, value):
+        """Sets the parent class of the attribute so it is possible to backtrace"""
+
+        if isinstance(value, (list, ListPlus)):
+            parented = ListPlus()
+            for entry in value:
+                if hasattr(entry, "__fields__"):
+                    entry.__parent__ = self
+                    parented.append(entry)
+
+            return value
+
+        elif not hasattr(value, "__fields__"):
+            return value
+
+        else:
+            value.__parent__ = self
+
+        return value
 
     # ! Getters
     def get(
@@ -111,6 +142,31 @@ class DataModel(pydantic.BaseModel):
             return object
         else:
             return self._traverse_model_by_path(object, path[1::])
+
+    def get_by_meta_path(self: "DataModel", path: str) -> List["DataModel"]:
+        """Returns all obejcts or values found via the meta path and instance"""
+
+        if not path.startswith("/"):
+            path = "/" + path
+
+        references = []
+
+        for subpath in self.paths():
+            meta_path = self.process_path_to_meta(str(subpath))
+
+            if meta_path != path:
+                continue
+
+            reference = self.get(str(subpath))
+
+            if not isinstance(reference, list):
+                references.append(reference)
+
+        return references
+
+    @staticmethod
+    def process_path_to_meta(path: str) -> str:
+        return "/".join([part for part in str(path).split("/") if not part.isdigit()])
 
     def paths(self, leaves: bool = False):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
@@ -517,7 +573,7 @@ class DataModel(pydantic.BaseModel):
             if inspect.isclass(obj) and issubclass(obj, Enum)
         }
 
-        return ImportedModules({**classes, "enums": enums, "links": links})
+        return ImportedModules(classes=classes, enums=enums, links=links)
 
     @staticmethod
     def _find_root_objects(classes: Dict):
@@ -590,3 +646,47 @@ class DataModel(pydantic.BaseModel):
             return str(value)
 
         return value
+
+    # ! Overloads
+    def __setattr__(self, name, value):
+
+        if name == "__parent__":
+            return super().__setattr__(name, value)
+
+        if self.is_data_model(value):
+            self.set_parent_instances(value)
+            self.check_references(value)
+
+        return super().__setattr__(name, value)
+
+    def set_parent_instances(self, value) -> None:
+        """Sets current instance as the parent to objects"""
+        if isinstance(value, list):
+            for i in range(len(value)):
+                self.set_parent_to_object_field(value[i])
+        else:
+            self.set_parent_to_object_field(value)
+
+    def set_parent_to_object_field(self, value):
+        """Sets a reference to the parent element found in the data model"""
+
+        if not hasattr(value, "__fields__"):
+            return
+
+        value.__parent__ = self
+
+    def check_references(self, value) -> None:
+        """Checks if any (sub)-object fulfills the conditions of the model"""
+        if isinstance(value, list):
+            for i in range(len(value)):
+                is_compliant_to_references(value[i])
+        else:
+            is_compliant_to_references(value)
+
+    def is_data_model(self, value) -> bool:
+        """Checks whether this object is of type 'DataModel'"""
+
+        if isinstance(value, list):
+            return all(hasattr(subval, "__fields__") for subval in value)
+
+        return hasattr(value, "__fields__")

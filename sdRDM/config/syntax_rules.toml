@@ -34,6 +34,9 @@ order = 3
 [REQUIRED]
 order = 3
 
+[REFERENCE]
+order = 3
+
 [MULTIPLE]
 order = 3
 

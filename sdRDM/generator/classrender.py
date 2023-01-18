@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union, Tuple
 from jinja2 import Template
 from importlib import resources as pkg_resources
 
@@ -18,9 +18,10 @@ def render_object(
     all_objects = objects + enums
 
     # Get the class body
-    class_part = render_class(object=object, inherits=inherits)
+    class_part = render_class(object=object, inherits=inherits, objects=all_objects)
     methods_part = render_add_methods(object=object, objects=all_objects)
-    class_body = class_part + "\n" + "\n\n".join(methods_part)
+    validator_part = render_reference_validator(object=object, objects=all_objects)
+    class_body = "\n".join([class_part, methods_part, validator_part])
 
     # Clean and render imports
     imports = render_imports(object=object, objects=all_objects, inherits=inherits)
@@ -32,6 +33,7 @@ def render_object(
 def render_class(
     object: Dict,
     inherits: List[Dict],
+    objects: List[Dict],
     repo: Optional[str] = None,
     commit: Optional[str] = None,
 ) -> str:
@@ -55,13 +57,13 @@ def render_class(
         name=object.pop("name"),
         inherit=inherit,
         docstring=object.pop("docstring"),
-        attributes=[render_attribute(attr) for attr in object["attributes"]],
+        attributes=[render_attribute(attr, objects) for attr in object["attributes"]],
         repo=repo,
         commit=commit,
     )
 
 
-def render_attribute(attribute: Dict) -> str:
+def render_attribute(attribute: Dict, objects: List[Dict]) -> str:
     """Renders an attributeibute to code using a Jinja2 template"""
 
     attribute = deepcopy(attribute)
@@ -71,9 +73,14 @@ def render_attribute(attribute: Dict) -> str:
 
     is_multiple = attribute.pop("multiple")
     is_required = attribute["required"]
+    has_reference = "reference" in attribute
 
     if is_multiple:
         attribute["default_factory"] = "ListPlus"
+
+    if has_reference:
+        reference_types = get_reference_type(attribute["reference"], objects)
+        attribute["type"] += reference_types
 
     return template.render(
         name=attribute.pop("name"),
@@ -94,11 +101,33 @@ def combine_types(dtypes: List[str], is_multiple: bool, is_required: bool) -> st
     return encapsulate_type(dtypes, is_multiple, is_required)
 
 
+def get_reference_type(reference: str, objects: List[Dict]) -> List[str]:
+    """Gets the type of a specific reference used for automatic fetching"""
+    object, attribute = reference.split(".")
+
+    if attribute == "id":
+        return ["str"]
+
+    assert any(
+        object == obj["name"] for obj in objects
+    ), f"Object '{object}' cannot be found in model for referencing."
+
+    object = next(filter(lambda obj: obj["name"] == object, objects))
+
+    assert any(
+        attribute == attr["name"] for attr in object["attributes"]
+    ), f"Attribute '{attribute}' cannot be found in model for referencing."
+
+    return next(filter(lambda attr: attr["name"] == attribute, object["attributes"]))
+
+
 def stringize_option_values(attribute: Dict):
     """Puts string type values in literals for code generation"""
 
     for key, option in attribute.items():
-        if not isinstance(option, str) or option == "ListPlus":
+        if not is_pure_string_type(option) or option == "ListPlus":
+            continue
+        elif is_reference(key, option):
             continue
 
         attribute[key] = f'"{option}"'
@@ -106,7 +135,39 @@ def stringize_option_values(attribute: Dict):
     return attribute
 
 
-def render_add_methods(object: Dict, objects: List[Dict]) -> List[str]:
+def is_pure_string_type(value: str) -> Union[bool, str]:
+    """Checks whether the given option value could be bool"""
+
+    if value is None:
+        return False
+    elif value.lower() in ["true", "false"]:
+        return False
+    elif value.lower() == "false":
+        return False
+
+    try:
+        int(value)
+        float(value)
+    except ValueError:
+        return True
+
+    return False
+
+
+def is_reference(key: str, option: str) -> bool:
+    """Checks whether this is a reference to another class -> Mainly used for Enums"""
+
+    if key != "default":
+        return False
+
+    if len(option.split(".")) > 1 and option.count(" ") == 0:
+        # Typically references to classes will follow pattern 'Something.something'
+        return True
+
+    return False
+
+
+def render_add_methods(object: Dict, objects: List[Dict]) -> str:
     """Renders add methods fro each non-native type of an attribute"""
 
     add_methods = []
@@ -120,7 +181,35 @@ def render_add_methods(object: Dict, objects: List[Dict]) -> List[str]:
 
             add_methods.append(render_single_add_method(attribute, type, objects))
 
-    return add_methods
+    return "\n\n".join(add_methods)
+
+
+def render_reference_validator(object: Dict, objects: List[Dict]) -> str:
+    """Renders refrence methods that are used to extract specified attributes from an object"""
+
+    template = Template(
+        pkg_resources.read_text(jinja_templates, "reference_template.jinja2")
+    )
+
+    validator_funcs = []
+    attributes = list(
+        filter(lambda attribute: "reference" in attribute, object["attributes"])
+    )
+
+    for attribute in attributes:
+        target_obj, target_attribute = attribute["reference"].split(".")
+
+        assert any(
+            target_obj == model_obj["name"] for model_obj in objects
+        ), f"Target object {target_obj} not found in model."
+
+        validator_func = template.render(
+            attribute=attribute["name"], object=target_obj, target=target_attribute
+        )
+
+        validator_funcs.append(validator_func)
+
+    return "\n\n".join(validator_funcs)
 
 
 def is_enum_type(name: str, objects: List[Dict]) -> bool:
