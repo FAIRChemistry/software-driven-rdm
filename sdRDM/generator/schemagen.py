@@ -19,7 +19,7 @@ def generate_mermaid_schema(path: str, libname: str, parser: MarkdownParser) -> 
         pkg_resources.read_text(jinja_templates, "mermaid_class.jinja2")
     )
 
-    list(map(convert_attributes, parser.objs))
+    # list(map(convert_attributes, parser.objs))
 
     rendered = template.render(
         inherits=parser.inherits,
