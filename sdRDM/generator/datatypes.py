@@ -23,7 +23,7 @@ class DataTypes(Enum):
     posfloat = ("PositiveFloat", ["from pydantic.types import PositiveFloat"])
     PositiveFloat = ("PositiveFloat", ["from pydantic.types import PositiveFloat"])
     positivefloat = ("PositiveFloat", ["from pydantic.types import PositiveFloat"])
-    date = ("datetime", ["from datetime import datetime"])
+    date = ("date", ["from datetime import date"])
     datetime = ("datetime", ["from datetime import datetime"])
     bool = ("bool", None)
     boolean = ("bool", None)
