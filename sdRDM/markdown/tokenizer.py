@@ -51,6 +51,24 @@ def check_type_token_exception(type: str) -> List[str]:
     return [t.strip() for t in type.split(",")]
 
 
+def clean_html_markdown(html: str) -> str:
+    """Removes closing tags and unnecessary ones"""
+    
+    CLOSING_TAG_PATTERN = r"<\/[h1|h2|h3|h4|li|ul|p|strong]*>"
+    
+    html = (
+        re.sub(CLOSING_TAG_PATTERN, "", html)
+        .replace(r"<ul>\n", "")
+        .replace("<p>", "")
+        .replace("&quot;", '"')
+    )
+    
+    return "\n".join([
+        line.strip() for line in html.split("\n")
+        if line.strip() and "<ul>" not in line
+    ])
+
+
 def has_token(line: str):
     """Checks whether there is a token in the line"""
     return any(line.strip().startswith(token) for token in MarkdownTokens.__members__)

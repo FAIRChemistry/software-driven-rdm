@@ -2,9 +2,10 @@ import toml
 import sdRDM.config
 
 from typing import List, Dict, Tuple, IO
+from markdown_it import MarkdownIt
 from importlib import resources as pkg_resources
 
-from sdRDM.markdown.tokenizer import tokenize_markdown_model
+from sdRDM.markdown.tokenizer import tokenize_markdown_model, clean_html_markdown
 from .tokennode import TokenNode, build_token_tree
 from .styler import pretty_print_report
 from .utils import split_token_list
@@ -29,8 +30,9 @@ def validate_markdown_model(
 ) -> Tuple[bool, List[Dict]]:
     """Validates a given markdown model, prints report and returns result as well as machine-readable report"""
 
-    lines = "".join([line for line in handle.readlines() if line != "\n"])
-    model = tokenize_markdown_model(lines)
+    html = MarkdownIt().render(handle.read())
+    model_string = clean_html_markdown(html)
+    model = tokenize_markdown_model(model_string)
 
     rules = toml.loads(pkg_resources.read_text(sdRDM.config, "syntax_rules.toml"))
     nodes = build_token_tree(rules)

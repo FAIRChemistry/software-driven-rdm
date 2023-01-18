@@ -1,11 +1,12 @@
 import re
 
-from typing import Optional, IO, Type
+from typing import Optional, IO
+from markdown_it import MarkdownIt
 
 from sdRDM.validator import validate_markdown_model, pretty_print_report
 
 from .tokens import MarkdownTokens
-from .tokenizer import tokenize_markdown_model
+from .tokenizer import tokenize_markdown_model, clean_html_markdown
 from .utils import process_type
 
 
@@ -31,8 +32,9 @@ class MarkdownParser:
         parser = cls()
 
         # Read, discard empty lines and tokenize
-        lines = "".join([line for line in handle.readlines() if line != "\n"])
-        tokenized = tokenize_markdown_model(lines)
+        html = MarkdownIt().render(handle.read())
+        model_string = clean_html_markdown(html)
+        tokenized = tokenize_markdown_model(model_string)
 
         # Validate model
         handle.seek(0)
@@ -133,6 +135,9 @@ class MarkdownParser:
         elif token == MarkdownTokens.MAPPING.value and content:
             key, value = re.split(r"\s?\=\s?", content)
             self.stack[-1]["mappings"].append({"key": key, "value": value})
+            
+        elif token == MarkdownTokens.REFERENCE.value and content:
+            self.stack[-1]["attributes"][-1]["reference"] = content
 
     def add_model(self, parser: "MarkdownParser"):
         """Adds another parser to the current one"""

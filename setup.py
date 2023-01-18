@@ -32,6 +32,7 @@ setup(
         "termcolor",
         "redbaron==0.9.2",
         "dotted-dict==1.1.3",
+        "markdown-it-py==2.1.0"
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
