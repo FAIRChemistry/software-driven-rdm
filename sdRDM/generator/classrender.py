@@ -192,8 +192,8 @@ def render_reference_validator(object: Dict, objects: List[Dict]) -> str:
     )
 
     validator_funcs = []
-    attributes = list(
-        filter(lambda attribute: "reference" in attribute, object["attributes"])
+    attributes = deepcopy(
+        list(filter(lambda attribute: "reference" in attribute, object["attributes"]))
     )
 
     for attribute in attributes:
@@ -204,7 +204,11 @@ def render_reference_validator(object: Dict, objects: List[Dict]) -> str:
         ), f"Target object {target_obj} not found in model."
 
         validator_func = template.render(
-            attribute=attribute["name"], object=target_obj, target=target_attribute
+            attribute=attribute["name"],
+            object=target_obj,
+            target=target_attribute,
+            types=get_reference_type(attribute["reference"], objects),
+            required=attribute["required"],
         )
 
         validator_funcs.append(validator_func)
@@ -307,7 +311,7 @@ def encapsulate_type(dtypes: List[str], is_multiple: bool, is_required: bool) ->
         if is_multiple == True:
             return f"List[Union[{', '.join(dtypes)}]]"
         elif is_required is False:
-            return f"Optional[Union[{', '.join(dtypes)}]]"
+            return f"Union[{', '.join(dtypes)}, None]"
         else:
             return f"Union[{', '.join(dtypes)}]"
 

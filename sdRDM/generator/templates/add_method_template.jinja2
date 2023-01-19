@@ -24,8 +24,4 @@
         if id is not None:
             params["id"] = id
 
-        {{ snake_case }} = [
-            {{cls}}(**params)
-        ]
-
-        self.{{attribute}} = self.{{attribute}} + {{ snake_case }}
+        self.{{attribute}}.append({{cls}}(**params))
