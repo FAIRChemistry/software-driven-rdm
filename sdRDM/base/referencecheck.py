@@ -2,10 +2,10 @@ from pydantic.fields import ModelField
 from typing import Tuple, Dict, Optional
 
 
-def is_compliant_to_references(obj) -> bool:
+def object_is_compliant_to_references(obj) -> Dict:
     """Checks if individual fields that have been set are compliant to their references, if specified"""
 
-    is_compliant, report = True, {}
+    report = {}
     checks = get_fields_to_check(obj)
 
     for attribute, (root, path) in checks.items():
@@ -14,25 +14,44 @@ def is_compliant_to_references(obj) -> bool:
         root_obj = traverse_to_root_node(obj, root)
 
         if root_obj is None:
+            # Reference is not yet part of the tree
             continue
 
         if value not in root_obj.get_by_meta_path(path):
-            is_compliant = False
             report[
                 attribute
             ] = f"""Value '{value}' for attribute '{attribute}' of object '{obj.id}' does not appear at path '{'/'.join([root, path])}' yet is required.
                 """
 
-    if not is_compliant:
-        rendered_report = "\n\n".join([f"- {message}" for message in report.values()])
-        raise ValueError(
-            f"""Object is not compliant to the model:
-            
-            {rendered_report}
-            """
-        )
+    return report
 
-    return is_compliant
+
+def value_is_compliant_to_references(attribute, value, parent: "DataModel") -> Dict:
+    """Checks whether an assigned value is compliant to the model"""
+
+    checks = get_fields_to_check(parent)
+
+    if attribute not in checks:
+        return {}
+
+    root, path = checks[attribute]
+
+    if root == parent.__class__.__name__:
+        root_obj = parent
+    else:
+        root_obj = traverse_to_root_node(parent, root)
+
+    if root_obj is None:
+        # Reference is not yet part of the tree
+        return {}
+
+    if value in root_obj.get_by_meta_path(path):
+        return {}
+
+    return {
+        attribute: f"""Value '{value}' for attribute '{attribute}' of object '{parent.id}' does not appear at path '{'/'.join([root, path])}' yet is required.
+                """
+    }
 
 
 def traverse_to_root_node(obj: "DataModel", root: str) -> Optional["DataModel"]:

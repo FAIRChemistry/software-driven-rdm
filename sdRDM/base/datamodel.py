@@ -11,7 +11,6 @@ import yaml
 import warnings
 import numpy as np
 
-from io import StringIO
 from nob import Nob
 from dotted_dict import DottedDict
 from enum import Enum
@@ -25,7 +24,10 @@ from typing import List, Dict, Optional, IO, Union, get_args
 
 from sdRDM.base.importemodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
-from sdRDM.base.referencecheck import is_compliant_to_references
+from sdRDM.base.referencecheck import (
+    object_is_compliant_to_references,
+    value_is_compliant_to_references,
+)
 from sdRDM.base.utils import object_to_orm, generate_model
 from sdRDM.base.ioutils.xml import write_xml, read_xml
 from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
@@ -47,7 +49,6 @@ class DataModel(pydantic.BaseModel):
         use_enum_values = True
         arbitrary_types_allowed = True
         allow_population_by_field_name = True
-        orm_mode = True
 
     # * Private attributes
     __node__: Optional[Node] = PrivateAttr(default=None)
@@ -55,8 +56,14 @@ class DataModel(pydantic.BaseModel):
     __parent__: Optional["DataModel"] = PrivateAttr(default=None)
 
     def __init__(self, **data):
-        # data = self.set_parents(data)
         super().__init__(**data)
+
+        for field, value in self.__dict__.items():
+            if not isinstance(value, ListPlus):
+                continue
+
+            self.__dict__[field].__parent__ = self
+            self.__dict__[field].__attribute__ = field
 
         self.__types__ = DottedDict()
         for name, field in self.__fields__.items():
@@ -68,34 +75,6 @@ class DataModel(pydantic.BaseModel):
                 self.__types__[name] = tuple(
                     [subtype for subtype in args if hasattr(subtype, "__fields__")]
                 )
-
-    def set_parents(self, data) -> Dict:
-        """Adds a parent relation to all complex sub attributes"""
-
-        for name, value in data.items():
-            data[name] = self.set_parent_to_sub_field(value)
-
-        return data
-
-    def set_parent_to_sub_field(self, value):
-        """Sets the parent class of the attribute so it is possible to backtrace"""
-
-        if isinstance(value, (list, ListPlus)):
-            parented = ListPlus()
-            for entry in value:
-                if hasattr(entry, "__fields__"):
-                    entry.__parent__ = self
-                    parented.append(entry)
-
-            return value
-
-        elif not hasattr(value, "__fields__"):
-            return value
-
-        else:
-            value.__parent__ = self
-
-        return value
 
     # ! Getters
     def get(
@@ -632,6 +611,7 @@ class DataModel(pydantic.BaseModel):
     @validator("*")
     def convert_extended_list_and_numpy_strings(cls, value):
         """Validator used to convert any list into a ListPlus."""
+
         if isinstance(value, list):
             return ListPlus(*[cls._convert_numpy_type(v) for v in value], in_setup=True)
         elif isinstance(value, np.str_):
@@ -647,21 +627,69 @@ class DataModel(pydantic.BaseModel):
 
         return value
 
+    def validate_references(self):
+        """Recursively validates this object and all sub-objects"""
+
+        report = {}
+
+        for _, value in self:
+            if not self.is_data_model(value):
+                continue
+
+            if isinstance(value, list):
+                for subvalue in value:
+                    report.update(subvalue.validate_references())
+                continue
+
+            report.update(value.validate_references())
+
+        return report
+
+    @validator("*", each_item=True)
+    def check_list_values(cls, value, config, field):
+        if not isinstance(value, field.type_):
+            raise TypeError(
+                f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
+            )
+        return value
+
     # ! Overloads
     def __setattr__(self, name, value):
 
-        if name == "__parent__":
+        if name == "__parent__" or name == "__types__":
             return super().__setattr__(name, value)
 
-        if self.is_data_model(value):
-            self.set_parent_instances(value)
-            self.check_references(value)
+        self.set_parent_instances(value)
+        self.check_references(name, value)
 
-        return super().__setattr__(name, value)
+        super().__setattr__(name, value)
+
+        if isinstance(value, list):
+            self.__dict__[name].__parent__ = self
+
+    def check_references(self, name, value):
+        """Checks whether references are compliant"""
+
+        if self.is_data_model(value):
+            report = self.check_object_references(value)
+        else:
+            report = self.check_value_references(name, value)
+
+        if report != {}:
+            rendered_report = "\n\n".join(
+                [f"- {message}" for message in report.values()]
+            )
+            raise ValueError(
+                f"""Object is not compliant to the model:
+                
+            {rendered_report}
+                """
+            )
 
     def set_parent_instances(self, value) -> None:
         """Sets current instance as the parent to objects"""
-        if isinstance(value, list):
+        if isinstance(value, ListPlus):
+            value.__parent__ = self
             for i in range(len(value)):
                 self.set_parent_to_object_field(value[i])
         else:
@@ -675,13 +703,35 @@ class DataModel(pydantic.BaseModel):
 
         value.__parent__ = self
 
-    def check_references(self, value) -> None:
+    def check_object_references(self, value) -> Dict:
         """Checks if any (sub)-object fulfills the conditions of the model"""
+
+        report = {}
+
         if isinstance(value, list):
             for i in range(len(value)):
-                is_compliant_to_references(value[i])
+                report.update(object_is_compliant_to_references(value[i]))
+
+            return report
+
         else:
-            is_compliant_to_references(value)
+            return object_is_compliant_to_references(value)
+
+    def check_value_references(self, attribute, value) -> Dict:
+        """Checks if a value assigned to this object is compliant to references"""
+
+        report = {}
+
+        if isinstance(value, list):
+            for i in range(len(value)):
+                report.update(
+                    value_is_compliant_to_references(attribute, value[i], self)
+                )
+
+            return report
+
+        else:
+            return value_is_compliant_to_references(attribute, value, self)
 
     def is_data_model(self, value) -> bool:
         """Checks whether this object is of type 'DataModel'"""

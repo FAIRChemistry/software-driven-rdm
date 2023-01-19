@@ -4,9 +4,15 @@
 
         from .{{object.lower()}} import {{object}}
         
-        if not isinstance(value, ({{object}}, str)):
-            raise TypeError(f"Expected '{{object}}' or 'str' got '{type(value).__name__}' instead.")
-        elif isinstance(value, {{object}}):
+        if isinstance(value, {{object}}):
             return value.{% if target %}{{target}}{% else %}id{% endif %}
-        elif isinstance(value, str):
+        {%- for type in types %}
+        elif isinstance(value, {{type}}):
             return value
+        {%- endfor %}
+        {%- if required is false %}
+        elif value is None:
+            return value
+        {%- endif %}
+        else:
+            raise TypeError(f"Expected types [{{object}}, {{", ".join(types)}}] got '{type(value).__name__}' instead.")

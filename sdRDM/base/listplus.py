@@ -8,7 +8,11 @@ class ListPlus(List[Any]):
     attributes.
     """
 
-    def __init__(self, *args, in_setup: bool = True, **kwargs):
+    __parent__: "DataModel"
+    __types__: List["DataModel"]
+    __attribute__: str
+
+    def __init__(self, *args, **kwargs):
         super(ListPlus, self).__init__()
 
         for arg in args:
@@ -20,6 +24,10 @@ class ListPlus(List[Any]):
 
     def append(self, *args):
         for arg in args:
+            if hasattr(arg, "__fields__"):
+                arg.__parent__ = self.__parent__
+                arg.check_references(self.__attribute__, arg)
+
             super().append(arg)
 
     def get(self, query: str, attr: str = "id"):
