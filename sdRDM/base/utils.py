@@ -108,10 +108,7 @@ def generate_model(
     # Finally create the corresponding object
     objs[name] = create_model(name, __base__=base, **fields)
 
-    if is_root:
-        return ImportedModules(classes=objs)
-    else:
-        return objs[name]
+    return ImportedModules(classes=objs) if is_root else objs[name]
 
 
 def forge_signature(cls):
@@ -207,35 +204,32 @@ def object_to_orm(obj, base, foreign_key=None, backref=None, tablename=None):
                     obj=field.type_, base=base, backref=tablename, tablename=name
                 )
 
+        elif is_list:
+            attributes[name] = relationship(name, lazy=True)
+            attributes[foreign_key.split(".")[0]] = Column(
+                Integer, ForeignKey(foreign_key)
+            )
+            type(
+                name,
+                (base,),
+                {
+                    "__tablename__": name,
+                    "object_id": Column(
+                        BigInteger().with_variant(Integer, "sqlite"),
+                        primary_key=True,
+                    ),
+                    tablename: Column(
+                        Integer, ForeignKey(f"{tablename}.object_id")
+                    ),
+                    name: Column(
+                        SQL_DATATYPES[inner_dtype], nullable=not field.required
+                    ),
+                },
+            )
         else:
-            if is_list:
-                attributes[name] = relationship(name, lazy=True)
-                attributes[foreign_key.split(".")[0]] = Column(
-                    Integer, ForeignKey(foreign_key)
-                )
-                type(
-                    name,
-                    (base,),
-                    {
-                        "__tablename__": name,
-                        "object_id": Column(
-                            BigInteger().with_variant(Integer, "sqlite"),
-                            primary_key=True,
-                        ),
-                        tablename: Column(
-                            Integer, ForeignKey(f"{tablename}.object_id")
-                        ),
-                        name: Column(
-                            SQL_DATATYPES[inner_dtype],
-                            nullable=False if field.required else True,
-                        ),
-                    },
-                )
-            else:
-                attributes[name] = Column(
-                    SQL_DATATYPES[inner_dtype],
-                    nullable=False if field.required else True,
-                )
+            attributes[name] = Column(
+                SQL_DATATYPES[inner_dtype], nullable=not field.required
+            )
 
     # Add the table as a new type
     type(tablename, (base,), attributes)
