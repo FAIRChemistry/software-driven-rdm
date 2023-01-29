@@ -31,6 +31,7 @@ from sdRDM.base.referencecheck import (
 from sdRDM.base.utils import object_to_orm, generate_model
 from sdRDM.base.ioutils.xml import write_xml, read_xml
 from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
+from sdRDM.base.graphql import parse_query_to_selections, traverse_graphql_query
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.linking.utils import build_guide_tree, generate_template
@@ -177,6 +178,11 @@ class DataModel(pydantic.BaseModel):
                 )
 
         return sorted(metapaths, key=lambda path: len(path.split("/")))
+
+    def query(self, query: str) -> Dict:
+        """Takes a graphql query and extracts all data matching the structure and arguments"""
+        selections = parse_query_to_selections(query)
+        return traverse_graphql_query(selections, self)
 
     # ! Exporters
     def to_dict(self, exclude_none=True, warn=True, convert_h5ds=True, **kwargs):
