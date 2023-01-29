@@ -24,7 +24,7 @@ def generate_mermaid_schema(path: str, libname: str, parser: MarkdownParser) -> 
     rendered = template.render(
         inherits=parser.inherits,
         compositions=parser.compositions,
-        classes=parser.objs,
+        classes=parser.objects,
         enums=parser.enums,
         externals=parser.external_objects,
     )

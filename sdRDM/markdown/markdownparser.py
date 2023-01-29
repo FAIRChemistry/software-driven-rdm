@@ -1,153 +1,113 @@
-import re
-
-from typing import Optional, IO
+from typing import List, Tuple, Dict, IO
 from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
-from sdRDM.validator import validate_markdown_model, pretty_print_report
+from sdRDM.generator.utils import camel_to_snake
 
-from .tokens import MarkdownTokens
-from .tokenizer import tokenize_markdown_model, clean_html_markdown
-from .utils import process_type
+from .enumutils import parse_markdown_enumerations
+from .objectutils import parse_markdown_module
 
 
 class MarkdownParser:
     def __init__(self) -> None:
-        self.objs = []
+        self.objects = []
         self.enums = []
         self.inherits = []
         self.compositions = []
         self.external_objects = {}
-        self.module_name = "NoName"
-        self.module_docstring = []
-        self.stack = []
 
     @classmethod
     def parse(cls, handle: IO):
-        """Parses a given markdown file to a mermaid schema from which code is generated.
-
-        Args:
-            path (str): Path to the markdown file.
-        """
+        """Parses a given markdown file to a mermaid schema from which code is generated."""
 
         parser = cls()
 
-        # Read, discard empty lines and tokenize
-        html = MarkdownIt().render(handle.read())
-        model_string = clean_html_markdown(html)
-        tokenized = tokenize_markdown_model(model_string)
+        doc = MarkdownIt().parse(handle.read())
+        modules, enumerations = parser.get_objects_and_enumerations(doc)
 
-        # Validate model
-        handle.seek(0)
-        is_valid, report = validate_markdown_model(handle=handle)
+        for module, model in modules.items():
+            parser.objects += [obj for obj in parse_markdown_module(module, model)]
 
-        if not is_valid:
-            pretty_print_report(report, tokenized)
-            raise ValueError(
-                f"Given Markdown model is not valid. Please see the report above."
-            )
+        parser.enums = parse_markdown_enumerations(enumerations)
 
-        for token, content in tokenized:
-            # Process tokens one by one
-            parser.process_token_line(token=token, content=content)
-
-        # Extract objects and enums
-        parser.enums = list(filter(lambda e: e["type"] == "enum", parser.stack))
-        parser.objs = list(filter(lambda e: e["type"] == "object", parser.stack))
-
-        del parser.stack
+        # Parse given structure
+        parser.get_compositions()
+        parser.get_inherits()
 
         return parser
-
-    def process_token_line(self, token: Optional[str], content: Optional[str]) -> None:
-        """Process a token and content pair that will be sorted accordingly"""
-
-        # OBJECT Handling
-        if token == MarkdownTokens.OBJECT.value and content:
-            self.stack.append(
-                {
-                    "name": content,
-                    "type": "object",
-                    "docstring": None,
-                    "attributes": [],
-                    "mappings": [],
-                }
-            )
-
-        elif token == MarkdownTokens.PARENT.value:
-            self.inherits.append({"parent": content, "child": self.stack[-1]["name"]})
-
-        # ATTRIBUTE Handling
-        elif token == MarkdownTokens.ATTRIBUTE.value and content:
-            self.stack[-1]["attributes"].append(
-                {
-                    "name": content,
-                    "required": False,
-                    "multiple": False,
-                    "default": None,
-                    "description": "Not description given.",
-                    "type": [],
-                }
-            )
-
-        elif token == MarkdownTokens.TYPE.value and content:
-
-            dtype, is_composite, exts = process_type(content)
-
-            self.stack[-1]["attributes"][-1]["type"].append(dtype)
-            self.external_objects.update(exts)
-
-            if is_composite:
-                self.compositions += [
-                    {"container": self.stack[-1]["name"], "module": dtype}
-                ]
-
-        elif token == MarkdownTokens.ATTRDESCRIPTION.value and content:
-            self.stack[-1]["attributes"][-1]["description"] = content
-
-        elif token == MarkdownTokens.REQUIRED.value:
-            self.stack[-1]["attributes"][-1]["required"] = True
-
-            if self.stack[-1]["attributes"][-1]["default"] is None:
-                del self.stack[-1]["attributes"][-1]["default"]
-
-        elif token == MarkdownTokens.MULTIPLE.value:
-            self.stack[-1]["attributes"][-1]["multiple"] = True
-
-            if "default" in self.stack[-1]["attributes"][-1]:
-                del self.stack[-1]["attributes"][-1]["default"]
-
-        elif token == MarkdownTokens.OPTION.value and content:
-            key, value = re.split(r"\s?\:\s?", content)
-            self.stack[-1]["attributes"][-1][key.lower()] = value
-
-        # ENUM Handling
-        elif token == MarkdownTokens.ENUM.value:
-            self.stack.append(
-                {
-                    "name": content,
-                    "type": "enum",
-                    "docstring": "",
-                    "attributes": [],
-                    "mappings": [],
-                }
-            )
-
-        elif token == MarkdownTokens.MAPPING.value and content:
-            key, value = re.split(r"\s?\=\s?", content)
-            self.stack[-1]["mappings"].append({"key": key, "value": value})
-            
-        elif token == MarkdownTokens.REFERENCE.value and content:
-            self.stack[-1]["attributes"][-1]["reference"] = content
 
     def add_model(self, parser: "MarkdownParser"):
         """Adds another parser to the current one"""
 
         assert isinstance(
             parser, self.__class__
-        ), "Got wrong parser of type {parser.__class__.__name__}"
+        ), f"Got wrong parser of type {parser.__class__.__name__}"
 
-        self.objs += parser.objs
+        self.objects += parser.objects
         self.enums += parser.enums
         self.inherits += parser.inherits
         self.compositions += parser.compositions
         self.external_objects.update(parser.external_objects)
+
+    def get_objects_and_enumerations(
+        self,
+        doc: List[Token],
+    ) -> Tuple[Dict[str, List[Token]], List[Token]]:
+        """Gets all objects and enumerations denoted by H2 headings"""
+
+        objects, enumerations = {}, []
+        h2_indices = self.get_h2_indices(doc)
+        for index, (module, start) in enumerate(h2_indices[0:-1]):
+
+            end = h2_indices[index + 1][-1]
+            model_part = doc[start:end]
+
+            if module.lower() == "enumerations":
+                enumerations += model_part
+            else:
+                objects[camel_to_snake(module)] = model_part
+
+        return objects, enumerations
+
+    def get_h2_indices(self, doc: List[Token]) -> List[Tuple[str, int]]:
+        """Returns all H2 indices to extract objects and enumerations"""
+        return [
+            (doc[index + 1].content, index)
+            for index, token in enumerate(doc)
+            if token.tag == "h2" and token.type == "heading_open"
+        ] + [("END", len(doc))]
+
+    def get_inherits(self) -> None:
+        """Gets all inheritance cases present in the data model"""
+
+        for object in self.objects:
+            if not "parent" in object:
+                continue
+
+            self.inherits.append({"parent": object["parent"], "child": object["name"]})
+
+    def get_compositions(self) -> None:
+        """Find all compositions across the model and add them to the parser"""
+
+        for object in self.objects:
+            dtypes = self.find_types(
+                self.acummulate_dtypes(object), self.enums + self.objects
+            )
+
+            self.compositions += [
+                {"container": object["name"], "module": dtype} for dtype in dtypes
+            ]
+
+    @staticmethod
+    def acummulate_dtypes(object: Dict) -> List[str]:
+        """Accumulates all types found within the attributes of an object"""
+
+        return [
+            dtype for attribute in object["attributes"] for dtype in attribute["type"]
+        ]
+
+    @staticmethod
+    def find_types(dtypes: List[str], elements: List[Dict]) -> List[str]:
+        """Finds types across objects and enums"""
+
+        return [element["name"] for element in elements if element["name"] in dtypes]

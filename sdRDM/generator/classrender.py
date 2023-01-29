@@ -71,7 +71,7 @@ def render_attribute(attribute: Dict, objects: List[Dict]) -> str:
         pkg_resources.read_text(jinja_templates, "attribute_template.jinja2")
     )
 
-    is_multiple = attribute.pop("multiple")
+    is_multiple = "multiple" in attribute
     is_required = attribute["required"]
     has_reference = "reference" in attribute
 
@@ -176,7 +176,7 @@ def render_add_methods(object: Dict, objects: List[Dict]) -> str:
         for type in attribute["type"]:
             if is_enum_type(type, objects):
                 continue
-            elif type in DataTypes.__members__ or attribute["multiple"] is False:
+            elif type in DataTypes.__members__ or not "multiple" in attribute:
                 continue
 
             add_methods.append(render_single_add_method(attribute, type, objects))
@@ -265,7 +265,7 @@ def assemble_signature(type: str, objects: List[Dict]) -> List[Dict]:
 def sort_by_defaults(attribute: Dict) -> bool:
     """Sorting key function to put attributes with defaults last"""
 
-    if attribute["multiple"] is True:
+    if "multiple" in attribute:
         return False
     elif attribute["required"] is False:
         return False
@@ -282,7 +282,7 @@ def convert_type(attribute: Dict) -> Dict:
 
     type = attribute["type"]
 
-    if attribute["required"] is False and attribute["multiple"] is False:
+    if attribute["required"] is False and "multiple" in attribute:
         attribute["default"] = None
 
     union_type = [
@@ -291,7 +291,7 @@ def convert_type(attribute: Dict) -> Dict:
     ]
 
     attribute["type"] = encapsulate_type(
-        union_type, attribute["multiple"], attribute["required"]
+        union_type, bool("multiple" in attribute), attribute["required"]
     )
 
     return attribute

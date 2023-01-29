@@ -45,13 +45,13 @@ def generate_python_api(
     libpath = create_directory_structure(dirpath, libname)
 
     # Write classes to the directory
-    write_classes(libpath, parser.objs, parser.enums, parser.inherits, use_formatter)
+    write_classes(libpath, parser.objects, parser.enums, parser.inherits, use_formatter)
 
     # Write init files
-    core_init = render_core_init_file(parser.objs, parser.enums)
+    core_init = render_core_init_file(parser.objects, parser.enums)
     save_rendered_to_file(core_init, os.path.join(libpath, "core", "__init__.py"))
 
-    lib_init = render_library_init_file(parser.objs, parser.enums, url, commit)
+    lib_init = render_library_init_file(parser.objects, parser.enums, url, commit)
     save_rendered_to_file(lib_init, os.path.join(libpath, "__init__.py"))
 
     # Write schema to library
@@ -86,6 +86,16 @@ def save_rendered_to_file(rendered: str, path: str, use_formatter: bool = True) 
 
     if use_formatter:
         subprocess.run([sys.executable, "-m", "black", "-q", "--preview", path])
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "autoflake",
+                "--in-place",
+                "--remove-all-unused-imports",
+                path,
+            ]
+        )
 
 
 def create_directory_structure(path: str, libname: str) -> str:

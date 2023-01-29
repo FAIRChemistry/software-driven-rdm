@@ -1,7 +1,7 @@
 import importlib
 import copy
 
-from typing import List
+from typing import List, get_origin
 from anytree import Node, LevelOrderGroupIter
 
 
@@ -32,6 +32,10 @@ class ClassNode(Node):
 
     def import_class(self):
         """Imports the class that is described in this node"""
+
+        assert self.module, "Module is empty"
+        assert self.class_name, "No class name given"
+
         module = importlib.import_module(self.module)
         return getattr(module, self.class_name)
 
@@ -40,19 +44,36 @@ class ClassNode(Node):
 
         cls = self.import_class()
 
-        if all([self._is_empty(node.value) for node in self.children]):
+        instances = {}
+        for index in self._get_unique_indices():
+            kwargs = self._get_kwargs(index)
+
+            if (
+                all(
+                    arg is None or arg == []
+                    for name, arg in kwargs.items()
+                    if name != "id"
+                )
+                or kwargs == {}
+            ):
+                continue
+
+            instances[index] = cls(**kwargs)
+
+        if len(instances) == 0:
             return {0: None}
-            # return {0: cls(**{node.name: None for node in self.children})}
         else:
-            indices = self._get_unique_indices()
-            return {index: cls(**self._get_kwargs(index=index)) for index in indices}
+            return instances
 
     @staticmethod
     def _is_empty(value):
         if value == {}:
             return True
+        elif any([bool(entry) for entry in list(value.values())]):
+            return False
         elif not all([bool(entry) for entry in list(value.values())]):
             return True
+
         return False
 
     def _get_kwargs(self, index=0):
@@ -125,7 +146,7 @@ class ClassNode(Node):
 
                 if (
                     parent.outer_type is not None
-                    and parent.outer_type.__name__ == "list"
+                    and get_origin(parent.outer_type) == list
                 ):
                     # Check for list processing
                     if is_empty:
