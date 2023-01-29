@@ -142,8 +142,15 @@ def process_option(element: Token, object_stack: List) -> None:
 
     if option.lower().strip() == "type":
         value = process_type_option(value, object_stack)
+    elif option.lower().strip() == "multiple" and attribute_has_default(object_stack):
+        del object_stack[-1]["attributes"][-1]["default"]
 
     object_stack[-1]["attributes"][-1][option.strip().lower()] = value
+
+
+def attribute_has_default(object_stack: List[Dict]) -> bool:
+    """Checks whether the current attribute has a default value or not"""
+    return "default" in object_stack[-1]["attributes"][-1]
 
 
 def process_type_option(dtypes: str, object_stack: List) -> List[str]:
