@@ -91,6 +91,9 @@ class DataModel(pydantic.BaseModel):
             path = f"/{path}"
 
         model = Nob(self.to_dict(warn=False, convert_h5ds=False))
+
+        assert model.find(path), f"Path '{path}' does not exist in the model."
+
         path = model.find(path)
 
         if attribute is None and target is None:
