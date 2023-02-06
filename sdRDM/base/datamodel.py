@@ -487,7 +487,7 @@ class DataModel(pydantic.BaseModel):
         return True
 
     @classmethod
-    def from_markdown(cls, path: str):
+    def from_markdown(cls, path: str) -> ImportedModules:
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -518,7 +518,7 @@ class DataModel(pydantic.BaseModel):
         commit: Optional[str] = None,
         tag: Optional[str] = None,
         only_classes: bool = False,
-    ):
+    ) -> ImportedModules:
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -545,7 +545,7 @@ class DataModel(pydantic.BaseModel):
         return cls._extract_modules(lib, links)
 
     @classmethod
-    def _extract_modules(cls, lib, links):
+    def _extract_modules(cls, lib, links) -> ImportedModules:
         """Extracts root nodes and specified modules from a generated API"""
 
         # Get all classes present
