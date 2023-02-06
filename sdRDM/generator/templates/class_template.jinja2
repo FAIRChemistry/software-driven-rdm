@@ -11,6 +11,7 @@ class {{name}}({% if inherit is not none %}
             default_factory=IDGenerator("{{name.lower()}}INDEX"),
             xml="@id"
     )
+    
     {% for attribute in attributes -%}
     {{ attribute }}
     {% endfor -%}
