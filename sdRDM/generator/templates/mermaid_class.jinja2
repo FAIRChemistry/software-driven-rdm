@@ -11,7 +11,7 @@ classDiagram
     class {{class.name}} {
     
         {%- for attr in class.attributes %}
-        +{{attr.type}}{% if "multiple" in attr %}[0..*]{% endif %} {{attr.name}}{{attr.required}}
+        +{{", ".join(attr.type)}}{% if "multiple" in attr %}[0..*]{% endif %} {{attr.name}}{% if attr.required %}*{% endif %}
         {%- endfor %}
     }
     {% endfor %}
