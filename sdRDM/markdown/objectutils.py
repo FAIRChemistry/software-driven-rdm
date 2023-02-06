@@ -6,7 +6,7 @@ from typing import List, Dict
 from sdRDM.markdown.tokens import MarkdownTokens
 
 OPTION_PATTERN = r"\s*([A-Za-z0-9\_]*)\s*\:\s*(.*)"
-LINKED_TYPE_PATTERN = r"\[([A-Za-z0-9\_]*)\]\(\#[A-Za-z0-9\_]*\)"
+LINKED_TYPE_PATTERN = r"\[([A-Za-z0-9\_]*)\]\(\#[A-Za-z0-9\_\-]*\)"
 REFERENCE_TYPE_PATTERN = r"\@([A-Za-z0-9\_]*).([A-Za-z0-9\_]*)"
 
 TAG_MAPPING = {
@@ -144,6 +144,7 @@ def process_option(element: Token, object_stack: List) -> None:
         value = process_type_option(value, object_stack)
     elif option.lower().strip() == "multiple" and attribute_has_default(object_stack):
         del object_stack[-1]["attributes"][-1]["default"]
+        object_stack[-1]["attributes"][-1]["default_factory"] = "ListPlus()"
 
     object_stack[-1]["attributes"][-1][option.strip().lower()] = value
 
