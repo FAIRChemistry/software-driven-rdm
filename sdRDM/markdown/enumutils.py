@@ -27,18 +27,19 @@ def parse_markdown_enumerations(enumerations: List[Token]) -> List[Dict]:
             enum_stack[-1]["docstring"] += element.content
 
         elif element.level == 0 and element.content.strip():
-            mapping = element.content.strip()
+            mappings = element.content.strip().split("\n")
 
-            assert bool(
-                re.match(MAPPING_PATTERN, mapping)
-            ), f"Mapping '{mapping}' does not follow the synatx rules."
+            for mapping in mappings:
+                match = re.match(MAPPING_PATTERN, mapping)
 
-            match = re.match(MAPPING_PATTERN, mapping)
+                assert bool(
+                    re.match(MAPPING_PATTERN, mapping)
+                ), f"Mapping '{mapping}' does not follow the synatx rules."
 
-            assert match is not None, f"No groups found for mapping '{mapping}'"
+                assert match is not None, f"No groups found for mapping '{mapping}'"
 
-            key, value = match.group(1, 2)
+                key, value = match.group(1, 2)
 
-            enum_stack[-1]["mappings"].append({"key": key, "value": value})
+                enum_stack[-1]["mappings"].append({"key": key, "value": value})
 
     return enum_stack

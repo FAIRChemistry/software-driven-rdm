@@ -282,8 +282,10 @@ def convert_type(attribute: Dict) -> Dict:
 
     type = attribute["type"]
 
-    if attribute["required"] is False and "multiple" in attribute:
+    if attribute["required"] is False and "multiple" not in attribute:
         attribute["default"] = None
+    elif "multiple" in attribute:
+        attribute["default"] = "ListPlus()"
 
     union_type = [
         DataTypes[subtype].value[0] if subtype in DataTypes.__members__ else subtype
@@ -395,7 +397,12 @@ def process_subtypes(nested_type: str, objects: List[Dict]) -> List[str]:
     if nested_type in DataTypes.__members__:
         return []
 
-    attributes = get_object(nested_type, objects)["attributes"]
+    object = get_object(nested_type, objects)
+
+    if object["type"] == "enum":
+        return []
+
+    attributes = object["attributes"]
     subtypes = gather_all_types(attributes, objects)
 
     for subtype in subtypes:
