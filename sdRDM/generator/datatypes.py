@@ -137,26 +137,26 @@ class DataTypes(Enum):
     pastdate = ("PastDate", ["from pydantic.types import PastDate"])
     FutureDate = ("FutureDate", ["from pydantic.types import FutureDate"])
     futuredate = ("FutureDate", ["from pydantic.types import FutureDate"])
-    NDArray = (
-        "Union[NDArray, H5Dataset]",
+    ArrayLike = (
+        "Union[ArrayLike, H5Dataset]",
         [
-            "from numpy.typing import NDArray",
+            "from numpy.typing import ArrayLike",
             "from h5py._hl.dataset import Dataset as H5Dataset",
             "from typing import Union",
         ],
     )
     ndarray = (
-        "Union[NDArray, H5Dataset]",
+        "Union[ArrayLike, H5Dataset]",
         [
-            "from numpy.typing import NDArray",
+            "from numpy.typing import ArrayLike",
             "from h5py._hl.dataset import Dataset as H5Dataset",
             "from typing import Union",
         ],
     )
     ndArray = (
-        "Union[NDArray, H5Dataset]",
+        "Union[ArrayLike, H5Dataset]",
         [
-            "from numpy.typing import NDArray",
+            "from numpy.typing import ArrayLike",
             "from h5py._hl.dataset import Dataset as H5Dataset",
             "from typing import Union",
         ],

@@ -3,7 +3,7 @@ import numpy as np
 
 from anytree import findall
 from datetime import date, datetime
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike
 from typing import Union
 
 from h5py._hl.dataset import Dataset as H5Dataset
