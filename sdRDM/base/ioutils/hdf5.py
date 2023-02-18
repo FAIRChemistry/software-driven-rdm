@@ -104,7 +104,7 @@ def _write_attr(name, value, h5obj: Union[H5File, H5Group]):
     h5obj.attrs[name] = value
 
 
-def _write_array(name, data: Union[NDArray, H5Dataset], group):
+def _write_array(name, data: Union[ArrayLike, H5Dataset], group):
     """Writes an ndarray to an HDF5 file"""
 
     dataset = group.create_dataset(name=name, shape=data.shape)
