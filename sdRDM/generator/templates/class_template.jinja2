@@ -16,6 +16,6 @@ class {{name}}({% if inherit is not none %}
     {{ attribute }}
     {% endfor -%}
     
-    {% if repo is not none %}__repo__: Optional[str] = PrivateAttr(default="{{url}}"){% endif %}
+    {% if repo is not none %}__repo__: Optional[str] = PrivateAttr(default="{{repo}}"){% endif %}
     {% if commit is not none %}__commit__: Optional[str] = PrivateAttr(default="{{commit}}"){% endif %}
     

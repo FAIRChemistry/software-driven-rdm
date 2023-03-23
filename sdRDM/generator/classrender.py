@@ -10,7 +10,12 @@ from .utils import camel_to_snake, clean_imports
 
 
 def render_object(
-    object: Dict, objects: List[Dict], enums: List[Dict], inherits: List[Dict]
+    object: Dict,
+    objects: List[Dict],
+    enums: List[Dict],
+    inherits: List[Dict],
+    repo: Optional[str] = None,
+    commit: Optional[str] = None,
 ) -> str:
 
     """Renders a class of type object coming from a parsed Markdown model"""
@@ -18,7 +23,9 @@ def render_object(
     all_objects = objects + enums
 
     # Get the class body
-    class_part = render_class(object=object, inherits=inherits, objects=all_objects)
+    class_part = render_class(
+        object=object, inherits=inherits, objects=all_objects, repo=repo, commit=commit
+    )
     methods_part = render_add_methods(object=object, objects=all_objects)
     validator_part = render_reference_validator(object=object, objects=all_objects)
     class_body = "\n".join([class_part, methods_part, validator_part])

@@ -45,7 +45,15 @@ def generate_python_api(
     libpath = create_directory_structure(dirpath, libname)
 
     # Write classes to the directory
-    write_classes(libpath, parser.objects, parser.enums, parser.inherits, use_formatter)
+    write_classes(
+        libpath,
+        parser.objects,
+        parser.enums,
+        parser.inherits,
+        use_formatter,
+        url,
+        commit,
+    )
 
     # Write init files
     core_init = render_core_init_file(parser.objects, parser.enums)
@@ -64,11 +72,13 @@ def write_classes(
     enums: List[Dict],
     inherits: List[Dict],
     use_formatter: bool,
+    repo: Optional[str] = None,
+    commit: Optional[str] = None,
 ) -> None:
     """Renders classes that were parsed from a markdown model and creates a library."""
 
     for object in objects:
-        rendered = render_object(object, objects, enums, inherits)
+        rendered = render_object(object, objects, enums, inherits, repo, commit)
         path = os.path.join(libpath, "core", f"{object['name'].lower()}.py")
         save_rendered_to_file(rendered, path, use_formatter)
 
