@@ -67,20 +67,15 @@ class DataModel(pydantic.BaseModel):
 
         if attribute is None and target is None:
             return self._traverse_model_by_path(self, path[0])
+        object = self._traverse_model_by_path(self, path[0])
+
+        if isinstance(object, ListPlus):
+            result = object.get(query=target, attr=attribute)  # type: ignore
+
+            return result[0] if len(result) == 1 else result
         else:
-            object = self._traverse_model_by_path(self, path[0])
-
-            if isinstance(object, ListPlus):
-                result = object.get(query=target, attr=attribute)  # type: ignore
-
-                if len(result) == 1:
-                    return result[0]
-                else:
-                    return result
-
-            else:
-                if hasattr(object, attribute) and getattr(object, attribute) == target:
-                    return object
+            if hasattr(object, attribute) and getattr(object, attribute) == target:
+                return object
 
     def _traverse_model_by_path(self, object, path):
         """Traverses a give sdRDM model by using a path"""
@@ -101,10 +96,7 @@ class DataModel(pydantic.BaseModel):
         # Get JSON representation
         model = Nob(self.to_dict(warn=False))
 
-        if leaves:
-            return model.leaves
-        else:
-            return model.paths
+        return model.leaves if leaves else model.paths
 
     @classmethod
     def meta_paths(cls, leaves: bool = False):
@@ -115,15 +107,10 @@ class DataModel(pydantic.BaseModel):
             if len(node.path) == 1:
                 continue
 
-            if leaves and node.is_leaf:
+            if leaves and node.is_leaf or not leaves:
                 metapaths.add(
                     "/".join([n.name for n in node.path if n.name[0].islower()])
                 )
-            elif not leaves:
-                metapaths.add(
-                    "/".join([n.name for n in node.path if n.name[0].islower()])
-                )
-
         return sorted(metapaths, key=lambda path: len(path.split("/")))
 
     # ! Exporters
@@ -162,13 +149,11 @@ class DataModel(pydantic.BaseModel):
         for key, value in data.items():
 
             if isinstance(value, ListPlus):
-                if not value and exclude_none:
-                    continue
-
-                nu_data[key] = [
-                    self._check_and_convert_sub(element, exclude_none, convert_h5ds)
-                    for element in value
-                ]
+                if value or not exclude_none:
+                    nu_data[key] = [
+                        self._check_and_convert_sub(element, exclude_none, convert_h5ds)
+                        for element in value
+                    ]
 
             elif isinstance(value, (dict)):
                 if not value and exclude_none:
@@ -208,10 +193,7 @@ class DataModel(pydantic.BaseModel):
     def _json_dump(value):
         """Helper function to export nd-arrays in a proper way"""
 
-        if isinstance(value, np.ndarray):
-            return value.tolist()
-
-        return str(value)
+        return value.tolist() if isinstance(value, np.ndarray) else str(value)
 
     def yaml(self):
         return yaml.dump(
@@ -364,11 +346,11 @@ class DataModel(pydantic.BaseModel):
             dataset = data
         elif data and path:
             raise ValueError(
-                f"Data and path have been specified. Please use only one of the arguments to parse live data ('data') or file data ('path')"
+                "Data and path have been specified. Please use only one of the arguments to parse live data ('data') or file data ('path')"
             )
         else:
             raise ValueError(
-                f"Neither path nor data have been specified. Either of both should be specified."
+                "Neither path nor data have been specified. Either of both should be specified."
             )
 
         # Check if there is a source reference
@@ -388,7 +370,7 @@ class DataModel(pydantic.BaseModel):
             url = dataset.get("__source__")["repo"]
 
             if url is None:
-                raise ValueError(f"No repository given in __source__")
+                raise ValueError("No repository given in __source__")
             elif not validators.url(url):
                 raise ValueError(f"Given URL '{url}' is not a valid URL.")
 
@@ -445,7 +427,7 @@ class DataModel(pydantic.BaseModel):
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             # Generate API to parse the file
-            lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
+            lib_name = f"sdRDM-Library-{random.randint(0, 30)}"
             api_loc = os.path.join(tmpdirname, lib_name)
             generate_python_api(
                 path=path, out=tmpdirname, name=lib_name, use_formatter=False
@@ -480,10 +462,7 @@ class DataModel(pydantic.BaseModel):
             url=url, commit=commit, tag=tag, only_classes=only_classes
         )
 
-        if only_classes:
-            return lib
-
-        return cls._extract_modules(lib, links)
+        return lib if only_classes else cls._extract_modules(lib, links)
 
     @classmethod
     def _extract_modules(cls, lib, links):
@@ -571,7 +550,4 @@ class DataModel(pydantic.BaseModel):
     @staticmethod
     def _convert_numpy_type(value):
         """Helper function to convert numpy strings into builtin"""
-        if isinstance(value, np.str_):
-            return str(value)
-
-        return value
+        return str(value) if isinstance(value, np.str_) else value

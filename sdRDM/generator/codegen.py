@@ -39,9 +39,8 @@ def generate_python_api(
     schema_path = os.path.join(lib_path, "schemes")
 
     # Correct "git://" url
-    if url != None:
-        if url.startswith("git://"):
-            url = url.replace("git://", "https://")
+    if url != None and url.startswith("git://"):
+        url = url.replace("git://", "https://")
 
     os.makedirs(core_path, exist_ok=True)
 
@@ -237,10 +236,7 @@ def _create_dependency_tree(mermaid: str):
     for parent, child in relations:
         cls_nodes[child].parent = cls_nodes[parent]
 
-    # Get all root nodes
-    roots = list(filter(lambda node: node.is_root, cls_nodes.values()))
-
-    return roots
+    return list(filter(lambda node: node.is_root, cls_nodes.values()))
 
 
 def get_keys(dictionary):
@@ -330,7 +326,7 @@ def _write_classes(cls_obj, classes: dict, dirpath: str, url, commit, use_format
 def _render_class(cls_obj, dirpath, classes, url, commit, use_formatter):
     """Renders imports, attributes and methods of a class"""
 
-    path = os.path.join(dirpath, cls_obj.fname + ".py")
+    path = os.path.join(dirpath, f"{cls_obj.fname}.py")
     if isinstance(cls_obj, MermaidClass):
         rendered_class = _render_data_class(cls_obj, classes, url, commit)
     elif isinstance(cls_obj, MermaidEnum):
@@ -376,20 +372,17 @@ def _set_optional_classes_as_default_factories(cls_obj, classes):
     for name, attribute in cls_obj.attributes.items():
         dtype = re.sub(r"\[|\]|Union|Optional", "", attribute["dtype"])
 
-        if dtype not in classes:
+        if dtype not in classes or isinstance(
+            classes[dtype], (MermaidEnum, MermaidExternal)
+        ):
             continue
-        elif isinstance(classes[dtype], MermaidEnum):
-            continue
-        elif isinstance(classes[dtype], MermaidExternal):
-            continue
-
         # Check if the datatype has only optional values
         is_optional = all(
             bool(re.match(r"List|Optional", attr["dtype"]))
             for attr in classes[dtype].attributes.values()
         )
 
-        if is_optional is True and cls_obj.attributes[name].get("default") is None:
+        if is_optional and cls_obj.attributes[name].get("default") is None:
             cls_obj.attributes[name]["default_factory"] = dtype
             del cls_obj.attributes[name]["default"]
         else:
