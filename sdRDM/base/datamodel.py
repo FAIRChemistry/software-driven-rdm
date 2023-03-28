@@ -386,6 +386,15 @@ class DataModel(pydantic.BaseModel):
         else:
             # Get source and build libary
             url = dataset.get("__source__")["repo"]
+
+            if url is None:
+                raise ValueError(f"No repository given in __source__")
+            elif not validators.url(url):
+                raise ValueError(f"Given URL '{url}' is not a valid URL.")
+
+            # Replace git action artifact
+            url = url.replace("git://", "https://", 1)
+
             commit = dataset.get("__source__")["commit"]
             root = dataset.get("__source__")["root"]
             lib = cls.from_git(url=url, commit=commit)
@@ -465,9 +474,6 @@ class DataModel(pydantic.BaseModel):
             commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
             tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         """
-
-        if not validators.url(url):
-            raise ValueError(f"Given URL '{url}' is not a valid URL.")
 
         # Build and import the library
         lib, links = build_library_from_git_specs(
