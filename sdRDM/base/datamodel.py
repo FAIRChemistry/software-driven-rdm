@@ -386,9 +386,20 @@ class DataModel(pydantic.BaseModel):
         else:
             # Get source and build libary
             url = dataset.get("__source__")["repo"]
+
+            # correct "git://" url
+            if url.startswith("git://"):
+                url = url.replace("git://", "https://")
+
+            if not validators.url(url):
+                raise ValueError(f"Given URL '{url}' is not a valid URL.")
+
+
             commit = dataset.get("__source__")["commit"]
             root = dataset.get("__source__")["root"]
             lib = cls.from_git(url=url, commit=commit)
+
+            print(url)
 
             # Use the internal librar to parse the file
             return getattr(lib, root).from_dict(dataset), lib  # type: ignore
@@ -466,8 +477,6 @@ class DataModel(pydantic.BaseModel):
             tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         """
 
-        if not validators.url(url):
-            raise ValueError(f"Given URL '{url}' is not a valid URL.")
 
         # Build and import the library
         lib, links = build_library_from_git_specs(

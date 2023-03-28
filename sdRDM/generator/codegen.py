@@ -38,6 +38,11 @@ def generate_python_api(
     core_path = os.path.join(lib_path, "core")
     schema_path = os.path.join(lib_path, "schemes")
 
+    # Correct "git://" url
+    if url != None:
+        if url.startswith("git://"):
+            url = url.replace("git://", "https://")
+
     os.makedirs(core_path, exist_ok=True)
 
     # Add __init__ for module compliance
