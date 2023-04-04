@@ -389,11 +389,15 @@ class DataModel(pydantic.BaseModel):
 
             if url is None:
                 raise ValueError(f"No repository given in __source__")
+            
+            # Replace git action artifact
+            elif url.startswith("git://"):
+                url = url.replace("git://", "https://", 1)
+                
             elif not validators.url(url):
                 raise ValueError(f"Given URL '{url}' is not a valid URL.")
 
-            # Replace git action artifact
-            url = url.replace("git://", "https://", 1)
+    
 
             commit = dataset.get("__source__")["commit"]
             root = dataset.get("__source__")["root"]
