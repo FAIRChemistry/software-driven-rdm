@@ -33,6 +33,10 @@ def generate(
     if not all([url, commit]):
         url, commit = None, None
 
+    if url and url.startswith("git://"):
+        # Convert into valid URL
+        url = url.replace("git://", "https://", 1)
+
     generate_python_api(path=path, dirpath=out, libname=name, commit=commit, url=url)
 
 
@@ -44,7 +48,7 @@ def link():
 @app.command()
 def schema(
     path: str = typer.Option(..., help="Path to the schema definition"),
-    out: str = typer.Option("." , help="Directory where the file will be written to."),
+    out: str = typer.Option(".", help="Directory where the file will be written to."),
     name: str = typer.Option(..., help="Name of the schema"),
 ):
     """Generate a Mermaid schema from a given Format.
