@@ -17,7 +17,6 @@ def render_object(
     repo: Optional[str] = None,
     commit: Optional[str] = None,
 ) -> str:
-
     """Renders a class of type object coming from a parsed Markdown model"""
 
     all_objects = objects + enums
@@ -180,15 +179,31 @@ def render_add_methods(object: Dict, objects: List[Dict]) -> str:
     add_methods = []
 
     for attribute in object["attributes"]:
-        for type in attribute["type"]:
-            if is_enum_type(type, objects):
-                continue
-            elif type in DataTypes.__members__ or not "multiple" in attribute:
-                continue
+        complex_types = get_complex_types(attribute, objects)
+        is_single_type = len(complex_types) == 1
 
-            add_methods.append(render_single_add_method(attribute, type, objects))
+        for type in complex_types:
+            add_methods.append(
+                render_single_add_method(attribute, type, objects, is_single_type)
+            )
 
     return "\n\n".join(add_methods)
+
+
+def get_complex_types(attribute: Dict, objects: List[Dict]) -> List[str]:
+    """Checks whether an attributes types contain multiple complex types"""
+
+    complex_types = []
+
+    for type in attribute["type"]:
+        if is_enum_type(type, objects):
+            continue
+        elif type in DataTypes.__members__ or not "multiple" in attribute:
+            continue
+
+        complex_types.append(type)
+
+    return complex_types
 
 
 def render_reference_validator(object: Dict, objects: List[Dict]) -> str:
@@ -234,7 +249,9 @@ def is_enum_type(name: str, objects: List[Dict]) -> bool:
     return obj["type"] == "enum"
 
 
-def render_single_add_method(attribute: Dict, type: str, objects: List[Dict]) -> str:
+def render_single_add_method(
+    attribute: Dict, type: str, objects: List[Dict], is_single_type: bool
+) -> str:
     """Renders an add method for an attribute that occurs multiple times"""
 
     attribute = deepcopy(attribute)
@@ -244,11 +261,19 @@ def render_single_add_method(attribute: Dict, type: str, objects: List[Dict]) ->
         pkg_resources.read_text(jinja_templates, "add_method_template.jinja2")
     )
 
+    # Generate the name of the method
+    attr_name = camel_to_snake(attribute["name"])
+    type_name = camel_to_snake(type)
+
+    if attr_name == type_name or is_single_type:
+        destination = f"to_{attr_name}"
+    else:
+        destination = f"{type_name}_to_{attr_name}"
+
     return template.render(
-        snake_case=camel_to_snake(attribute["name"]),
         attribute=attribute["name"],
+        destination=destination,
         cls=type,
-        type=camel_to_snake(type),
         signature=assemble_signature(type, objects),
         summary=f"This method adds an object of type '{type}' to attribute {attribute['name']}",
     )
