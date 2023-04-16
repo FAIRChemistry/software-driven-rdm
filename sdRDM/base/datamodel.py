@@ -168,16 +168,16 @@ class DataModel(pydantic.BaseModel):
 
         metapaths = set()
         for node in LevelOrderIter(cls.create_tree()[0]):
-            if len(node.path) == 1:
+            if len(node.node_path) == 1:
                 continue
 
             if leaves and node.is_leaf:
                 metapaths.add(
-                    "/".join([n.name for n in node.path if n.name[0].islower()])
+                    "/".join([n.name for n in node.node_path if n.name[0].islower()])
                 )
             elif not leaves:
                 metapaths.add(
-                    "/".join([n.name for n in node.path if n.name[0].islower()])
+                    "/".join([n.name for n in node.node_path if n.name[0].islower()])
                 )
 
         return sorted(metapaths, key=lambda path: len(path.split("/")))

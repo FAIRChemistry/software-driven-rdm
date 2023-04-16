@@ -35,6 +35,7 @@ setup(
         "markdown-it-py==2.1.0",
         "autoflake==2.0.0",
         "graphql-core==3.2.3",
+        "bigtree",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
