@@ -36,6 +36,7 @@ setup(
         "autoflake==2.0.0",
         "graphql-core==3.2.3",
         "bigtree",
+        "email-validator",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
