@@ -54,7 +54,7 @@ def build_library_from_git_specs(
     # Import generator to prevent circular import
     from sdRDM.generator.codegen import generate_python_api
 
-    with tempfile.TemporaryDirectory() as tmpdirname:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdirname:
 
         # Fetch from github
         repo = git.Repo.clone_from(url, tmpdirname)
