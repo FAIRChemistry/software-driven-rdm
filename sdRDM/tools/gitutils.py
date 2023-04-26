@@ -34,6 +34,7 @@ class ObjectNode:
 @lru_cache(maxsize=CACHE_SIZE)
 def build_library_from_git_specs(
     url: str,
+    tmpdirname: str,
     commit: Optional[str] = None,
     tag: Optional[str] = None,
     only_classes: bool = False,
@@ -46,6 +47,7 @@ def build_library_from_git_specs(
 
     Args:
         url (str): Link to the git repository. Use the URL ending with ".git".
+        tmpdirname (str): Path to the temporary directory the specs are cloned to.
         commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
         tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         only_classes (bool): Returns the raw strings rather than the initialized files
@@ -53,54 +55,55 @@ def build_library_from_git_specs(
 
     # Import generator to prevent circular import
     from sdRDM.generator.codegen import generate_python_api
+    
+    tmpdirname = tempfile.mkdtemp()
 
-    with tempfile.TemporaryDirectory() as tmpdirname:
+    # Fetch from github
+    repo = git.Repo.clone_from(url, tmpdirname)
 
-        # Fetch from github
-        repo = git.Repo.clone_from(url, tmpdirname)
+    # Checkout branches, tags or commit
+    if commit:
+        repo.git.checkout(commit)
+    elif tag:
+        repo.git.checkout(tag)
 
-        # Checkout branches, tags or commit
-        if commit:
-            repo.git.checkout(commit)
-        elif tag:
-            repo.git.checkout(tag)
+    # Write specification
+    schema_loc = os.path.join(tmpdirname, "specifications")
 
-        # Write specification
-        schema_loc = os.path.join(tmpdirname, "specifications")
+    # Get possible linking templates
+    links = {}
+    for path in glob.glob(os.path.join(tmpdirname, "links", "*")):
 
-        # Get possible linking templates
-        links = {}
-        for path in glob.glob(os.path.join(tmpdirname, "links", "*")):
+        if path.endswith("toml"):
+            linking_template = toml.load(open(path))
+        elif path.endswith("yaml") or path.endswith("yml"):
+            linking_template = yaml.safe_load(open(path))
+        else:
+            continue
 
-            if path.endswith("toml"):
-                linking_template = toml.load(open(path))
-            elif path.endswith("yaml") or path.endswith("yml"):
-                linking_template = yaml.safe_load(open(path))
-            else:
-                continue
+        # Add to templates
+        name = os.path.basename(path).split(".")[0]
+        links[name] = linking_template
 
-            # Add to templates
-            name = os.path.basename(path).split(".")[0]
-            links[name] = linking_template
+    # Generate API to parse the file
+    lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
+    api_loc = os.path.join(tmpdirname, lib_name)
 
-        # Generate API to parse the file
-        lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
-        api_loc = os.path.join(tmpdirname, lib_name)
-        cls_defs = generate_python_api(
-            path=schema_loc,
-            dirpath=tmpdirname,
-            libname=lib_name,
-            url=url,
-            commit=str(repo.commit()),
-            only_classes=only_classes,
-            use_formatter=False,
-        )
+    cls_defs = generate_python_api(
+        path=schema_loc,
+        dirpath=tmpdirname,
+        libname=lib_name,
+        url=url,
+        commit=str(repo.commit()),
+        only_classes=only_classes,
+        use_formatter=False,
+    )
+    
+    if only_classes:
+        return cls_defs
 
-        if only_classes:
-            return cls_defs
-
-        return _import_library(api_loc=api_loc, lib_name=lib_name), links
-
+    return _import_library(api_loc=api_loc, lib_name=lib_name), links
+    
 
 @lru_cache(maxsize=CACHE_SIZE)
 def _import_library(api_loc: str, lib_name: str):

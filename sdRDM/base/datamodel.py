@@ -1,6 +1,7 @@
 import inspect
 import json
 import os
+import shutil
 import h5py
 import pydantic
 import random
@@ -535,9 +536,19 @@ class DataModel(pydantic.BaseModel):
             raise ValueError(f"Given URL '{url}' is not a valid URL.")
 
         # Build and import the library
-        lib, links = build_library_from_git_specs(
-            url=url, commit=commit, tag=tag, only_classes=only_classes
-        )
+        tmpdirname = tempfile.mkdtemp()
+        
+        try:
+            lib, links = build_library_from_git_specs(
+                url=url, tmpdirname=tmpdirname, commit=commit, tag=tag, only_classes=only_classes
+            )
+        except Exception as e:
+            # At any exception catch it and remove the tempdir
+            shutil.rmtree(tmpdirname, ignore_errors=True)
+            raise e
+        finally:
+            # At success, also remove it
+            shutil.rmtree(tmpdirname, ignore_errors=True)
 
         if only_classes:
             return lib
