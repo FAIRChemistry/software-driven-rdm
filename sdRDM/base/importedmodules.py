@@ -10,10 +10,15 @@ class ImportedModules(DottedDict):
     def __init__(
         self,
         classes,
-        enums,
+        enums: Optional[Dict] = None,
         links: Optional[Dict] = None,
         include_links: bool = True,
     ):
+        super().__init__()
+
+        if enums is None:
+            enums = {}
+
         for name, node in classes.items():
             if hasattr(node, "cls"):
                 # Add all classes
@@ -44,13 +49,11 @@ class ImportedModules(DottedDict):
             setattr(obj, f"to_{name.replace(' ', '_')}", converter)
 
     def __repr__(self) -> str:
-
         GROUPS = ["Objects", "enums", "links"]
         MAXINDENT = len("Objects ")
         out_string = []
 
         for group in GROUPS:
-
             if group not in self.__dict__ and group != "Objects":
                 continue
 

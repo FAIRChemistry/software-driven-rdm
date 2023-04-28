@@ -15,7 +15,7 @@ from sqlalchemy import (
     BigInteger,
     ForeignKey,
 )
-from sdRDM.base.importemodules import ImportedModules
+from sdRDM.base.importedmodules import ImportedModules
 
 SQL_DATATYPES = {
     str: String,
@@ -61,7 +61,6 @@ def generate_model(
 
     fields = {}
     for field, content in data.items():
-
         field_params = {}
         if (
             isinstance(content, list)
@@ -135,7 +134,6 @@ def _construct_signature(cls):
     parameters = []
 
     for name, parameter in cls.__signature__.parameters.items():
-
         if f"{name}_" in cls.__fields__:
             name = f"{name}_"
 
@@ -182,7 +180,6 @@ def object_to_orm(obj, base, foreign_key=None, backref=None, tablename=None):
         is_list = get_origin(outer_dtype) == list
 
         if hasattr(inner_dtype, "__fields__"):
-
             if is_list:
                 # If its a list it is considered a one to many relationship
                 # and thus the FK is put on the sub objects table

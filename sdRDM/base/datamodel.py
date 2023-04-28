@@ -23,7 +23,7 @@ from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
 from typing import List, Dict, Optional, IO, Union, get_args
 
-from sdRDM.base.importemodules import ImportedModules
+from sdRDM.base.importedmodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.referencecheck import (
     object_is_compliant_to_references,
@@ -222,7 +222,6 @@ class DataModel(pydantic.BaseModel):
         nu_data = {}
 
         for key, value in data.items():
-
             if isinstance(value, ListPlus):
                 if not value and exclude_none:
                     continue
@@ -537,10 +536,14 @@ class DataModel(pydantic.BaseModel):
 
         # Build and import the library
         tmpdirname = tempfile.mkdtemp()
-        
+
         try:
             lib, links = build_library_from_git_specs(
-                url=url, tmpdirname=tmpdirname, commit=commit, tag=tag, only_classes=only_classes
+                url=url,
+                tmpdirname=tmpdirname,
+                commit=commit,
+                tag=tag,
+                only_classes=only_classes,
             )
         except Exception as e:
             # At any exception catch it and remove the tempdir
@@ -655,7 +658,6 @@ class DataModel(pydantic.BaseModel):
 
     # ! Overloads
     def __setattr__(self, name, value):
-
         if name == "__parent__" or name == "__types__":
             return super().__setattr__(name, value)
 
