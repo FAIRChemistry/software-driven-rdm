@@ -650,7 +650,7 @@ class DataModel(pydantic.BaseModel):
 
     @validator("*", each_item=True)
     def check_list_values(cls, value, config, field):
-        if not isinstance(value, field.type_):
+        if not isinstance(value, field.type_) and not issubclass(field.type_, Enum):
             raise TypeError(
                 f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
             )
