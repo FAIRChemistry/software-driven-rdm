@@ -356,7 +356,7 @@ def render_imports(object: Dict, objects: List[Dict], inherits: List[Dict]) -> s
     objects = deepcopy(objects)
     object = deepcopy(object)
 
-    all_types = gather_all_types(object["attributes"], objects)
+    all_types = gather_all_types(object["attributes"], objects, object["name"])
 
     for inherit in inherits:
         if inherit["child"] != object["name"]:
@@ -398,7 +398,9 @@ def render_imports(object: Dict, objects: List[Dict], inherits: List[Dict]) -> s
     )
 
 
-def gather_all_types(attributes: List[Dict], objects: List[Dict]) -> List[str]:
+def gather_all_types(
+    attributes: List[Dict], objects: List[Dict], obj_name: str = ""
+) -> List[str]:
     """Gets the occuring types in all attributes"""
 
     types = []
@@ -407,6 +409,9 @@ def gather_all_types(attributes: List[Dict], objects: List[Dict]) -> List[str]:
         types += attribute["type"]
 
         for nested_type in attribute["type"]:
+            if nested_type == obj_name:
+                continue
+
             types += process_subtypes(nested_type, objects)
 
     return types
@@ -435,7 +440,7 @@ def process_subtypes(nested_type: str, objects: List[Dict]) -> List[str]:
         return []
 
     attributes = object["attributes"]
-    subtypes = gather_all_types(attributes, objects)
+    subtypes = gather_all_types(attributes, objects, object["name"])
 
     for subtype in subtypes:
         types.append(subtype)
