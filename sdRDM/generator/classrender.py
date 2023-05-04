@@ -127,7 +127,10 @@ def get_reference_type(reference: str, objects: List[Dict]) -> List[str]:
         filter(lambda attr: attr["name"] == attribute, object["attributes"])
     )
 
-    return attribute["type"]
+    return [
+        DataTypes[subtype].value[0] if subtype in DataTypes.__members__ else subtype
+        for subtype in attribute["type"]
+    ]
 
 
 def stringize_option_values(attribute: Dict):
