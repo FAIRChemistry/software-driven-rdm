@@ -31,7 +31,6 @@ def render_object(
 
     # Clean and render imports
     imports = render_imports(object=object, objects=all_objects, inherits=inherits)
-    # imports = clean_imports(imports, class_body)
 
     return f"{imports}\n\n{class_body}"
 
@@ -124,7 +123,11 @@ def get_reference_type(reference: str, objects: List[Dict]) -> List[str]:
         attribute == attr["name"] for attr in object["attributes"]
     ), f"Attribute '{attribute}' cannot be found in model for referencing."
 
-    return next(filter(lambda attr: attr["name"] == attribute, object["attributes"]))
+    attribute = next(
+        filter(lambda attr: attr["name"] == attribute, object["attributes"])
+    )
+
+    return attribute["type"]
 
 
 def stringize_option_values(attribute: Dict):
