@@ -742,3 +742,6 @@ class DataModel(pydantic.BaseModel):
             return all(hasattr(subval, "__fields__") for subval in value)
 
         return hasattr(value, "__fields__")
+
+    def __repr__(self):
+        return self.yaml()
