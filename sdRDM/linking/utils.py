@@ -29,26 +29,32 @@ def build_guide_tree(obj, parent=None, outer=None, constants={}):
         Node: Tree representation of the data model.
     """
 
-    obj_tree = ClassNode(
-        obj.__name__,
-        parent=parent,
-        module=obj.__module__,
-        class_name=obj.__name__,
-        outer_type=outer,
-        constants=constants,
-    )
+    if parent is None:
+        parent = ClassNode(
+            obj.__name__,
+            parent=parent,
+            module=obj.__module__,
+            class_name=obj.__name__,
+            outer_type=outer,
+            constants=constants,
+        )
+
+    if outer == list:
+        parent = AttributeNode(name="0", parent=parent)
 
     for name, field in obj.__fields__.items():
         inner_type = field.type_
         outer_type = field.outer_type_
 
         if outer_type and _is_iterable(outer_type):
-            value = DEFAULT_MAPPINGS[outer_type.__origin___]()
+            value = get_origin(outer_type)()
+            outer_type = get_origin(outer_type)
         else:
             value = None
+            outer_type = None
 
         current_parent = AttributeNode(
-            name, parent=obj_tree, outer_type=outer_type, value=value
+            name, parent=parent, outer_type=outer_type, value=value
         )
 
         if get_origin(inner_type) is Union:
@@ -59,21 +65,25 @@ def build_guide_tree(obj, parent=None, outer=None, constants={}):
             inner_type = [inner_type]
 
         for dtype in inner_type:
-            if hasattr(dtype, "__fields__") and dtype.__name__ != obj_tree.name:
+            if hasattr(dtype, "__fields__"):
                 build_guide_tree(
                     dtype, current_parent, outer=outer_type, constants=constants
                 )
 
-    return obj_tree
+    return parent
 
 
 def _is_iterable(data_type):
     """Checks whether the given typing.XYZ is of type List or Dict"""
 
-    if not hasattr(data_type, "__origin__"):
+    origin = get_origin(data_type)
+
+    if origin is None:
         return False
-    elif isinstance(data_type.__origin__, (list, dict)):
-        return True
+    elif origin.__name__ == "Union":
+        return False
+
+    return True
 
 
 def generate_template(obj, out: str, simple: bool = True) -> None:
@@ -90,14 +100,16 @@ def generate_template(obj, out: str, simple: bool = True) -> None:
     template[obj.__name__] = {
         n.name: "Enter target"
         for n in obj.create_tree()[0].children
-        if isinstance(n, AttributeNode) and not n.__dict__.get("outer_type")
+        if isinstance(n, AttributeNode) and len(n.children) == 0
     }
 
     for node in LevelOrderIter(obj.create_tree()[0]):
-        path = _get_path(node.path)
+        path = _get_path(node.node_path)
 
-        if isinstance(node, ClassNode) and path:
-            attr_template = {n.name: "Enter target" for n in node.children}
+        if node.children and path:
+            attr_template = {
+                n.name: "Enter target" for n in node.children if len(n.children) == 0
+            }
 
             if simple:
                 template[path] = attr_template
@@ -111,7 +123,6 @@ def generate_template(obj, out: str, simple: bool = True) -> None:
                 ]
 
     with open(out, "w") as f:
-
         if not simple:
             f.write(yaml.dump(template, Dumper=YAMLDumper, sort_keys=False))
             return
