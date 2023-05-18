@@ -1,3 +1,5 @@
+import re
+
 from typing import List, Tuple, Dict, IO
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
@@ -22,7 +24,7 @@ class MarkdownParser:
 
         parser = cls()
 
-        doc = MarkdownIt().parse(handle.read())
+        doc = MarkdownIt().parse(cls.clean_html_tags(handle.readlines()))
         modules, enumerations = parser.get_objects_and_enumerations(doc)
 
         for module, model in modules.items():
@@ -58,7 +60,6 @@ class MarkdownParser:
         objects, enumerations = {}, []
         h2_indices = self.get_h2_indices(doc)
         for index, (module, start) in enumerate(h2_indices[0:-1]):
-
             end = h2_indices[index + 1][-1]
             model_part = doc[start:end]
 
@@ -111,3 +112,12 @@ class MarkdownParser:
         """Finds types across objects and enums"""
 
         return [element["name"] for element in elements if element["name"] in dtypes]
+
+    @staticmethod
+    def clean_html_tags(model: List[str]):
+        """Removes all lines that contain html tags that are used for styling
+        the markdown file"""
+
+        HTML_TAG_PATTERN = re.compile(r"<.*?>")
+
+        return "".join([line for line in model if not HTML_TAG_PATTERN.search(line)])
