@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, Callable, List, Union
 
 
 class ListPlus(List[Any]):
@@ -38,7 +38,6 @@ class ListPlus(List[Any]):
         return self.__parent__ is not None and self.__attribute__ is not None
 
     def __setattr__(self, name: str, value: Any) -> None:
-
         if name == "__parent__" and value is not None:
             self.set_parent_for_object_entries(value)
 
@@ -52,7 +51,7 @@ class ListPlus(List[Any]):
 
             entry.__parent__ = parent
 
-    def get(self, query: str, attr: str = "id"):
+    def get(self, query: Callable, attr: str = "id"):
         """Given an a query, returns all objects that match
 
         Adding an attribute allows to scan classes too, if
@@ -64,10 +63,7 @@ class ListPlus(List[Any]):
 
         if not all([self._is_builtin(obj) for obj in self]):
             # Check for objects
-            search_fun = lambda obj: obj.__dict__[attr] == query
-        elif all([self._is_builtin(obj) for obj in self]):
-            # Check for builtins
-            search_fun = lambda elem: elem == query
+            search_fun = lambda obj: query(obj.__dict__[attr])
         else:
             raise TypeError(
                 f"Mixed types in list, can only search homogeneous (builtin or classes)."

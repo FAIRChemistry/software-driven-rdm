@@ -1,6 +1,7 @@
 import inspect
 import json
 import os
+import re
 import shutil
 import h5py
 import pydantic
@@ -21,7 +22,7 @@ from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
 from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
-from typing import List, Dict, Optional, IO, Union, get_args
+from typing import List, Dict, Optional, IO, Union, get_args, Callable
 
 from sdRDM.base.importedmodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
@@ -80,17 +81,28 @@ class DataModel(pydantic.BaseModel):
 
     # ! Getters
     def get(
-        self, path: str, attribute: Optional[str] = None, target: Optional[str] = None
+        self,
+        path: str,
+        attribute: Optional[str] = None,
+        target: Union[str, float, int, None, "DataModel", Callable] = None,
     ):
-        """Traverses the data model tree by a path or key and returns its content.
-
-        Args:
-            path (str): _description_
-        """
-
         if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
+        if not bool(re.search(r"\/\d*\/", path)):
+            return self._get_by_meta_path(path, attribute, target)
+
+        return self._filter_model(path, attribute, target)
+
+    def _filter_model(
+        self,
+        path: str,
+        attribute: Optional[str] = None,
+        target: Union[str, float, int, None, "DataModel", Callable] = None,
+    ):
+        """Helper function to search for a given path in the model"""
+
+        query = self._setup_query(target)
         model = Nob(self.to_dict(warn=False, convert_h5ds=False))
 
         assert model.find(path), f"Path '{path}' does not exist in the model."
@@ -103,7 +115,7 @@ class DataModel(pydantic.BaseModel):
             object = self._traverse_model_by_path(self, path[0])
 
             if isinstance(object, ListPlus):
-                result = object.get(query=target, attr=attribute)  # type: ignore
+                result = object.get(query=query, attr=attribute)  # type: ignore
 
                 if len(result) == 1:
                     return result[0]
@@ -111,8 +123,53 @@ class DataModel(pydantic.BaseModel):
                     return result
 
             else:
-                if hasattr(object, attribute) and getattr(object, attribute) == target:
+                if hasattr(object, attribute) and query(getattr(object, attribute)):
                     return object
+
+    def _get_by_meta_path(
+        self: "DataModel",
+        path: str,
+        attribute: Optional[str] = None,
+        target: Optional[str] = None,
+    ) -> List["DataModel"]:
+        """Returns all obejcts or values found via the meta path and instance"""
+
+        if not path.startswith("/"):
+            path = "/" + path
+
+        references = []
+        search_kwargs = {"attribute": attribute, "target": target}
+
+        for subpath in self.paths():
+            meta_path = self.process_path_to_meta(str(subpath))
+
+            if meta_path != path:
+                continue
+
+            reference = self._filter_model(str(subpath), **search_kwargs)
+
+            if reference is None:
+                continue
+
+            if not isinstance(reference, list):
+                reference = [reference]
+
+            references += reference
+
+        return list(set(references))
+
+    @staticmethod
+    def _setup_query(
+        target: Union[str, float, int, None, "DataModel", Callable]
+    ) -> Optional[Callable]:
+        """Sets up a query function that can be used to filter values"""
+
+        if not isinstance(target, Callable) and target is not None:
+            return lambda x: x == target
+        elif target is None:
+            return None
+
+        return target
 
     def _traverse_model_by_path(self, object, path):
         """Traverses a give sdRDM model by using a path"""
@@ -126,27 +183,6 @@ class DataModel(pydantic.BaseModel):
             return object
         else:
             return self._traverse_model_by_path(object, path[1::])
-
-    def get_by_meta_path(self: "DataModel", path: str) -> List["DataModel"]:
-        """Returns all obejcts or values found via the meta path and instance"""
-
-        if not path.startswith("/"):
-            path = "/" + path
-
-        references = []
-
-        for subpath in self.paths():
-            meta_path = self.process_path_to_meta(str(subpath))
-
-            if meta_path != path:
-                continue
-
-            reference = self.get(str(subpath))
-
-            if not isinstance(reference, list):
-                references.append(reference)
-
-        return references
 
     @staticmethod
     def process_path_to_meta(path: str) -> str:
@@ -262,8 +298,10 @@ class DataModel(pydantic.BaseModel):
 
         return self._convert_types(element, exclude_none, convert_h5ds)
 
-    def json(self, indent: int = 2):
-        return json.dumps(self.to_dict(), indent=indent, default=self._json_dump)
+    def json(self, indent: int = 2, **kwargs):
+        return json.dumps(
+            self.to_dict(**kwargs), indent=indent, default=self._json_dump
+        )
 
     @staticmethod
     def _json_dump(value):
@@ -274,9 +312,12 @@ class DataModel(pydantic.BaseModel):
 
         return str(value)
 
-    def yaml(self):
+    def yaml(self, **kwargs):
         return yaml.dump(
-            self.to_dict(), Dumper=YAMLDumper, default_flow_style=False, sort_keys=False
+            self.to_dict(**kwargs),
+            Dumper=YAMLDumper,
+            default_flow_style=False,
+            sort_keys=False,
         )
 
     def xml(self, pascal: bool = True):
@@ -743,5 +784,25 @@ class DataModel(pydantic.BaseModel):
 
         return hasattr(value, "__fields__")
 
-    def __repr__(self):
-        return self.yaml()
+    # ! Dunder methods
+    def __hash__(self) -> int:
+        """Hashes the object based on its content"""
+
+        import pandas as pd
+
+        df = pd.json_normalize(self.to_dict(warn=False), sep="_")
+        data = df.to_dict(orient="records")[0]
+        to_hash = [f"{key}={data[key]}" for key in sorted(data.keys())]  # type: ignore
+
+        return hash(tuple(to_hash))
+
+    def __eq__(self, __value: object) -> bool:
+        """Compares two objects based on their content"""
+
+        try:
+            hash(__value)
+        except TypeError:
+            raise TypeError(
+                f"Can't compare '{self.__class__.__name__}' to type '{type(__value)}'"
+            )
+        return hash(self) == hash(__value)
