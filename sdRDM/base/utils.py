@@ -89,10 +89,10 @@ def generate_model(
             )  # type: ignore
         elif isinstance(content, list):
             field_params["default_factory"] = list
-            dtype = List[Any]
+            dtype = List[type(content[0])]
         else:
             field_params["default"] = None
-            dtype = Optional[Any]
+            dtype = Optional[type(content)]
 
         # Perform attribute replacement
         new_name = re.sub(attr_replace, "", field)
