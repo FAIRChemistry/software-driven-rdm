@@ -9,62 +9,62 @@ from sdRDM.base.listplus import ListPlus
 # ! Reader
 def read_xml(xml_string: bytes, object: "DataModel") -> Dict:
     """Parses a given XML file or StringIO to a a dictionary
-    
+
     This function closely operates with the given data model
     and inferes types and general structural information from
     the model.
     """
-    
+
     root = etree.fromstring(xml_string)
     library = gather_object_types(object)
-    
+
     return parse_xml_element_to_model(library, root)
 
+
 def gather_object_types(obj) -> Dict:
-    """Gets all sub types found in a """
-    
+    """Gets all sub types found in a"""
+
     objects = {obj.__name__: obj}
-    
+
     for field in obj.__fields__.values():
         if hasattr(field.type_, "__fields__"):
             subobject = field.type_
-            objects[subobject.__name__] =subobject
-            objects.update({
-                **gather_object_types(subobject),
-                subobject.__name__: subobject
-            })
-            
+            objects[subobject.__name__] = subobject
+            objects.update(
+                {**gather_object_types(subobject), subobject.__name__: subobject}
+            )
+
     return objects
 
-def parse_xml_element_to_model(library: Dict, element: _Element) -> Dict:
 
+def parse_xml_element_to_model(library: Dict, element: _Element) -> Dict:
     cls = library[element.tag]
     attributes, alias_map, objects = prepare_xml_parsing(cls)
-    
+
     for subelement in element:
         # Go through each element and add it to the attributes
         map_xml_element(attributes, subelement, alias_map, library, objects)
-        
+
     for name, value in element.attrib.items():
-        attributes[name] = value        
-            
+        attributes[name] = value
+
     return attributes
+
 
 def prepare_xml_parsing(object: "DataModel") -> Tuple[Dict, Dict, List[str]]:
     """Retrieves attributes and preparse parsing of an XML object"""
-    
+
     attributes = {}
     alias_map = {}
     objects = []
 
     # Prepare for expected attributes
     for name, attr in object.__fields__.items():
-        
         is_multiple = get_origin(attr.outer_type_) == list
         is_object = hasattr(attr.type_, "__fields__")
-        
+
         alias_map[name] = name
-        
+
         if is_object and is_multiple:
             attributes[name] = []
             objects.append(name)
@@ -76,40 +76,42 @@ def prepare_xml_parsing(object: "DataModel") -> Tuple[Dict, Dict, List[str]]:
             attributes[name] = []
         else:
             attributes[name] = None
-    
+
         if "xml" in attr.field_info.extra:
             # Overrides all other things
             alias_map[attr.field_info.extra["xml"].replace("@", "")] = name
-            
+
     return attributes, alias_map, objects
+
 
 def map_xml_element(
     attributes: Dict,
     element: _Element,
     alias_map: Dict,
     library: Dict,
-    objects: List[str]
+    objects: List[str],
 ) -> None:
     """Parses a sub element found in an XML document and maps it accordingly to the data model"""
-    
+
+    if element.tag is etree.Comment:
+        return
+
     attr_name = alias_map[element.tag]
     is_multiple = isinstance(attributes[attr_name], list)
     is_object = attr_name in objects
-    
+
     if is_object and not is_multiple:
-        attributes[attr_name] = parse_xml_element_to_model(
-            library, element
-        )
+        attributes[attr_name] = parse_xml_element_to_model(library, element)
     elif is_object and is_multiple:
         attributes[attr_name] += [
-            parse_xml_element_to_model(library, subelement)
-            for subelement in element
+            parse_xml_element_to_model(library, subelement) for subelement in element
         ]
     elif not is_object and is_multiple:
         attributes[attr_name] += [element.text]
     else:
         attributes[attr_name] = element.text
-    
+
+
 # ! Writer
 def write_xml(obj, pascal: bool = True):
     node = etree.Element(
