@@ -6,7 +6,7 @@ class {{name}}({% if inherit is not none %}
                 
     {% if docstring is not none %}"""{{ docstring }}"""{% endif %}
     
-    id: str = Field(
+    id: Optional[str] = Field(
             description="Unique identifier of the given object.",
             default_factory=IDGenerator("{{name.lower()}}INDEX"),
             xml="@id"
@@ -18,4 +18,3 @@ class {{name}}({% if inherit is not none %}
     
     {% if repo is not none %}__repo__: Optional[str] = PrivateAttr(default="{{repo}}"){% endif %}
     {% if commit is not none %}__commit__: Optional[str] = PrivateAttr(default="{{commit}}"){% endif %}
-    
