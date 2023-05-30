@@ -6,7 +6,7 @@ from anytree import LevelOrderGroupIter
 from bigtree import Node
 
 # from anytree import Node
-from typing import List, get_origin
+from typing import Any, List, get_origin
 
 
 class AttributeNode(Node):
@@ -16,6 +16,10 @@ class AttributeNode(Node):
         self.value = value
         self.outer_type = outer_type
         self.id = id
+
+
+class ListNode(Node):
+    pass
 
 
 class ClassNode(Node):
@@ -51,26 +55,8 @@ class ClassNode(Node):
 
         cls = self.import_class()
 
-        instances = {}
-        for index in self._get_unique_indices():
-            kwargs = self._get_kwargs(index)
-
-            if (
-                all(
-                    arg is None or arg == []
-                    for name, arg in kwargs.items()
-                    if name != "id"
-                )
-                or kwargs == {}
-            ):
-                continue
-
-            instances[index] = cls(**kwargs)
-
-        if len(instances) == 0:
-            return {0: None}
-        else:
-            return instances
+        kwargs = self._get_kwargs()
+        return cls(**kwargs)
 
     @staticmethod
     def _is_empty(value):
@@ -83,12 +69,13 @@ class ClassNode(Node):
 
         return False
 
-    def _get_kwargs(self, index=0):
+    def _get_kwargs(self):
         """Generates list of keyword arguments used to set up a sub class"""
 
         # Get all constants from the template
         path = (
-            ".".join([node.name for node in self.path if node.name[0].islower()]) + "."
+            ".".join([node.name for node in self.node_path if node.name[0].islower()])
+            + "."
         )
 
         if path == ".":
@@ -104,10 +91,7 @@ class ClassNode(Node):
         kwargs = {}
 
         for child in self.children:
-            if index in child.value:
-                value = child.value[index]
-                if value is not None:
-                    kwargs[child.name] = value
+            kwargs[child.name] = child.value
 
         return {**kwargs, **constants}
 
@@ -132,7 +116,10 @@ class ClassNode(Node):
 
         for level in level_order:
             if all(isinstance(node, AttributeNode) for node in level):
+                print("ATTRS", level)
                 continue
+            else:
+                print("CLLAS", level)
 
             for node in level:
                 if node == self:
@@ -143,27 +130,6 @@ class ClassNode(Node):
                 cls = node.instantiate()
                 parent = node.parent
 
-                # Check if all sub classes are empty
-                is_empty = all(
-                    sub_cls.dict(exclude_none=True, exclude={"id"}) == {}
-                    if sub_cls is not None
-                    else True
-                    for sub_cls in cls.values()
-                )
+                parent.value = cls
 
-                if (
-                    parent.outer_type is not None
-                    and get_origin(parent.outer_type) == list
-                ):
-                    # Check for list processing
-                    if is_empty:
-                        parent.value = {0: []}
-                    else:
-                        parent.value = {0: list(cls.values())}
-                else:
-                    if is_empty:
-                        parent.value = {0: None}
-                    else:
-                        parent.value = {0: list(cls.values())[0]}
-
-        return self.instantiate()[0]
+        return self.instantiate()
