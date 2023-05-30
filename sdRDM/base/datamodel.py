@@ -16,7 +16,8 @@ import numpy as np
 from nob import Nob
 from dotted_dict import DottedDict
 from enum import Enum
-from anytree import RenderTree, Node, LevelOrderIter
+from anytree import Node, LevelOrderIter
+from bigtree import print_tree
 from h5py._hl.files import File as H5File
 from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
@@ -345,7 +346,7 @@ class DataModel(pydantic.BaseModel):
         """Writes the object instance to HDF5."""
         write_hdf5(self, file)
 
-    def convert_to(self, option: str = "", template: Union[str, None, Dict] = None):
+    def convert_to(self, template: Union[str, None, Dict] = None):
         """
         Converts a given data model to another model that has been specified
         in the attributes metadata. This will create a new object model from
@@ -361,15 +362,12 @@ class DataModel(pydantic.BaseModel):
 
         This function provides the utility to map in between data models and
         offer an exchange of data without explicit code.
-
-        Args:
-            option (str): Key of the attribute metadata, where the destination is stored.
         """
 
         if isinstance(template, str):
             if template.lower().endswith(".yaml") or template.lower().endswith(".yml"):
                 template = yaml.safe_load(open(template))
-            elif template.lower().endswith("toml"):
+            elif template.lower().endswith(".toml"):
                 template = toml.load(open(template))
             else:
                 raise TypeError(
@@ -378,7 +376,9 @@ class DataModel(pydantic.BaseModel):
         elif template is None:
             template = {}
 
-        return convert_data_model(obj=self, option=option, template=template)
+        assert isinstance(template, dict), f"Template is not a dictionary"
+
+        return convert_data_model(dataset=self, template=template)
 
     def to_sql(self, loc: str):
         """Adds data to a complementary SQL database"""
@@ -644,15 +644,29 @@ class DataModel(pydantic.BaseModel):
 
     # ! Utilities
     @classmethod
-    def create_tree(cls):
+    def meta_tree(cls, show: bool = True):
         """Builds a tree structure from the class definition and all decending types."""
         tree = build_guide_tree(cls)
-        return tree, RenderTree(tree)
+
+        if show:
+            print_tree(tree)
+
+        return tree
+
+    def tree(self, show: bool = True, values: bool = True):
+        """Builds a tree structure from the class definition and all decending types."""
+        tree = build_guide_tree(self)
+
+        if show:
+            print_tree(tree, attr_list=["value"] if values else [])
+
+        return tree
 
     @classmethod
     def visualize_tree(cls):
-        _, render = cls.create_tree()
-        print(render.by_attr("name"))
+        raise NotImplementedError(
+            "This function has been removed. In order to visualize the tree, use the `tree` function for an instance or 'meta_tree' for an uninstantiated model instead."
+        )
 
     # ! Validators
     @validator("*")

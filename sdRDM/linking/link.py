@@ -1,15 +1,14 @@
-import importlib
 import re
 import validators
-import os
+from typing import Dict, List, Tuple
 
-from typing import Dict, List, Optional, Union
+from bigtree import dict_to_tree, levelorder_iter, tree_to_dict
+from dotted_dict import DottedDict
+from nob import Nob
+from pydantic.main import ModelMetaclass
 
-from sdRDM.linking.utils import build_guide_tree
-from anytree import findall
 
-
-def convert_data_model(obj, option: str, template: Dict = {}):
+def convert_data_model(dataset, template: Dict = {}):
     """
     Converts a given data model to another model that has been specified
     in the attributes metadata. This will create a new object model from
@@ -31,270 +30,210 @@ def convert_data_model(obj, option: str, template: Dict = {}):
     """
 
     # Create target roots and map data
-    libs = {}
-    roots = {
-        **_extract_roots_from_template(template=template, libs=libs),
-        **_extract_roots(obj=obj, option=option, libs=libs),
+    model = template.pop("__model__")
+
+    if dataset.__class__.__name__ != model:
+        raise TypeError(
+            f"Linking template requires the source dataset to be of type '{model}' but got '{dataset.__class__.__name__}'"
+        )
+
+    sources = {
+        root: getattr(_build_source(path), root)
+        for root, path in template.pop("__sources__").items()
     }
 
-    # Transfer data towards the target roots
-    _convert_tree(obj=obj, option=option, roots=roots, template=template)
-
-    return [(root.build(), libs[root.name]) for root in roots.values()]
-
-
-def _extract_roots(obj, option: str, libs: Dict, roots: Dict = {}, template: Dict = {}):
-    """
-    Parses metadata of all attributes present in this data model and
-    extracts the libraries needed for executing the given option.
-
-    This function builds the trees to which the data will be mapped
-    later on.
-
-    Args:
-        obj (DataModel): Query objet from which everythin will be mapped.
-        option (str): Export option that holds target destination.
-        roots (dict): Target tree(s) to map to.
-    """
-
-    for field in obj.__fields__.values():
-        field_options = field.field_info.extra
-
-        if option in field_options:
-            lib, root, *_ = field_options[option].split(".")
-            lib = importlib.import_module(lib)
-            libs[root] = lib
-            roots[root] = build_guide_tree(getattr(lib, root))
-
-        if hasattr(field, "__fields__"):
-            _extract_roots(obj=field, roots=roots, option=option, libs=libs)
-        elif hasattr(field.type_, "__fields__"):
-            _extract_roots(obj=field.type_, roots=roots, option=option, libs=libs)
-
-    return roots
+    return DottedDict(
+        {
+            name: source(**_assemble_dataset(dataset, template, source)[name])
+            for name, source in sources.items()
+        }
+    )
 
 
-def _extract_roots_from_template(template: Dict, libs: Dict) -> Dict:
-    """
-    Parses the provided linking template and extracts
-    the libraries needed for executing the given option.
+def _build_source(source: str) -> "DataModel":
+    """Builds the source data model from the given template."""
 
-    This function builds the trees to which the data will be mapped
-    later on.
+    from sdRDM import DataModel
 
-    Args:
-        template (Dict): Dictionary containing all infos about links.
-        roots (dict): Target tree(s) to map to.
-    """
+    if bool(validators.url(source)):
+        url, *tag = re.split(r"@|#", source)
 
-    from sdRDM.base.datamodel import DataModel
-
-    roots = {}
-
-    if template == {}:
-        return {}
-
-    if "__constants__" in template:
-        constants = template["__constants__"]
-    else:
-        constants = {}
-
-    # Get sources defined in the templates
-    for name, address in template["__sources__"].items():
-
-        if validators.url(address):
-            if "@" in address:
-                # Get specific tags
-                address, tag = address.split("@")
-            else:
-                # If not given, lets leave this at None
-                tag = None
-
-            lib = DataModel.from_git(url=address, tag=tag)
-            libs[name] = lib
-
-        elif os.path.exists(address):
-            lib = DataModel.from_markdown(address)
-            libs[name] = lib
+        if tag:
+            tag = tag[0]
         else:
-            lib = importlib.import_module(address)
-            libs[name] = lib
+            tag = None
 
-        if name in constants:
-            local_const = constants[name]
-        else:
-            local_const = {}
+        return DataModel.from_git(url=url, tag=tag)
 
-        roots[name] = build_guide_tree(getattr(lib, name), constants=local_const)
-
-    return roots
+    return DataModel.from_markdown(source)
 
 
-def _convert_tree(obj, roots, option, template, obj_index=0, attr_path="", target={}):
+def _assemble_dataset(
+    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+) -> Dict:
+    """Creates an explicit mapping from the source to the target dataset and transfers values."""
+
+    target_dataset = {}
+    explicit_mapping = _construct_explicit_mapping(dataset, template, target_class)
+    for source, target in explicit_mapping.items():
+        value = dataset.get(source)
+
+        if isinstance(value, list) and len(value) == 1:
+            value = value[0]
+
+        target_dataset[target] = {"value": value}
+
+    return _convert_value_tree_to_dict(dict_to_tree(target_dataset))
+
+
+def _construct_explicit_mapping(
+    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+):
+    """Creates an explicit mapping between the source and target dataset."""
+
+    dataset_paths, source_meta_paths, target_meta_paths = _gather_paths(
+        dataset, template, target_class
+    )
+
+    explicit_mapping = {}
+    for source_path in dataset_paths:
+        # Remove digits from path
+        source_meta_path = re.sub(r"\/\d+\/", "/", source_path)
+
+        if source_meta_path not in source_meta_paths:
+            raise ValueError(f"Path {source_path} not found within the data model")
+
+        target_meta_path = _get_target_meta_path(
+            source_meta_paths[source_meta_path], target_meta_paths
+        )
+
+        # Adjust indices if necessary
+        target_path = _adjust_index(target_meta_path, source_path)
+
+        explicit_mapping[source_path] = target_path
+
+    return explicit_mapping
+
+
+def _gather_paths(
+    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+) -> Tuple[List, Dict, List]:
+    """Gathers all the necessary meta and explicit paths.
+
+    Explicit in the sense of strict list indices within the path
     """
-    Maps values found in a tree to the corresponding target nodes of the
-    other data model's tree.
 
-    This function takes the given targets and adds the respective values
-    to the nodes of the other data model. If objects of cardinality > 1
-    are encountered, these will be stored as indexed dictionaries. This
-    way, nested models can be perserved, while the tree can be kept as a
-    single instance.
+    source_meta_paths = _get_source_meta_paths(dataset, template, target_class)
+    dataset_paths = [
+        str(path)
+        for path in dataset.paths()
+        if re.sub(r"\/\d+\/", "/", str(path)) in source_meta_paths
+    ]
+
+    target_meta_paths = list(tree_to_dict(target_class.meta_tree(show=False)).keys())
+
+    return dataset_paths, source_meta_paths, target_meta_paths
 
 
-    Args:
-        obj (sdRDM.DataModel): Object from which the data will be transfered.
-        roots (Dict): Target trees to which the data will be transfered.
-        option (str): Export option that holds target destination.
-        obj_index (int, optional): Index that is used for 'multiple' objects. Defaults to 0.
+def _get_source_meta_paths(
+    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+) -> Dict[str, str]:
+    """Get the source meta paths from the template."""
+    source_meta_paths = {}
+
+    for name, obj in template.items():
+        if name == dataset.__class__.__name__:
+            name = ""
+
+        for attr, target in obj.items():
+            source_path = "/".join([name, attr])
+
+            if not target.startswith(target_class.__name__):
+                continue
+
+            if not source_path.startswith("/"):
+                source_path = "/" + source_path
+            if not target.startswith("/"):
+                target = "/" + target
+
+            source_meta_paths[source_path] = target
+
+    return source_meta_paths
+
+
+def _convert_value_tree_to_dict(target_dataset: Dict) -> Dict:
+    """Transforms the given tree to a dictionary and creates lists
+    where indicees are given as keys
     """
 
-    object_name = obj.__class__.__name__
-    for attribute, field in obj.__fields__.items():
-        field_options = field.field_info.extra
-        value = getattr(obj, attribute)
+    mapped = Nob({})
 
-        if value is None:
+    for node in levelorder_iter(target_dataset):
+        if node.is_leaf:
+            mapped[node.path_name] = node.value
             continue
 
-        if not isinstance(value, list) and hasattr(field.type_, "__fields__"):
-            matches = _check_matching_target(
-                obj=value,
-                path=f"{attr_path}.{attribute}".strip("."),
-                template=template,
-            )
-
-            if isinstance(matches, dict):
-                # TODO Refactor this
-                _convert_tree(
-                    obj=value,
-                    roots=roots,
-                    option=option,
-                    obj_index=obj_index,
-                    template=template,
-                    attr_path=f"{attr_path}.{attribute}".strip("."),
-                    target=matches,
-                )
-            else:
-                for match in matches:
-                    _convert_tree(
-                        obj=value,
-                        roots=roots,
-                        option=option,
-                        obj_index=obj_index,
-                        template=template,
-                        attr_path=f"{attr_path}.{attribute}".strip("."),
-                        target=match["targets"],
-                    )
-
-        elif isinstance(value, list) and _only_classes(value):
-            wrap_type = _get_wrapping_type(field)
-            if wrap_type == "list":
-                for i, sub_obj in enumerate(value):
-
-                    matches = _check_matching_target(
-                        obj=value[i],
-                        path=f"{attr_path}.{attribute}".strip("."),
-                        template=template,
-                    )
-
-                    if isinstance(matches, dict):
-                        # TODO Refactor this
-                        _convert_tree(
-                            obj=sub_obj,
-                            roots=roots,
-                            option=option,
-                            obj_index=obj_index + i,
-                            template=template,
-                            attr_path=f"{attr_path}.{attribute}".strip("."),
-                            target=matches,
-                        )
-                    else:
-                        for match in matches:
-                            _convert_tree(
-                                obj=sub_obj,
-                                roots=roots,
-                                option=option,
-                                obj_index=obj_index + i,
-                                template=template,
-                                attr_path=f"{attr_path}.{attribute}".strip("."),
-                                target=match["targets"],
-                            )
-
+        if all([child.name.isdigit() for child in node.children]):
+            mapped[node.path_name] = []
+        elif node.name.isdigit():
+            mapped[node.parent.path_name].val.append({})
         else:
-            if attribute in target:
-                root, *path = target[attribute].split(".")
-                node = roots[root]
-                _assign_primitive_data_to_node(path, node, value, index=obj_index)
+            mapped[node.path_name] = {}
 
-            elif option in field_options:
-                _, root, *path = field_options[option].split(".")
-                nu_index = f"{attr_path}.{obj_index}"
-                node = roots[root]
-                _assign_primitive_data_to_node(path, node, value, index=nu_index)
-
-            elif object_name in template and attribute in template[object_name]:
-                root, *path = template[object_name][attribute].split(".")
-                node = roots[root]
-                _assign_primitive_data_to_node(path, node, value, index=obj_index)
+    return mapped.val
 
 
-def _check_matching_target(obj, path, template):
-    """Checks whether one of the targets defined in a template apply and returns it."""
-    targets = template.get(path)
+def _get_target_meta_path(path: str, target_meta_paths: List[str]):
+    """Gets the target meta paths for a given path, these are then adjusted
+    to the indexed explicit paths of the source dataset.
+    """
 
-    if targets is None:
-        return {}
-    elif isinstance(targets, dict) and not any(
-        [isinstance(options, dict) for options in targets.values()]
-    ):
-        # Return empty target if the source template is not specified with
-        # a filter/regex pattern
-        return targets
+    digit_free_paths = [_digit_free_path(path) for path in target_meta_paths]
 
-    matches = []
+    if path in digit_free_paths:
+        return target_meta_paths[digit_free_paths.index(path)]
 
-    for target in targets:
-        match_attr = getattr(obj, target["attribute"])
-        pattern = target["pattern"]
-
-        if bool(re.match(pattern, str(match_attr))):
-            matches.append(target)
-
-    return matches
-
-    if len(matches) > 1:
-        raise ValueError(
-            f"Object '{obj.__class__.__name__}' at '{path}' matches for {len(matches)} targets. \
-            There can only be one match though. Please make sure that when linking, that patterns \
-            only apply once.".replace(
-                "  ", ""
-            )
-        )
-    elif len(matches) == 0:
-        return {}
-
-    return matches[0]["targets"]
+    raise ValueError(f"Path {path} not found in {target_meta_paths}")
 
 
-def _only_classes(value: List):
-    """Checks whether the content of a list are classes"""
-    return all(hasattr(obj, "__fields__") for obj in value)
+def _digit_free_path(path: str):
+    """Clears all digits from a path"""
+    return re.sub(r"\/\d+\/", "/", path)
 
 
-def _assign_primitive_data_to_node(path, node, value, index: Union[str, int] = 0):
-    """Adds data to a single nodes dictionary"""
-    node = findall(node, _search_by_path(path))[0]
-    node.value[index] = value
+def _adjust_index(target_path: str, source_path: str):
+    """This function adjusts the indices of the target path to match the source path
 
+    The intend of this method is to preserve the order of the source dataset by
+    adjusting the indices of the target dataset. Consider the following example:
 
-def _search_by_path(path):
-    """Searches a tree for a given node by a given path"""
-    return lambda node: [n.name for n in node.path if n.name[0].islower()] == path
+    Source dataset:
+        attribute/0/attribute2/0/attribute3
+        attribute/0/attribute2/1/attribute3
+        attribute/1/attribute2/0/attribute3
+        attribute/1/attribute2/1/attribute3
 
+    has to be mapped to the following target dataset in case of a nested model:
+        attribute/0/attribute2/0/attribute3/0/attribute4
+        attribute/0/attribute2/0/attribute3/1/attribute4
+        attribute/0/attribute2/1/attribute3/0/attribute4
+        attribute/0/attribute2/1/attribute3/1/attribute
+    """
 
-def _get_wrapping_type(field):
-    """Extracts the outer type of an attribute (e.g. 'List')"""
-    origin_type = field.outer_type_.__dict__.get("__origin__")
-    if hasattr(origin_type, "__name__"):
-        return origin_type.__name__
+    # Build a reverse order of indices
+    index_order = [int(part) for part in source_path.split("/")[::-1] if part.isdigit()]
+
+    # Re-build the path and include the new index order
+    new_path = []
+
+    for part in target_path.split("/")[::-1]:
+        if not part.isdigit():
+            new_path.append(part)
+            continue
+
+        if index_order:
+            new_path.append(str(index_order.pop(0)))
+        else:
+            new_path.append(part)
+
+    return "/".join(new_path[::-1])
