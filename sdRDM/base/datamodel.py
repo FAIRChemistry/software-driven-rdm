@@ -257,6 +257,9 @@ class DataModel(pydantic.BaseModel):
 
         nu_data = {}
 
+        if not isinstance(data, dict):
+            return data
+
         for key, value in data.items():
             if isinstance(value, ListPlus):
                 if not value and exclude_none:
