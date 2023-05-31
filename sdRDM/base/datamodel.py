@@ -1,3 +1,4 @@
+from copy import deepcopy
 import inspect
 import json
 import os
@@ -17,7 +18,7 @@ from nob import Nob
 from dotted_dict import DottedDict
 from enum import Enum
 from anytree import Node, LevelOrderIter
-from bigtree import print_tree
+from bigtree import print_tree, levelorder_iter, yield_tree
 from h5py._hl.files import File as H5File
 from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
@@ -37,6 +38,7 @@ from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
 from sdRDM.base.graphql import parse_query_to_selections, traverse_graphql_query
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
+from sdRDM.linking.nodes import ClassNode
 from sdRDM.linking.utils import build_guide_tree, generate_template
 from sdRDM.database.utils import add_to_database
 from sdRDM.tools.utils import YAMLDumper
@@ -658,9 +660,20 @@ class DataModel(pydantic.BaseModel):
         tree = build_guide_tree(self)
 
         if show:
-            print_tree(tree, attr_list=["value"] if values else [])
+            show_tree = self._prune_tree(tree)
+            print_tree(show_tree, attr_list=["value"] if values else [])
 
         return tree
+
+    def _prune_tree(self, tree: ClassNode):
+        """Prunes leaves that have no value given"""
+        show_tree = deepcopy(tree)
+        for node in levelorder_iter(show_tree):
+            if hasattr(node, "value") and node.value is None and not node.children:
+                node.children = []
+                node.parent = None
+
+        return show_tree
 
     @classmethod
     def visualize_tree(cls):
@@ -708,10 +721,26 @@ class DataModel(pydantic.BaseModel):
 
     @validator("*", each_item=True)
     def check_list_values(cls, value, config, field):
-        if not isinstance(value, field.type_) and not issubclass(field.type_, Enum):
+        if hasattr(field.type_, "regex"):
+            if not bool(field.type_.regex.match(value)):
+                raise TypeError(
+                    f"List element of value '{value}' cannot be added due to not matching the requried regex '{field.type_.regex}'"
+                )
+            else:
+                return value
+
+        if "pydantic" in field.type_.__module__:
+            try:
+                field.type_(value)
+            except ValueError:
+                raise TypeError(
+                    f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
+                )
+        elif not isinstance(value, field.type_) and not issubclass(field.type_, Enum):
             raise TypeError(
                 f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
             )
+
         return value
 
     # ! Overloads
@@ -823,3 +852,33 @@ class DataModel(pydantic.BaseModel):
                 f"Can't compare '{self.__class__.__name__}' to type '{type(__value)}'"
             )
         return hash(self) == hash(__value)
+
+    def __str__(self) -> str:
+        class bcolors:
+            HEADER = "\033[95m"
+            OKBLUE = "\033[94m"
+            OKCYAN = "\033[96m"
+            OKGREEN = "\033[92m"
+            WARNING = "\033[93m"
+            FAIL = "\033[91m"
+            ENDC = "\033[0m"
+            BOLD = "\033[1m"
+            UNDERLINE = "\033[4m"
+
+        tree = self._prune_tree(self.tree(show=False))
+        tree_string = ""
+        for branch, stem, node in yield_tree(tree, style="const"):
+            if hasattr(node, "value") and node.value is not None:
+                tree_string += f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC} = {str(node.value)}\n"
+            elif hasattr(node, "value") and node.value is None:
+                tree_string += (
+                    f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC}\n"
+                )
+            elif node.name.isdigit():
+                tree_string += f"{branch}{stem}{node.node_name}\n"
+            else:
+                tree_string += (
+                    f"{branch}{stem}{bcolors.UNDERLINE}{node.node_name}{bcolors.ENDC}\n"
+                )
+
+        return tree_string
