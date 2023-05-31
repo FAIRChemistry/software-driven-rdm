@@ -17,7 +17,7 @@ def object_is_compliant_to_references(obj) -> Dict:
             # Reference is not yet part of the tree
             continue
 
-        if value not in root_obj.get_by_meta_path(path):
+        if value not in root_obj.get(path):
             report[
                 attribute
             ] = f"""Value '{value}' for attribute '{attribute}' of object '{obj.id}' does not appear at path '{'/'.join([root, path])}' yet is required.
