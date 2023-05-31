@@ -289,13 +289,17 @@ def assemble_signature(type: str, objects: List[Dict]) -> List[Dict]:
     """Takes a non-native sdRDM type defined within the model and extracts all attributes"""
 
     try:
-        sub_object_attrs = next(filter(lambda object: object["name"] == type, objects))[
-            "attributes"
-        ]
+        sub_object = next(filter(lambda object: object["name"] == type, objects))
+        sub_object_attrs = sub_object["attributes"]
+        sub_object_parent = sub_object.get("parent")
+
     except StopIteration:
         raise ValueError(f"Sub object '{type}' has no attributes.")
 
     sub_object_attrs = [convert_type(attribute) for attribute in sub_object_attrs]
+
+    if sub_object_parent:
+        sub_object_attrs += assemble_signature(sub_object_parent, objects)
 
     return sorted(sub_object_attrs, key=sort_by_defaults, reverse=True)
 
@@ -447,6 +451,12 @@ def process_subtypes(nested_type: str, objects: List[Dict]) -> List[str]:
 
     attributes = object["attributes"]
     subtypes = gather_all_types(attributes, objects, object["name"])
+
+    if object.get("parent"):
+        parent_obj = get_object(object["parent"], objects)
+        subtypes += gather_all_types(
+            parent_obj["attributes"], objects, parent_obj["name"]
+        )
 
     for subtype in subtypes:
         types.append(subtype)
