@@ -1,3 +1,4 @@
+from copy import deepcopy
 import textwrap
 
 from dotted_dict import DottedDict
@@ -45,7 +46,7 @@ class ImportedModules(DottedDict):
 
         for name, link in self.links.items():
             obj = getattr(self, link["__model__"])
-            converter = lambda self: self.convert_to(template=link)[0]
+            converter = lambda self: self.convert_to(template=deepcopy(link))
             setattr(obj, f"to_{name.replace(' ', '_')}", converter)
 
     def __repr__(self) -> str:
