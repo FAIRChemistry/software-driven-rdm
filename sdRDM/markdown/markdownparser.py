@@ -28,9 +28,15 @@ class MarkdownParser:
         modules, enumerations = parser.get_objects_and_enumerations(doc)
 
         for module, model in modules.items():
-            parser.objects += [obj for obj in parse_markdown_module(module, model)]
+            parser.objects += [
+                obj
+                for obj in parse_markdown_module(module, model, parser.external_objects)
+            ]
 
         parser.enums = parse_markdown_enumerations(enumerations)
+
+        # Add external objects to the current parser
+        parser.merge_external_objects()
 
         # Parse given structure
         parser.get_compositions()
@@ -43,13 +49,36 @@ class MarkdownParser:
 
         assert isinstance(
             parser, self.__class__
-        ), f"Got wrong parser of type {parser.__class__.__name__}"
+        ), f"Expected parser of type 'MarkdownParser' got '{type(parser)}' instead."
+
+        duplicate_objects = self._has_duplicate_object_names(parser)
+        assert (
+            not duplicate_objects
+        ), f"A given remote model has redundant object names: {duplicate_objects}"
 
         self.objects += parser.objects
         self.enums += parser.enums
         self.inherits += parser.inherits
         self.compositions += parser.compositions
         self.external_objects.update(parser.external_objects)
+
+    def _has_duplicate_object_names(self, parser):
+        """Checks whether there are redundancies within the model"""
+
+        assert isinstance(
+            parser, self.__class__
+        ), f"Expected parser of type 'MarkdownParser' got '{type(parser)}' instead."
+
+        self_names = set([obj["name"] for obj in self.objects])
+        parser_names = set([obj["name"] for obj in parser.objects])
+
+        return self_names.intersection(parser_names)
+
+    def merge_external_objects(self):
+        """Merges all remote objects into the current parser"""
+
+        for external_def in self.external_objects.values():
+            self.add_model(external_def)
 
     def get_objects_and_enumerations(
         self,

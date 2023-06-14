@@ -1,7 +1,7 @@
 import re
 
 from markdown_it.token import Token
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from sdRDM.markdown.tokens import MarkdownTokens
 
@@ -17,7 +17,9 @@ TAG_MAPPING = {
 }
 
 
-def parse_markdown_module(name: str, module: List[Token]) -> List[Dict]:
+def parse_markdown_module(
+    name: str, module: List[Token], external_types: Dict[str, "MarkdownParser"]
+) -> List[Dict]:
     """Parses the part of a markdown model that follows after an H2 heading"""
 
     TOKEN_MAPPING = {
@@ -25,7 +27,7 @@ def parse_markdown_module(name: str, module: List[Token]) -> List[Dict]:
         MarkdownTokens.DESCRIPTION: process_description,
         MarkdownTokens.ATTRIBUTE: process_attribute,
         MarkdownTokens.OPTION: process_option,
-        MarkdownTokens.HEADING: lambda element, object_stack: None,
+        MarkdownTokens.HEADING: lambda **kwargs: None,
     }
 
     object_stack = []
@@ -43,7 +45,9 @@ def parse_markdown_module(name: str, module: List[Token]) -> List[Dict]:
         else:
             continue
 
-        TOKEN_MAPPING[token](element=element, object_stack=object_stack)
+        TOKEN_MAPPING[token](
+            element=element, object_stack=object_stack, external_types=external_types
+        )
 
     return add_module_name_to_objects(name, object_stack)
 
@@ -57,7 +61,7 @@ def add_module_name_to_objects(name: str, object_stack: List[Dict]) -> List[Dict
     return object_stack
 
 
-def process_object(element: Token, object_stack: List) -> None:
+def process_object(element: Token, object_stack: List, **kwargs) -> None:
     """Processes a new object and adds it to the object stack"""
 
     assert element.children is not None, "Object has no children"
@@ -92,7 +96,7 @@ def get_parent(children: List[Token]) -> str:
     ).content
 
 
-def process_description(element: Token, object_stack: List) -> None:
+def process_description(element: Token, object_stack: List, **kwargs) -> None:
     """Processes a description and adds it to the recent object"""
 
     if object_stack == []:
@@ -101,7 +105,7 @@ def process_description(element: Token, object_stack: List) -> None:
     object_stack[-1]["docstring"] += element.content
 
 
-def process_attribute(element: Token, object_stack: List) -> None:
+def process_attribute(element: Token, object_stack: List, **kwargs) -> None:
     """Proceses a new attribute and adds it to the most recent object"""
 
     assert element.children, f"Element {element.content} has no children"
@@ -131,7 +135,12 @@ def get_attribute_name(children: List[Token]) -> str:
     ).content
 
 
-def process_option(element: Token, object_stack: List) -> None:
+def process_option(
+    element: Token,
+    object_stack: List,
+    external_types: Dict[str, "MarkdownParser"],
+    **kwargs,
+) -> None:
     """Processes a new option and adds it to the recent attribute of the recent object"""
 
     match = re.match(OPTION_PATTERN, element.content)
@@ -141,7 +150,7 @@ def process_option(element: Token, object_stack: List) -> None:
     option, value = match.groups()
 
     if option.lower().strip() == "type":
-        value = process_type_option(value, object_stack)
+        value = process_type_option(value, object_stack, external_types)
     elif option.lower().strip() == "multiple" and attribute_has_default(object_stack):
         del object_stack[-1]["attributes"][-1]["default"]
         object_stack[-1]["attributes"][-1]["default_factory"] = "ListPlus()"
@@ -154,7 +163,9 @@ def attribute_has_default(object_stack: List[Dict]) -> bool:
     return "default" in object_stack[-1]["attributes"][-1]
 
 
-def process_type_option(dtypes: str, object_stack: List) -> List[str]:
+def process_type_option(
+    dtypes: str, object_stack: List, external_types: Dict[str, "MarkdownParser"]
+) -> List[str]:
     """Processes the specific type option and extracts references as well as multiple types"""
 
     processed_types = []
@@ -162,9 +173,11 @@ def process_type_option(dtypes: str, object_stack: List) -> List[str]:
     for dtype in dtypes.split(","):
         dtype = dtype.strip()
 
-        if is_linked_type(dtype):
+        if is_remote_type(dtype):
+            dtype, cls_defs, url = process_remote_type(dtype)
+            external_types[url] = cls_defs
+        elif is_linked_type(dtype):
             dtype = re.sub(LINKED_TYPE_PATTERN, r"\1", dtype)
-
         elif is_reference_type(dtype):
             match = re.match(REFERENCE_TYPE_PATTERN, dtype)
 
@@ -180,6 +193,12 @@ def process_type_option(dtypes: str, object_stack: List) -> List[str]:
     return processed_types
 
 
+def is_remote_type(dtype: str) -> bool:
+    """Checks whether the given type points to a remote model"""
+    # TODO find a safer way
+    return "@" in dtype and "github" in dtype
+
+
 def is_linked_type(dtype: str) -> bool:
     """Checks whether the given type is a markdown link"""
     return bool(re.match(LINKED_TYPE_PATTERN, dtype))
@@ -188,3 +207,58 @@ def is_linked_type(dtype: str) -> bool:
 def is_reference_type(dtype: str) -> bool:
     """Checks whether the given type is an attribute reference"""
     return bool(re.match(REFERENCE_TYPE_PATTERN, dtype))
+
+
+def process_remote_type(dtype: str) -> Tuple[str, Dict, str]:
+    """Processes a remote type and adds it to the parsers external types
+
+    Returns:
+        (str): Name of the extracted object
+        (str): Class definitions of the attached model
+        (str): Remote URL of the the attached data model
+    """
+
+    from sdRDM.tools.gitutils import build_library_from_git_specs
+
+    url, obj = dtype.split("@")
+
+    cls_defs = build_library_from_git_specs(url=url, tmpdirname=obj, only_classes=True)
+
+    objects_to_keep = gather_objects_to_keep(obj, cls_defs.objects)
+    cls_defs.objects = list(
+        filter(lambda obj: obj["name"] in objects_to_keep, cls_defs.objects)
+    )
+
+    return obj, cls_defs, url
+
+
+def gather_objects_to_keep(name, objs, objects_to_keep=[]):
+    """Traverse a data model and extracts a list of objects to keep.
+
+    This function is intended to use in conjunction with nested data models
+    that are referencing a remote repository. Here, only parts of the model
+    need to be extracted that the object of interest requires.
+    """
+
+    try:
+        # Get the dtype from the objects, if given
+        obj = next(filter(lambda obj: obj["name"] == name, objs))
+        objects_to_keep.append(name)
+
+        if "parent" in obj:
+            objects_to_keep.append(obj["parent"])
+
+    except StopIteration:
+        return
+
+    # Gather all dtypes within this object
+    all_dtypes = _get_attribute_dtypes(obj["attributes"])
+
+    for dtype in all_dtypes:
+        gather_objects_to_keep(dtype, objs, objects_to_keep)
+
+    return objects_to_keep
+
+
+def _get_attribute_dtypes(attributes):
+    return set([dtype for attribute in attributes for dtype in attribute["type"]])
