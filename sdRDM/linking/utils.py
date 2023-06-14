@@ -88,11 +88,11 @@ def generate_template(obj, out: str, simple: bool = True) -> None:
     # Add attributes of root objects
     template[obj.__name__] = {
         n.name: "Enter target"
-        for n in obj.create_tree()[0].children
+        for n in obj.meta_tree(show=False).children
         if isinstance(n, AttributeNode) and len(n.children) == 0
     }
 
-    for node in LevelOrderIter(obj.create_tree()):
+    for node in LevelOrderIter(obj.meta_tree()):
         path = _get_path(node.node_path)
 
         if node.children and path:
