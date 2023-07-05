@@ -20,7 +20,7 @@ from anytree import RenderTree, Node, LevelOrderIter
 from h5py._hl.files import File as H5File
 from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
-from pydantic import PrivateAttr, validator
+from pydantic import PrivateAttr, field_validator
 from sqlalchemy.orm import declarative_base
 from typing import List, Dict, Optional, IO, Union, get_args, Callable
 
@@ -51,12 +51,12 @@ class DataModel(pydantic.BaseModel):
         validate_assignment = True
         use_enum_values = True
         arbitrary_types_allowed = True
-        allow_population_by_field_name = True
+        populate_by_name = True
 
     # * Private attributes
-    __node__: Optional[Node] = PrivateAttr(default=None)
-    __types__: DottedDict = PrivateAttr(default=dict)
-    __parent__: Optional["DataModel"] = PrivateAttr(default=None)
+    _node: Optional[Node] = PrivateAttr(default=None)
+    _types: DottedDict = PrivateAttr(default=dict)
+    _parent: Optional["DataModel"] = PrivateAttr(default=None)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -65,17 +65,17 @@ class DataModel(pydantic.BaseModel):
             if not isinstance(value, ListPlus):
                 continue
 
-            self.__dict__[field].__parent__ = self
-            self.__dict__[field].__attribute__ = field
+            self.__dict__[field]._parent = self
+            self.__dict__[field]._attribute = field
 
-        self.__types__ = DottedDict()
+        self._types = DottedDict()
         for name, field in self.__fields__.items():
             args = get_args(field.type_)
 
             if not args and hasattr(field.type_, "__fields__"):
-                self.__types__[name] = field.type_
+                self._types[name] = field.type_
             elif args:
-                self.__types__[name] = tuple(
+                self._types[name] = tuple(
                     [subtype for subtype in args if hasattr(subtype, "__fields__")]
                 )
 
@@ -239,9 +239,9 @@ class DataModel(pydantic.BaseModel):
             # Add git specs if available
             data["__source__"].update(
                 {
-                    "repo": self.__repo__,  # type: ignore
-                    "commit": self.__commit__,  # type: ignore
-                    "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
+                    "repo": self._repo,  # type: ignore
+                    "commit": self._commit,  # type: ignore
+                    "url": self._repo.replace(".git", "") + f"/tree/{self._commit}",  # type: ignore
                 }
             )  # type: ignore
         except AttributeError:
@@ -329,9 +329,9 @@ class DataModel(pydantic.BaseModel):
         try:
             tree.attrib.update(
                 {
-                    "repo": self.__repo__,  # type: ignore
-                    "commit": self.__commit__,  # type: ignore
-                    "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
+                    "repo": self._repo,  # type: ignore
+                    "commit": self._commit,  # type: ignore
+                    "url": self._repo.replace(".git", f"/tree/{self._commit}"),  # type: ignore
                 }
             )
         except AttributeError:
@@ -655,7 +655,8 @@ class DataModel(pydantic.BaseModel):
         print(render.by_attr("name"))
 
     # ! Validators
-    @validator("*")
+    @field_validator("*", mode="before")
+    @classmethod
     def convert_extended_list_and_numpy_strings(cls, value):
         """Validator used to convert any list into a ListPlus."""
 
@@ -692,17 +693,29 @@ class DataModel(pydantic.BaseModel):
 
         return report
 
-    @validator("*", each_item=True)
-    def check_list_values(cls, value, config, field):
-        if not isinstance(value, field.type_) and not issubclass(field.type_, Enum):
-            raise TypeError(
-                f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
-            )
+    @field_validator("*", mode="after")
+    @classmethod
+    def check_list_values(cls, value, info):
+        if not isinstance(value, (list, ListPlus)):
+            return value
+
+        field_type = cls.__annotations__[info.field_name]
+
+        for entry in value:
+            if not cls._has_valid_type(entry, field_type):
+                raise TypeError(
+                    f"List element '{value}' of type '{type(value)}' cannot be added. Expected type '{field_type.__name__}'"
+                )
         return value
+
+    @staticmethod
+    def _has_valid_type(value, type_):
+        print(type_)
+        return isinstance(value, type_) and issubclass(type_, Enum)
 
     # ! Overloads
     def __setattr__(self, name, value):
-        if name == "__parent__" or name == "__types__":
+        if name == "_parent" or name == "_types":
             return super().__setattr__(name, value)
 
         self.set_parent_instances(value)
@@ -711,7 +724,7 @@ class DataModel(pydantic.BaseModel):
         super().__setattr__(name, value)
 
         if isinstance(value, list):
-            self.__dict__[name].__parent__ = self
+            self.__dict__[name]._parent = self
 
     def check_references(self, name, value):
         """Checks whether references are compliant"""
@@ -735,7 +748,7 @@ class DataModel(pydantic.BaseModel):
     def set_parent_instances(self, value) -> None:
         """Sets current instance as the parent to objects"""
         if isinstance(value, ListPlus):
-            value.__parent__ = self
+            value._parent = self
             for i in range(len(value)):
                 self.set_parent_to_object_field(value[i])
         else:
@@ -747,7 +760,7 @@ class DataModel(pydantic.BaseModel):
         if not hasattr(value, "__fields__"):
             return
 
-        value.__parent__ = self
+        value._parent = self
 
     def check_object_references(self, value) -> Dict:
         """Checks if any (sub)-object fulfills the conditions of the model"""

@@ -44,7 +44,6 @@ def write_hdf5(dataset, file: Union[H5File, str]):
 
 
 def read_hdf5(obj, file):
-
     tree, _ = obj.create_tree()
     meta_paths = obj.meta_paths(leaves=True)
 
@@ -86,10 +85,10 @@ def _write_source(dataset, file: H5File):
 
     try:
         # Add Git info if given
-        if dataset.__repo__:
-            group.attrs["repo"] = (dataset.__repo__,)  # type: ignore
-        group.attrs["commit"] = (dataset.__commit__,)  # type: ignore
-        group.attrs["url"] = (dataset.__repo__.replace(".git", f"/tree/{dataset.__commit__}"),)  # type: ignore
+        if dataset._repo:
+            group.attrs["repo"] = (dataset._repo,)  # type: ignore
+        group.attrs["commit"] = (dataset._commit,)  # type: ignore
+        group.attrs["url"] = (dataset._repo.replace(".git", f"/tree/{dataset._commit}"),)  # type: ignore
     except AttributeError:
         pass
 

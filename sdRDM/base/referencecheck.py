@@ -1,4 +1,3 @@
-from pydantic.fields import ModelField
 from typing import Tuple, Dict, Optional
 
 
@@ -60,10 +59,10 @@ def traverse_to_root_node(obj: "DataModel", root: str) -> Optional["DataModel"]:
     while True:
         if obj.__class__.__name__ == root:
             return obj
-        elif obj.__parent__ is None:
+        elif obj._parent is None:
             return None
 
-        obj = obj.__parent__
+        obj = obj._parent
 
 
 def get_fields_to_check(obj: "DataModel") -> Dict:
@@ -80,12 +79,12 @@ def get_fields_to_check(obj: "DataModel") -> Dict:
     return checks
 
 
-def has_reference_check(field: ModelField) -> bool:
+def has_reference_check(field) -> bool:
     """Checks whether a field has a reference info"""
     return "references" in field.field_info.extra
 
 
-def get_field_reference_check(field: ModelField) -> Tuple[str, str]:
+def get_field_reference_check(field) -> Tuple[str, str]:
     """Extracts root and path from a refrence field"""
     root, *path = field.field_info.extra["references"].split(".")
     return (root, "/".join(path))

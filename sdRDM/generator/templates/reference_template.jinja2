@@ -1,4 +1,5 @@
-    @validator("{{attribute}}")
+    @field_validator("{{attribute}}")
+    @classmethod
     def get_{{attribute}}_reference(cls, value):
         """Extracts the ID from a given object to create a reference"""
 

@@ -1,8 +1,8 @@
 import yaml
 import toml
+import inspect
 
 from anytree import LevelOrderIter
-from pydantic.main import ModelMetaclass
 from typing import get_origin
 
 from sdRDM.linking.nodes import AttributeNode, ClassNode, ListNode
@@ -19,7 +19,7 @@ def build_guide_tree(obj: "DataModel") -> ClassNode:
         ClassNode: Tree of AttributeNodes and ClassNodes representing the data model
     """
 
-    if isinstance(obj, ModelMetaclass):
+    if inspect.isclass(obj):
         return _build_class_tree(obj)
 
     return _build_instance_tree(obj)
