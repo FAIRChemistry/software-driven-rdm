@@ -11,7 +11,7 @@ setup(
     entry_points={"console_scripts": ["sdrdm=sdRDM.cli:app"]},
     include_package_data=True,
     install_requires=[
-        "pydantic",
+        "pydantic <= 1.10.11",
         "numpy",
         "deepdish",
         "lxml",
