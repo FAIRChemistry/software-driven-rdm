@@ -29,7 +29,7 @@ class ListPlus(List[Any]):
         for arg in args:
             if hasattr(arg, "__fields__") and self.is_part_of_model():
                 arg.__parent__ = self.__parent__
-                arg.check_references(self.__attribute__, arg)
+                arg._check_references(self.__attribute__, arg)
 
             super().append(arg)
 
