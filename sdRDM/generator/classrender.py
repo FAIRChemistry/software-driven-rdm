@@ -30,7 +30,9 @@ def render_object(
     class_body = "\n".join([class_part, methods_part, validator_part])
 
     # Clean and render imports
-    imports = render_imports(object=object, objects=all_objects, inherits=inherits)
+    imports = render_imports(
+        object=object, objects=all_objects, inherits=inherits, obj_name=object["name"]
+    )
 
     return f"{imports}\n\n{class_body}"
 
@@ -50,6 +52,7 @@ def render_class(
     )
 
     inherit = None
+    name = object.pop("name")
 
     filtered = list(
         filter(lambda element: element["child"] == object["name"], inherits)
@@ -59,16 +62,18 @@ def render_class(
         inherit = filtered[0]["parent"]
 
     return template.render(
-        name=object.pop("name"),
+        name=name,
         inherit=inherit,
         docstring=object.pop("docstring"),
-        attributes=[render_attribute(attr, objects) for attr in object["attributes"]],
+        attributes=[
+            render_attribute(attr, objects, name) for attr in object["attributes"]
+        ],
         repo=repo,
         commit=commit,
     )
 
 
-def render_attribute(attribute: Dict, objects: List[Dict]) -> str:
+def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str:
     """Renders an attributeibute to code using a Jinja2 template"""
 
     attribute = deepcopy(attribute)
@@ -79,6 +84,9 @@ def render_attribute(attribute: Dict, objects: List[Dict]) -> str:
     is_multiple = "multiple" in attribute
     is_required = attribute["required"]
     has_reference = "reference" in attribute
+    attribute["type"] = [
+        f'"{dtype}"' if dtype == obj_name else dtype for dtype in attribute["type"]
+    ]
 
     if is_multiple:
         attribute["default_factory"] = "ListPlus"
@@ -360,7 +368,9 @@ def encapsulate_type(dtypes: List[str], is_multiple: bool, is_required: bool) ->
             return f"Union[{', '.join(dtypes)}]"
 
 
-def render_imports(object: Dict, objects: List[Dict], inherits: List[Dict]) -> str:
+def render_imports(
+    object: Dict, objects: List[Dict], inherits: List[Dict], obj_name: str
+) -> str:
     """Retrieves all necessary external and local imports for this class"""
 
     objects = deepcopy(objects)
@@ -388,7 +398,7 @@ def render_imports(object: Dict, objects: List[Dict], inherits: List[Dict]) -> s
     local_imports = [
         f"from .{type.lower()} import {type}"
         for type in all_types
-        if type not in DataTypes.__members__
+        if type not in DataTypes.__members__ and type != obj_name
     ]
 
     imports = [
