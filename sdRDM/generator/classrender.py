@@ -54,9 +54,7 @@ def render_class(
     inherit = None
     name = object.pop("name")
 
-    filtered = list(
-        filter(lambda element: element["child"] == object["name"], inherits)
-    )
+    filtered = list(filter(lambda element: element["child"] == name, inherits))
 
     if filtered and len(filtered) == 1:
         inherit = filtered[0]["parent"]
@@ -198,7 +196,9 @@ def render_add_methods(object: Dict, objects: List[Dict]) -> str:
 
         for type in complex_types:
             add_methods.append(
-                render_single_add_method(attribute, type, objects, is_single_type)
+                render_single_add_method(
+                    attribute, type, objects, is_single_type, object["name"]
+                )
             )
 
     return "\n\n".join(add_methods)
@@ -264,7 +264,7 @@ def is_enum_type(name: str, objects: List[Dict]) -> bool:
 
 
 def render_single_add_method(
-    attribute: Dict, type: str, objects: List[Dict], is_single_type: bool
+    attribute: Dict, type: str, objects: List[Dict], is_single_type: bool, obj_name: str
 ) -> str:
     """Renders an add method for an attribute that occurs multiple times"""
 
@@ -288,12 +288,12 @@ def render_single_add_method(
         attribute=attribute["name"],
         destination=destination,
         cls=type,
-        signature=assemble_signature(type, objects),
+        signature=assemble_signature(type, objects, obj_name),
         summary=f"This method adds an object of type '{type}' to attribute {attribute['name']}",
     )
 
 
-def assemble_signature(type: str, objects: List[Dict]) -> List[Dict]:
+def assemble_signature(type: str, objects: List[Dict], obj_name: str) -> List[Dict]:
     """Takes a non-native sdRDM type defined within the model and extracts all attributes"""
 
     try:
@@ -304,10 +304,12 @@ def assemble_signature(type: str, objects: List[Dict]) -> List[Dict]:
     except StopIteration:
         raise ValueError(f"Sub object '{type}' has no attributes.")
 
-    sub_object_attrs = [convert_type(attribute) for attribute in sub_object_attrs]
+    sub_object_attrs = [
+        convert_type(attribute, obj_name) for attribute in sub_object_attrs
+    ]
 
     if sub_object_parent:
-        sub_object_attrs += assemble_signature(sub_object_parent, objects)
+        sub_object_attrs += assemble_signature(sub_object_parent, objects, obj_name)
 
     return sorted(sub_object_attrs, key=sort_by_defaults, reverse=True)
 
@@ -327,10 +329,14 @@ def sort_by_defaults(attribute: Dict) -> bool:
         return True
 
 
-def convert_type(attribute: Dict) -> Dict:
+def convert_type(attribute: Dict, obj_name: str) -> Dict:
     """Turns argument types into correct typings"""
 
-    type = attribute["type"]
+    type = [dtype for dtype in attribute["type"]]
+
+    if obj_name in type:
+        index = type.index(obj_name)
+        type[index] = f'"{obj_name}"'
 
     if attribute["required"] is False and "multiple" not in attribute:
         attribute["default"] = None
