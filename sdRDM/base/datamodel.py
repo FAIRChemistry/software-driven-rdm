@@ -15,6 +15,7 @@ import warnings
 import numpy as np
 
 from nob import Nob
+from nob.path import Path
 from dotted_dict import DottedDict
 from enum import Enum
 from anytree import Node, LevelOrderIter
@@ -89,6 +90,9 @@ class DataModel(pydantic.BaseModel):
         attribute: Optional[str] = None,
         target: Union[str, float, int, None, "DataModel", Callable] = None,
     ):
+        if isinstance(path, Path):
+            path = str(path)
+        
         if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
