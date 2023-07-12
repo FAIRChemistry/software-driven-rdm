@@ -1,8 +1,8 @@
 import os
 import numpy as np
+import datetime
 
 from anytree import findall
-from datetime import date, datetime
 from numpy.typing import NDArray
 from typing import Union
 
@@ -30,9 +30,13 @@ def write_hdf5(dataset, file: Union[H5File, str]):
         prefix, attribute = path.split()
         prefix = str(prefix)
 
-        if str(prefix) == "/":
+        if isinstance(data, list) and len(data) == 1:
+            data = data[0]
+
+        if prefix == "/":
             # Write root attributes directly
-            _write_attr(prefix, dataset.get(path), file)
+            _write_attr(attribute, data, file)
+            continue
 
         # Fetch or create a group
         group = _get_group(file, prefix)
@@ -44,7 +48,6 @@ def write_hdf5(dataset, file: Union[H5File, str]):
 
 
 def read_hdf5(obj, file):
-
     tree, _ = obj.create_tree()
     meta_paths = obj.meta_paths(leaves=True)
 
@@ -97,7 +100,7 @@ def _write_source(dataset, file: H5File):
 def _write_attr(name, value, h5obj: Union[H5File, H5Group]):
     """Writes an attribute to an HDF5 root or group"""
 
-    if isinstance(value, (date, datetime)):
+    if isinstance(value, (datetime.date, datetime.datetime)):
         # HDF5 does not like date types
         value = str(value)
 
