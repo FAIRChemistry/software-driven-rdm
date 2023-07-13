@@ -16,8 +16,13 @@ import h5py
 def write_hdf5(dataset, file: Union[H5File, str]):
     """Writes a given sdRDM model to HDF5"""
 
+    # Keep track of closing the file
+    # only valid for str case
+    auto_close = False
+
     if isinstance(file, str):
         file = h5py.File(file, "w")
+        auto_close = True
 
     _write_source(dataset, file)
 
@@ -45,6 +50,9 @@ def write_hdf5(dataset, file: Union[H5File, str]):
             _write_array(attribute, data, group)
         else:
             _write_attr(attribute, data, group)  # type: ignore
+
+    if auto_close:
+        file.close()
 
 
 def read_hdf5(obj, file):
@@ -90,9 +98,9 @@ def _write_source(dataset, file: H5File):
     try:
         # Add Git info if given
         if dataset.__repo__:
-            group.attrs["repo"] = (dataset.__repo__,)  # type: ignore
-        group.attrs["commit"] = (dataset.__commit__,)  # type: ignore
-        group.attrs["url"] = (dataset.__repo__.replace(".git", f"/tree/{dataset.__commit__}"),)  # type: ignore
+            group.attrs["repo"] = dataset.__repo__  # type: ignore
+        group.attrs["commit"] = dataset.__commit__  # type: ignore
+        group.attrs["url"] = dataset.__repo__.replace(".git", f"/tree/{dataset.__commit__}")  # type: ignore
     except AttributeError:
         pass
 
