@@ -15,6 +15,13 @@ class {{name}}({% if inherit is not none %}
     {% for attribute in attributes -%}
     {{ attribute }}
     {% endfor -%}
+
+    @validator("*", pre=True, always=True)
+    def unit_validator(cls, v, values, config, field):
+        if field.type_.__name__ == "UnitBase":
+            return Unit(v)
+
+        return v
     
     {% if repo is not none %}__repo__: Optional[str] = PrivateAttr(default="{{repo}}"){% endif %}
     {% if commit is not none %}__commit__: Optional[str] = PrivateAttr(default="{{commit}}"){% endif %}
