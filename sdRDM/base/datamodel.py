@@ -26,6 +26,7 @@ from lxml import etree
 from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
 from typing import List, Dict, Optional, IO, Union, get_args, Callable
+from astropy.units import Unit
 
 from sdRDM.base.importedmodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
@@ -696,6 +697,15 @@ class DataModel(pydantic.BaseModel):
             return str(value)
         else:
             return value
+        
+    @validator("*", pre=True, always=True)
+    def unit_validator(cls, v, values, config, field):
+        if field.type_.__name__ == "UnitBase":
+            if isinstance(v, str):
+                return Unit(v)
+            return v
+
+        return v
 
     @staticmethod
     def _convert_numpy_type(value):

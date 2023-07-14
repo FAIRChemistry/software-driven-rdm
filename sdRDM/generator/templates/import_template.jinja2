@@ -7,7 +7,6 @@ from typing import Optional, Union, List
 from pydantic import PrivateAttr, Field, validator
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.utils import forge_signature, IDGenerator
-from astropy.units import Unit
 {% for import in from_imports %}
 {{import}}
 {%- endfor %}
