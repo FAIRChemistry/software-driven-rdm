@@ -19,7 +19,9 @@ class {{name}}({% if inherit is not none %}
     @validator("*", pre=True, always=True)
     def unit_validator(cls, v, values, config, field):
         if field.type_.__name__ == "UnitBase":
-            return Unit(v)
+            if isinstance(v, str):
+                return Unit(v)
+            return v
 
         return v
     
