@@ -38,6 +38,7 @@ setup(
         "bigtree",
         "anytree",
         "email-validator",
+        "astropy",
     ],
     extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
 )
