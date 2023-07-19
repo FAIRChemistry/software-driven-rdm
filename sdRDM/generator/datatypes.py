@@ -10,6 +10,8 @@ class DataTypes(Enum):
     int = ("int", None)
     integer = ("int", None)
     bytes = ("bytes", None)
+    Unit = ("UnitBase", ["from astropy.units import UnitBase"])
+    unit = ("UnitBase", ["from astropy.units import UnitBase"])
     EmailStr = ("EmailStr", ["from pydantic import EmailStr"])
     Email = ("EmailStr", ["from pydantic import EmailStr"])
     HttpUrl = ("HttpUrl", ["from pydantic import HttpUrl"])
