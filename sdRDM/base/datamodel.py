@@ -61,9 +61,11 @@ class DataModel(pydantic.BaseModel):
     __node__: Optional[Node] = PrivateAttr(default=None)
     __types__: DottedDict = PrivateAttr(default=dict)
     __parent__: Optional["DataModel"] = PrivateAttr(default=None)
+    __references__: DottedDict = PrivateAttr(default_factory=DottedDict)
 
     def __init__(self, **data):
         super().__init__(**data)
+        self._initialize_references()
 
         for field, value in self.__dict__.items():
             if not isinstance(value, ListPlus):
@@ -82,6 +84,11 @@ class DataModel(pydantic.BaseModel):
                 self.__types__[name] = tuple(
                     [subtype for subtype in args if hasattr(subtype, "__fields__")]
                 )
+
+    def _initialize_references(self):
+        """Initialized references for each field present in the data model"""
+        for field in self.__fields__:
+            self.__references__[field] = ListPlus()
 
     # ! Getters
     def get(
@@ -211,7 +218,7 @@ class DataModel(pydantic.BaseModel):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
 
         metapaths = set()
-        for node in LevelOrderIter(cls.create_tree()[0]):
+        for node in LevelOrderIter(cls.meta_tree(show=False)):
             if len(node.node_path) == 1:
                 continue
 
@@ -749,18 +756,36 @@ class DataModel(pydantic.BaseModel):
 
     # ! Overloads
     def __setattr__(self, name, value):
-        if name == "__parent__" or name == "__types__":
+        if bool(re.match("__[a-zA-Z0-9]*__", name)):
             return super().__setattr__(name, value)
 
-        self.set_parent_instances(value)
-        self.check_references(name, value)
+        self._add_reference_to_object(name, value)
+        self._set_parent_instances(value)
+        self._check_references(name, value)
 
         super().__setattr__(name, value)
 
         if isinstance(value, list):
             self.__dict__[name].__parent__ = self
 
-    def check_references(self, name, value):
+    def _add_reference_to_object(self, name, value):
+        """Adds the current class to the referenced object to maintain its relation"""
+
+        extra = self.__fields__[name].field_info.extra
+
+        if "reference" not in extra:
+            return
+        elif not hasattr(value, "__fields__"):
+            return
+
+        # Add the relation to the attribute of this field
+        self.__references__[name].append(value)
+
+        # Also add it to the other object
+        target_attr = extra["reference"].split(".")[-1]
+        value.__references__[target_attr].append(self)
+
+    def _check_references(self, name, value):
         """Checks whether references are compliant"""
 
         if self.is_data_model(value):
@@ -779,7 +804,7 @@ class DataModel(pydantic.BaseModel):
                 """
             )
 
-    def set_parent_instances(self, value) -> None:
+    def _set_parent_instances(self, value) -> None:
         """Sets current instance as the parent to objects"""
         if isinstance(value, ListPlus):
             value.__parent__ = self
