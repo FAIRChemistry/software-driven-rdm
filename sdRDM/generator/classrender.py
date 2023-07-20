@@ -30,7 +30,9 @@ def render_object(
     class_body = "\n".join([class_part, methods_part, validator_part])
 
     # Clean and render imports
-    imports = render_imports(object=object, objects=all_objects, inherits=inherits)
+    imports = render_imports(
+        object=object, objects=all_objects, inherits=inherits, obj_name=object["name"]
+    )
 
     return f"{imports}\n\n{class_body}"
 
@@ -50,25 +52,26 @@ def render_class(
     )
 
     inherit = None
+    name = object.pop("name")
 
-    filtered = list(
-        filter(lambda element: element["child"] == object["name"], inherits)
-    )
+    filtered = list(filter(lambda element: element["child"] == name, inherits))
 
     if filtered and len(filtered) == 1:
         inherit = filtered[0]["parent"]
 
     return template.render(
-        name=object.pop("name"),
+        name=name,
         inherit=inherit,
         docstring=object.pop("docstring"),
-        attributes=[render_attribute(attr, objects) for attr in object["attributes"]],
+        attributes=[
+            render_attribute(attr, objects, name) for attr in object["attributes"]
+        ],
         repo=repo,
         commit=commit,
     )
 
 
-def render_attribute(attribute: Dict, objects: List[Dict]) -> str:
+def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str:
     """Renders an attributeibute to code using a Jinja2 template"""
 
     attribute = deepcopy(attribute)
@@ -79,6 +82,9 @@ def render_attribute(attribute: Dict, objects: List[Dict]) -> str:
     is_multiple = "multiple" in attribute
     is_required = attribute["required"]
     has_reference = "reference" in attribute
+    attribute["type"] = [
+        f'"{dtype}"' if dtype == obj_name else dtype for dtype in attribute["type"]
+    ]
 
     if is_multiple:
         attribute["default_factory"] = "ListPlus"
@@ -190,7 +196,9 @@ def render_add_methods(object: Dict, objects: List[Dict]) -> str:
 
         for type in complex_types:
             add_methods.append(
-                render_single_add_method(attribute, type, objects, is_single_type)
+                render_single_add_method(
+                    attribute, type, objects, is_single_type, object["name"]
+                )
             )
 
     return "\n\n".join(add_methods)
@@ -256,7 +264,7 @@ def is_enum_type(name: str, objects: List[Dict]) -> bool:
 
 
 def render_single_add_method(
-    attribute: Dict, type: str, objects: List[Dict], is_single_type: bool
+    attribute: Dict, type: str, objects: List[Dict], is_single_type: bool, obj_name: str
 ) -> str:
     """Renders an add method for an attribute that occurs multiple times"""
 
@@ -280,12 +288,12 @@ def render_single_add_method(
         attribute=attribute["name"],
         destination=destination,
         cls=type,
-        signature=assemble_signature(type, objects),
+        signature=assemble_signature(type, objects, obj_name),
         summary=f"This method adds an object of type '{type}' to attribute {attribute['name']}",
     )
 
 
-def assemble_signature(type: str, objects: List[Dict]) -> List[Dict]:
+def assemble_signature(type: str, objects: List[Dict], obj_name: str) -> List[Dict]:
     """Takes a non-native sdRDM type defined within the model and extracts all attributes"""
 
     try:
@@ -296,10 +304,12 @@ def assemble_signature(type: str, objects: List[Dict]) -> List[Dict]:
     except StopIteration:
         raise ValueError(f"Sub object '{type}' has no attributes.")
 
-    sub_object_attrs = [convert_type(attribute) for attribute in sub_object_attrs]
+    sub_object_attrs = [
+        convert_type(attribute, obj_name) for attribute in sub_object_attrs
+    ]
 
     if sub_object_parent:
-        sub_object_attrs += assemble_signature(sub_object_parent, objects)
+        sub_object_attrs += assemble_signature(sub_object_parent, objects, obj_name)
 
     return sorted(sub_object_attrs, key=sort_by_defaults, reverse=True)
 
@@ -319,10 +329,14 @@ def sort_by_defaults(attribute: Dict) -> bool:
         return True
 
 
-def convert_type(attribute: Dict) -> Dict:
+def convert_type(attribute: Dict, obj_name: str) -> Dict:
     """Turns argument types into correct typings"""
 
-    type = attribute["type"]
+    type = [dtype for dtype in attribute["type"]]
+
+    if obj_name in type:
+        index = type.index(obj_name)
+        type[index] = f'"{obj_name}"'
 
     if attribute["required"] is False and "multiple" not in attribute:
         attribute["default"] = None
@@ -360,7 +374,9 @@ def encapsulate_type(dtypes: List[str], is_multiple: bool, is_required: bool) ->
             return f"Union[{', '.join(dtypes)}]"
 
 
-def render_imports(object: Dict, objects: List[Dict], inherits: List[Dict]) -> str:
+def render_imports(
+    object: Dict, objects: List[Dict], inherits: List[Dict], obj_name: str
+) -> str:
     """Retrieves all necessary external and local imports for this class"""
 
     objects = deepcopy(objects)
@@ -388,7 +404,7 @@ def render_imports(object: Dict, objects: List[Dict], inherits: List[Dict]) -> s
     local_imports = [
         f"from .{type.lower()} import {type}"
         for type in all_types
-        if type not in DataTypes.__members__
+        if type not in DataTypes.__members__ and type != obj_name
     ]
 
     imports = [

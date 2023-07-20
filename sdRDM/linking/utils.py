@@ -32,6 +32,10 @@ def _build_class_tree(obj: "DataModel", parent=None):
         parent = ClassNode(obj.__name__, parent=parent)
 
     for name, field in obj.__fields__.items():
+        if _is_recursive(obj, field.type_):
+            AttributeNode(f"{name} (Recursive - {field.type_.__name__})", parent=parent)
+            continue
+
         attr_node = AttributeNode(name, parent=parent)
 
         if _is_multiple_type(field.outer_type_, field.type_):
@@ -41,6 +45,11 @@ def _build_class_tree(obj: "DataModel", parent=None):
             _build_class_tree(field.type_, parent=attr_node)
 
     return parent
+
+
+def _is_recursive(obj: "DataModel", type) -> bool:
+    """Checks whether the given type is recursive"""
+    return hasattr(type, "__fields__") and obj.__fields__ == type.__fields__
 
 
 def _is_multiple_type(outer_type, type) -> bool:
@@ -88,11 +97,11 @@ def generate_template(obj, out: str, simple: bool = True) -> None:
     # Add attributes of root objects
     template[obj.__name__] = {
         n.name: "Enter target"
-        for n in obj.create_tree()[0].children
+        for n in obj.meta_tree(show=False).children
         if isinstance(n, AttributeNode) and len(n.children) == 0
     }
 
-    for node in LevelOrderIter(obj.create_tree()):
+    for node in LevelOrderIter(obj.meta_tree()):
         path = _get_path(node.node_path)
 
         if node.children and path:
