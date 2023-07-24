@@ -100,7 +100,7 @@ class DataModel(pydantic.BaseModel):
     ):
         if isinstance(path, Path):
             path = str(path)
-        
+
         if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
@@ -232,7 +232,7 @@ class DataModel(pydantic.BaseModel):
                     "/".join([n.name for n in node.node_path if n.name[0].islower()])
                 )
 
-        return sorted(metapaths, key=lambda path: len(path.split("/")))
+        return sorted(metapaths)
 
     def query(self, query: str) -> Dict:
         """Takes a graphql query and extracts all data matching the structure and arguments"""
@@ -704,7 +704,7 @@ class DataModel(pydantic.BaseModel):
             return str(value)
         else:
             return value
-        
+
     @validator("*", pre=True, always=True)
     def unit_validator(cls, v, values, config, field):
         if field.type_.__name__ == "UnitBase":
