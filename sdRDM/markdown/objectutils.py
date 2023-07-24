@@ -2,7 +2,9 @@ import re
 
 from markdown_it.token import Token
 from typing import List, Dict, Tuple
+from sdRDM.markdown.smalltypes import process_small_type
 
+from sdRDM.tools.utils import snake_to_camel
 from sdRDM.markdown.tokens import MarkdownTokens
 
 OPTION_PATTERN = r"\s*([A-Za-z0-9\_]*)\s*\:\s*(.*)"
@@ -72,6 +74,7 @@ def process_object(element: Token, object_stack: List, **kwargs) -> None:
             "docstring": "",
             "attributes": [],
             "type": "object",
+            "subtypes": [],
         }
     )
 
@@ -170,8 +173,19 @@ def process_type_option(
 
     processed_types = []
 
+    if has_small_type(dtypes):
+        small_type = process_small_type(dtypes, object_stack)
+        object_stack[-1]["subtypes"].append(small_type)
+
+        # Update dtypes and add the small type to the processed types
+        dtypes = re.sub(r"\{.*\}", "", dtypes).strip(",")
+        processed_types.append(small_type["name"])
+
     for dtype in dtypes.split(","):
         dtype = dtype.strip()
+
+        if not dtype:
+            continue
 
         if is_remote_type(dtype):
             dtype, cls_defs, url = process_remote_type(dtype)
@@ -195,8 +209,13 @@ def process_type_option(
 
 def is_remote_type(dtype: str) -> bool:
     """Checks whether the given type points to a remote model"""
-    # TODO find a safer way
     return "@" in dtype and "github" in dtype
+
+
+def has_small_type(dtype: str) -> bool:
+    # Pattern is {name: type, name: type, ...}
+    pattern = r"\{.*\}"
+    return bool(re.match(pattern, dtype))
 
 
 def is_linked_type(dtype: str) -> bool:
