@@ -21,17 +21,61 @@ def render_object(
 
     all_objects = objects + enums
 
+    # Keep track of small types
+    small_types = {small_type["name"]: small_type for small_type in object["subtypes"]}
+
+    if small_types:
+        small_type_part = "\n".join(
+            [
+                render_class(
+                    object=subtype,
+                    inherits=[],
+                    objects=all_objects,
+                    repo=repo,
+                    commit=commit,
+                )
+                for subtype in object["subtypes"]
+            ]
+        )
+    else:
+        small_type_part = ""
+
     # Get the class body
     class_part = render_class(
-        object=object, inherits=inherits, objects=all_objects, repo=repo, commit=commit
+        object=object,
+        inherits=inherits,
+        objects=all_objects,
+        repo=repo,
+        commit=commit,
     )
-    methods_part = render_add_methods(object=object, objects=all_objects)
-    validator_part = render_reference_validator(object=object, objects=all_objects)
-    class_body = "\n".join([class_part, methods_part, validator_part])
+
+    methods_part = render_add_methods(
+        object=object,
+        objects=all_objects,
+        small_types=small_types,
+    )
+
+    validator_part = render_reference_validator(
+        object=object,
+        objects=all_objects,
+    )
+
+    class_body = "\n".join(
+        [
+            small_type_part,
+            class_part,
+            methods_part,
+            validator_part,
+        ]
+    )
 
     # Clean and render imports
     imports = render_imports(
-        object=object, objects=all_objects, inherits=inherits, obj_name=object["name"]
+        object=object,
+        objects=all_objects,
+        inherits=inherits,
+        obj_name=object["name"],
+        small_types=small_types,
     )
 
     return f"{imports}\n\n{class_body}"
@@ -53,7 +97,6 @@ def render_class(
 
     inherit = None
     name = object.pop("name")
-
     filtered = list(filter(lambda element: element["child"] == name, inherits))
 
     if filtered and len(filtered) == 1:
@@ -64,7 +107,12 @@ def render_class(
         inherit=inherit,
         docstring=object.pop("docstring"),
         attributes=[
-            render_attribute(attr, objects, name) for attr in object["attributes"]
+            render_attribute(
+                attr,
+                objects,
+                name,
+            )
+            for attr in object["attributes"]
         ],
         repo=repo,
         commit=commit,
@@ -185,7 +233,7 @@ def is_reference(key: str, option: str) -> bool:
     return False
 
 
-def render_add_methods(object: Dict, objects: List[Dict]) -> str:
+def render_add_methods(object: Dict, objects: List[Dict], small_types: Dict) -> str:
     """Renders add methods fro each non-native type of an attribute"""
 
     add_methods = []
@@ -197,7 +245,12 @@ def render_add_methods(object: Dict, objects: List[Dict]) -> str:
         for type in complex_types:
             add_methods.append(
                 render_single_add_method(
-                    attribute, type, objects, is_single_type, object["name"]
+                    attribute,
+                    type,
+                    objects,
+                    is_single_type,
+                    object["name"],
+                    small_types,
                 )
             )
 
@@ -264,7 +317,12 @@ def is_enum_type(name: str, objects: List[Dict]) -> bool:
 
 
 def render_single_add_method(
-    attribute: Dict, type: str, objects: List[Dict], is_single_type: bool, obj_name: str
+    attribute: Dict,
+    type: str,
+    objects: List[Dict],
+    is_single_type: bool,
+    obj_name: str,
+    small_types: Dict,
 ) -> str:
     """Renders an add method for an attribute that occurs multiple times"""
 
@@ -288,28 +346,39 @@ def render_single_add_method(
         attribute=attribute["name"],
         destination=destination,
         cls=type,
-        signature=assemble_signature(type, objects, obj_name),
+        signature=assemble_signature(type, objects, obj_name, small_types),
         summary=f"This method adds an object of type '{type}' to attribute {attribute['name']}",
     )
 
 
-def assemble_signature(type: str, objects: List[Dict], obj_name: str) -> List[Dict]:
+def assemble_signature(
+    type: str,
+    objects: List[Dict],
+    obj_name: str,
+    small_types: Dict,
+) -> List[Dict]:
     """Takes a non-native sdRDM type defined within the model and extracts all attributes"""
 
     try:
         sub_object = next(filter(lambda object: object["name"] == type, objects))
-        sub_object_attrs = sub_object["attributes"]
-        sub_object_parent = sub_object.get("parent")
-
     except StopIteration:
-        raise ValueError(f"Sub object '{type}' has no attributes.")
+        if type in small_types:
+            sub_object = small_types[type]
+        else:
+            raise ValueError(f"Sub object '{type}' has no attributes.")
 
+    sub_object_parent = sub_object.get("parent")
     sub_object_attrs = [
-        convert_type(attribute, obj_name) for attribute in sub_object_attrs
+        convert_type(attribute, obj_name) for attribute in sub_object["attributes"]
     ]
 
-    if sub_object_parent:
-        sub_object_attrs += assemble_signature(sub_object_parent, objects, obj_name)
+    if sub_object_parent is not None:
+        sub_object_attrs += assemble_signature(
+            sub_object_parent,
+            objects,
+            obj_name,
+            small_types,
+        )
 
     return sorted(sub_object_attrs, key=sort_by_defaults, reverse=True)
 
@@ -375,14 +444,20 @@ def encapsulate_type(dtypes: List[str], is_multiple: bool, is_required: bool) ->
 
 
 def render_imports(
-    object: Dict, objects: List[Dict], inherits: List[Dict], obj_name: str
+    object: Dict,
+    objects: List[Dict],
+    inherits: List[Dict],
+    obj_name: str,
+    small_types: Dict,
 ) -> str:
     """Retrieves all necessary external and local imports for this class"""
 
     objects = deepcopy(objects)
     object = deepcopy(object)
 
-    all_types = gather_all_types(object["attributes"], objects, object["name"])
+    all_types = gather_all_types(
+        object["attributes"], objects, small_types, object["name"]
+    )
 
     for inherit in inherits:
         if inherit["child"] != object["name"]:
@@ -390,7 +465,9 @@ def render_imports(
 
         parent_type = inherit["parent"]
         all_types += gather_all_types(
-            get_object(parent_type, objects)["attributes"], objects
+            get_object(parent_type, objects)["attributes"],
+            objects,
+            small_types,
         ) + [parent_type]
 
     # Sort types into local and from imports
@@ -404,7 +481,9 @@ def render_imports(
     local_imports = [
         f"from .{type.lower()} import {type}"
         for type in all_types
-        if type not in DataTypes.__members__ and type != obj_name
+        if type not in DataTypes.__members__
+        and type != obj_name
+        and type not in small_types
     ]
 
     imports = [
@@ -425,7 +504,10 @@ def render_imports(
 
 
 def gather_all_types(
-    attributes: List[Dict], objects: List[Dict], obj_name: str = ""
+    attributes: List[Dict],
+    objects: List[Dict],
+    small_types: Dict,
+    obj_name: str = "",
 ) -> List[str]:
     """Gets the occuring types in all attributes"""
 
@@ -438,7 +520,7 @@ def gather_all_types(
             if nested_type == obj_name:
                 continue
 
-            types += process_subtypes(nested_type, objects)
+            types += process_subtypes(nested_type, objects, small_types)
 
     return types
 
@@ -452,12 +534,18 @@ def get_object(name: str, objects: List[Dict]) -> Dict:
         raise ValueError(f"Could not find object '{name}' in objects.")
 
 
-def process_subtypes(nested_type: str, objects: List[Dict]) -> List[str]:
+def process_subtypes(
+    nested_type: str,
+    objects: List[Dict],
+    small_types: Dict,
+) -> List[str]:
     """Processes types from nested attribute types"""
 
     types = []
 
     if nested_type in DataTypes.__members__:
+        return []
+    elif nested_type in small_types:
         return []
 
     object = get_object(nested_type, objects)
@@ -466,12 +554,12 @@ def process_subtypes(nested_type: str, objects: List[Dict]) -> List[str]:
         return []
 
     attributes = object["attributes"]
-    subtypes = gather_all_types(attributes, objects, object["name"])
+    subtypes = gather_all_types(attributes, objects, small_types, object["name"])
 
     if object.get("parent"):
         parent_obj = get_object(object["parent"], objects)
         subtypes += gather_all_types(
-            parent_obj["attributes"], objects, parent_obj["name"]
+            parent_obj["attributes"], objects, small_types, parent_obj["name"]
         )
 
     for subtype in subtypes:
