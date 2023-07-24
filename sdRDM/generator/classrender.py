@@ -17,13 +17,11 @@ def render_object(
     inherits: List[Dict],
     repo: Optional[str] = None,
     commit: Optional[str] = None,
+    small_types: Dict = {},
 ) -> str:
     """Renders a class of type object coming from a parsed Markdown model"""
 
     all_objects = objects + enums
-
-    # Keep track of small types
-    small_types = {small_type["name"]: small_type for small_type in object["subtypes"]}
 
     if small_types:
         small_type_part = "\n".join(
@@ -35,7 +33,8 @@ def render_object(
                     repo=repo,
                     commit=commit,
                 )
-                for subtype in object["subtypes"]
+                for subtype in small_types.values()
+                if subtype["origin"] == object["name"]
             ]
         )
     else:
@@ -504,6 +503,12 @@ def render_imports(
         if type not in DataTypes.__members__
         and type != obj_name
         and type not in small_types
+    ]
+
+    local_imports += [
+        f"from .{type['origin'].lower()} import {type['name']}"
+        for type in small_types.values()
+        if type["name"] in all_types and type["origin"] != obj_name
     ]
 
     imports = [

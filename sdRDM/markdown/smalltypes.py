@@ -21,12 +21,12 @@ def process_small_type(dtypes: str, object_stack: List[Dict]):
     small_type = re.match(r"\{(.*)\}", dtypes).groups()[0]
     attr_name = object_stack[-1]["attributes"][-1]["name"]
 
-    small_type_name = snake_to_camel(
-        object_stack[-1]["attributes"][-1]["name"]
-    ).capitalize()
+    small_type_name = snake_to_camel(object_stack[-1]["attributes"][-1]["name"])
+    small_type_name = small_type_name[0].upper() + small_type_name[1:]
 
     return {
         "name": small_type_name,
+        "origin": object_stack[-1]["name"],
         "attr_name": attr_name,
         "attributes": _extract_attributes(small_type, attr_name),
         "docstring": f"Small type for attribute '{attr_name}'",

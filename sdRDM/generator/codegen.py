@@ -77,8 +77,23 @@ def write_classes(
 ) -> None:
     """Renders classes that were parsed from a markdown model and creates a library."""
 
+    # Keep track of small types
+    small_types = {
+        small_type["name"]: small_type
+        for object in objects
+        for small_type in object["subtypes"]
+    }
+
     for object in objects:
-        rendered = render_object(object, objects, enums, inherits, repo, commit)
+        rendered = render_object(
+            object,
+            objects,
+            enums,
+            inherits,
+            repo,
+            commit,
+            small_types,
+        )
         path = os.path.join(libpath, "core", f"{object['name'].lower()}.py")
         save_rendered_to_file(rendered, path, use_formatter)
 
