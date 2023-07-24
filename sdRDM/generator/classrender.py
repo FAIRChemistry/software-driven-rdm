@@ -261,7 +261,6 @@ def get_complex_types(attribute: Dict, objects: List[Dict]) -> List[str]:
     """Checks whether an attributes types contain multiple complex types"""
 
     complex_types = []
-    print(attribute)
 
     for type in attribute["type"]:
         if is_enum_type(type, objects):
@@ -359,8 +358,6 @@ def assemble_signature(
     small_types: Dict,
 ) -> List[Dict]:
     """Takes a non-native sdRDM type defined within the model and extracts all attributes"""
-
-    print("LELEL", type, obj_name)
 
     try:
         sub_object = next(filter(lambda object: object["name"] == type, objects))
