@@ -1,4 +1,5 @@
 from copy import deepcopy
+import re
 from typing import Dict, List, Optional, Union, Tuple
 from jinja2 import Template
 from importlib import resources as pkg_resources
@@ -129,6 +130,7 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
 
     is_multiple = "multiple" in attribute
     is_required = attribute["required"]
+    is_all_optional = _is_optional_single_dtype(attribute, objects)
     has_reference = "reference" in attribute
     attribute["type"] = [
         f'"{dtype}"' if dtype == obj_name else dtype for dtype in attribute["type"]
@@ -136,6 +138,8 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
 
     if is_multiple:
         attribute["default_factory"] = "ListPlus"
+    elif not is_multiple and is_all_optional:
+        attribute["default"] = f"{attribute['type'][0]}()"
 
     if has_reference:
         reference_types = get_reference_type(attribute["reference"], objects)
@@ -146,7 +150,21 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
         required=attribute.pop("required"),
         dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
         metadata=stringize_option_values(attribute),
+        # complete_optional=is_complete_optional,
     )
+
+
+def _is_optional_single_dtype(attribute: Dict, objects: List[Dict]) -> bool:
+    if len(attribute["type"]) > 1:
+        # Has multiplem types
+        return False
+    elif not any(attribute["type"][0] == obj["name"] for obj in objects):
+        # Not a complex type
+        return False
+
+    object = get_object(attribute["type"][0], objects)
+
+    return all(attr["required"] is False for attr in object["attributes"])
 
 
 def combine_types(dtypes: List[str], is_multiple: bool, is_required: bool) -> str:
@@ -192,6 +210,8 @@ def stringize_option_values(attribute: Dict):
 
     for key, option in attribute.items():
         if not is_pure_string_type(option) or option == "ListPlus":
+            continue
+        elif "()" in option:
             continue
         elif is_reference(key, option):
             continue

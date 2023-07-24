@@ -288,6 +288,8 @@ class DataModel(pydantic.BaseModel):
             elif isinstance(value, (dict)):
                 if not value and exclude_none:
                     continue
+                elif self._is_only_id(value):
+                    continue
 
                 if self._convert_types(value, exclude_none, convert_h5ds):
                     nu_data[key] = self._convert_types(
@@ -304,6 +306,11 @@ class DataModel(pydantic.BaseModel):
                 nu_data[key] = value
 
         return nu_data
+
+    @staticmethod
+    def _is_only_id(value):
+        """Checks whether this object is just made up by its ID"""
+        return all(value == None for name, value in value.items() if name != "id")
 
     def _check_and_convert_sub(self, element, exclude_none, convert_h5ds):
         """Helper function used to trigger recursion on deeply nested lists."""
