@@ -1,4 +1,5 @@
 from copy import deepcopy
+from enum import Enum
 import re
 from typing import Dict, List, Optional, Union, Tuple
 from jinja2 import Template
@@ -162,6 +163,9 @@ def _is_optional_single_dtype(attribute: Dict, objects: List[Dict]) -> bool:
         return False
 
     object = get_object(attribute["type"][0], objects)
+
+    if object["type"] == "enum":
+        return False
 
     return all(attr["required"] is False for attr in object["attributes"])
 
