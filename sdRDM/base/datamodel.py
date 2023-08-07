@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import uuid
 import h5py
 import pydantic
 import random
@@ -63,6 +64,7 @@ class DataModel(pydantic.BaseModel):
     __types__: DottedDict = PrivateAttr(default=dict)
     __parent__: Optional["DataModel"] = PrivateAttr(default=None)
     __references__: DottedDict = PrivateAttr(default_factory=DottedDict)
+    __id__: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
 
     def __init__(self, **data):
         super().__init__(**data)
