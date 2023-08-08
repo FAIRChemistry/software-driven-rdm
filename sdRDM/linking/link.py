@@ -205,7 +205,9 @@ def _get_target_meta_path(path: str, target_meta_paths: List[str]):
     if path in digit_free_paths:
         return target_meta_paths[digit_free_paths.index(path)]
 
-    raise ValueError(f"Path {path} not found in {target_meta_paths}")
+    all_paths_string = "\n".join(target_meta_paths)
+
+    raise ValueError(f"Path {path} not found in \n\n {all_paths_string}")
 
 
 def _digit_free_path(path: str):
