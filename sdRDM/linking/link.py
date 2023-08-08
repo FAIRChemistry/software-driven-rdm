@@ -115,17 +115,6 @@ def _construct_explicit_mapping(
 
         explicit_mapping[source_path] = target_path
 
-    with open("log.log", "w") as f:
-        f.write(
-            json.dumps(
-                [
-                    {"source": source, "target": target}
-                    for source, target in explicit_mapping.items()
-                ],
-                indent=4,
-            )
-        )
-
     return explicit_mapping
 
 
