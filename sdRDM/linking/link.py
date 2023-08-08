@@ -1,3 +1,4 @@
+import json
 import re
 import validators
 from typing import Dict, List, Tuple
@@ -108,7 +109,9 @@ def _construct_explicit_mapping(
         )
 
         # Adjust indices if necessary
-        target_path = _adjust_index(target_meta_path, source_path)
+        target_path = _adjust_index(
+            target_meta_path, source_path, list(explicit_mapping.values())
+        )
 
         explicit_mapping[source_path] = target_path
 
@@ -136,7 +139,7 @@ def _gather_paths(
 
 
 def _get_source_meta_paths(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel", template: Dict[str, Dict], target_class: ModelMetaclass
 ) -> Dict[str, str]:
     """Get the source meta paths from the template."""
     source_meta_paths = {}
@@ -201,7 +204,7 @@ def _digit_free_path(path: str):
     return re.sub(r"\/\d+\/", "/", path)
 
 
-def _adjust_index(target_path: str, source_path: str):
+def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
     """This function adjusts the indices of the target path to match the source path
 
     The intend of this method is to preserve the order of the source dataset by
@@ -220,8 +223,20 @@ def _adjust_index(target_path: str, source_path: str):
         attribute/0/attribute2/1/attribute3/1/attribute
     """
 
+    # First, check the current paths for the target path
+    similar_paths = [
+        path
+        for path in current_paths
+        if _digit_free_path(target_path) == _digit_free_path(path)
+    ]
+
     # Build a reverse order of indices
     index_order = [int(part) for part in source_path.split("/")[::-1] if part.isdigit()]
+
+    # If there are similar paths, check if the given indices are lower or equal to the
+    # ones of the current paths. If so, adjust the indices by adding one
+    if similar_paths:
+        index_order = _update_index_order(similar_paths, index_order)
 
     # Re-build the path and include the new index order
     new_path = []
@@ -237,3 +252,46 @@ def _adjust_index(target_path: str, source_path: str):
             new_path.append(part)
 
     return "/".join(new_path[::-1])
+
+
+def _update_index_order(similar_paths: List[str], index_order: List[int]):
+    """Updates the index order to prevent redundant indices.
+
+    Specifically, this function checks if the given index order is lower or equal
+    to the maximum index order of the similar paths. If so, the index order is
+    increased by one.
+
+    Example:
+
+        Suppose the following paths are given to be mapped to the same target:
+
+        source1_tgt = "path/0/path2/0/path3"
+        source2_tgt = "path/0/path2/0/path3"
+
+        Then, to prevent redundant indices, the index order of the second path
+        will be increased by one. Resulting in:
+
+        source1_tgt = "path/0/path2/0/path3"
+        source2_tgt = "path/0/path2/1/path3"
+
+    Args:
+        similar_paths (List[str]): List of similar meta paths
+        index_order (List[int]): Index order of the current path
+
+    Returns:
+        List[int]: Updated index order
+    """
+
+    max_index_order = max(
+        [
+            [int(part) for part in path.split("/")[::-1] if part.isdigit()]
+            for path in similar_paths
+        ]
+    )
+
+    if max_index_order == index_order:
+        return [index + 1 for index in max_index_order]
+    elif max_index_order[-1] >= index_order[-1]:
+        index_order[-1] = max_index_order[-1] + 1
+
+    return index_order
