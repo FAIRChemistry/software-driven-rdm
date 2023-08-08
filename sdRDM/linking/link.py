@@ -70,12 +70,15 @@ def _build_source(source: str) -> "DataModel":
 
 
 def _assemble_dataset(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, str],
+    target_class: ModelMetaclass,
 ) -> Dict:
     """Creates an explicit mapping from the source to the target dataset and transfers values."""
 
     target_dataset = {}
     explicit_mapping = _construct_explicit_mapping(dataset, template, target_class)
+
     for source, target in explicit_mapping.items():
         value = dataset.get(source)
 
@@ -88,7 +91,9 @@ def _assemble_dataset(
 
 
 def _construct_explicit_mapping(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, str],
+    target_class: ModelMetaclass,
 ):
     """Creates an explicit mapping between the source and target dataset."""
 
@@ -119,7 +124,9 @@ def _construct_explicit_mapping(
 
 
 def _gather_paths(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, str],
+    target_class: ModelMetaclass,
 ) -> Tuple[List, Dict, List]:
     """Gathers all the necessary meta and explicit paths.
 
@@ -139,7 +146,9 @@ def _gather_paths(
 
 
 def _get_source_meta_paths(
-    dataset: "DataModel", template: Dict[str, Dict], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, Dict],
+    target_class: ModelMetaclass,
 ) -> Dict[str, str]:
     """Get the source meta paths from the template."""
     source_meta_paths = {}
@@ -149,7 +158,7 @@ def _get_source_meta_paths(
             name = ""
 
         for attr, target in obj.items():
-            source_path = "/".join([name, attr])
+            source_path = "/".join([name, attr]).replace(".", "/")
 
             if not target.startswith(target_class.__name__):
                 continue
