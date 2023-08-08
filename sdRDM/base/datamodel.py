@@ -68,6 +68,10 @@ class DataModel(pydantic.BaseModel):
         super().__init__(**data)
         self._initialize_references()
 
+        for name, value in data.items():
+            # Store references to other objects and vice versa
+            self._add_reference_to_object(name, value)
+
         for field, value in self.__dict__.items():
             if not isinstance(value, ListPlus):
                 continue
