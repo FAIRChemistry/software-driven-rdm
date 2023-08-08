@@ -69,6 +69,9 @@ class DataModel(pydantic.BaseModel):
         self._initialize_references()
 
         for name, value in data.items():
+            if bool(re.match("__[a-zA-Z0-9]*__", name)):
+                continue
+            
             # Store references to other objects and vice versa
             self._add_reference_to_object(name, value)
 

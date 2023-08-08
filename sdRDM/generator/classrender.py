@@ -150,7 +150,6 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
         required=attribute.pop("required"),
         dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
         metadata=stringize_option_values(attribute),
-        # complete_optional=is_complete_optional,
     )
 
 
@@ -217,6 +216,8 @@ def stringize_option_values(attribute: Dict):
         elif "()" in option:
             continue
         elif is_reference(key, option):
+            continue
+        elif key == "default_factory":
             continue
 
         attribute[key] = f'"{option}"'

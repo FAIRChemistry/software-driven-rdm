@@ -181,6 +181,12 @@ def process_type_option(
         dtypes = re.sub(r"\{.*\}", "", dtypes).strip(",")
         processed_types.append(small_type["name"])
 
+        # Set small type as default
+        current_attr = object_stack[-1]["attributes"][-1]
+        current_attr["default_factory"] = f"{small_type['name']}"
+
+        del current_attr["default"]
+
     for dtype in dtypes.split(","):
         dtype = dtype.strip()
 
