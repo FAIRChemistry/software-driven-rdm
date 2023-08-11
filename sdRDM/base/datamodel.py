@@ -71,7 +71,7 @@ class DataModel(pydantic.BaseModel):
         for name, value in data.items():
             if bool(re.match("__[a-zA-Z0-9]*__", name)):
                 continue
-            
+
             # Store references to other objects and vice versa
             self._add_reference_to_object(name, value)
 
@@ -672,34 +672,46 @@ class DataModel(pydantic.BaseModel):
 
     # ! Utilities
     @classmethod
-    def meta_tree(cls, show: bool = True):
+    def meta_tree(
+        cls,
+        show: bool = True,
+        max_depth: int = 0,
+    ):
         """Builds a tree structure from the class definition and all decending types."""
         tree = build_guide_tree(cls)
 
         if show:
-            print_tree(tree)
+            print_tree(tree, max_depth=max_depth)
 
         return tree
 
-    def tree(self, show: bool = True, values: bool = True):
+    def tree(
+        self,
+        show: bool = True,
+        values: bool = True,
+        max_depth: int = 0,
+    ):
         """Builds a tree structure from the class definition and all decending types."""
         tree = build_guide_tree(self)
 
         if show:
             show_tree = self._prune_tree(tree)
-            print_tree(show_tree, attr_list=["value"] if values else [])
+            print_tree(
+                show_tree,
+                attr_list=["value"] if values else [],
+                max_depth=max_depth,
+            )
 
         return tree
 
     def _prune_tree(self, tree: ClassNode):
         """Prunes leaves that have no value given"""
-        show_tree = deepcopy(tree)
-        for node in levelorder_iter(show_tree):
+        for node in levelorder_iter(tree):
             if hasattr(node, "value") and node.value is None and not node.children:
                 node.children = []
                 node.parent = None
 
-        return show_tree
+        return tree
 
     @classmethod
     def visualize_tree(cls):
@@ -920,6 +932,7 @@ class DataModel(pydantic.BaseModel):
 
         tree = self._prune_tree(self.tree(show=False))
         tree_string = ""
+        print(tree)
         for branch, stem, node in yield_tree(tree, style="const"):
             if hasattr(node, "value") and node.value is not None:
                 tree_string += f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC} = {str(node.value)}\n"
