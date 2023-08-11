@@ -40,6 +40,8 @@ class ListPlus(List[Any]):
     def __setattr__(self, name: str, value: Any) -> None:
         if name == "__parent__" and value is not None:
             self.set_parent_for_object_entries(value)
+        elif hasattr(value, "__fields__") and self.__parent__ is not None:
+            value.__parent__ = self.__parent__
 
         return super().__setattr__(name, value)
 
