@@ -9,7 +9,11 @@ from nob import Nob
 from pydantic.main import ModelMetaclass
 
 
-def convert_data_model(dataset, template: Dict = {}):
+def convert_data_model(
+    dataset,
+    template: Dict = {},
+    print_paths: bool = False,
+):
     """
     Converts a given data model to another model that has been specified
     in the attributes metadata. This will create a new object model from
@@ -29,6 +33,13 @@ def convert_data_model(dataset, template: Dict = {}):
     Args:
         option (str): Key of the attribute metadata, where the destination is stored.
     """
+
+    global __print_paths__
+
+    if print_paths:
+        __print_paths__ = True
+    else:
+        __print_paths__ = False
 
     # Create target roots and map data
     model = template.pop("__model__")
@@ -119,6 +130,10 @@ def _construct_explicit_mapping(
         )
 
         explicit_mapping[source_path] = target_path
+
+    if globals()["__print_paths__"]:
+        for source, target in explicit_mapping.items():
+            print(f"{source} -> {target}")
 
     return explicit_mapping
 
@@ -235,34 +250,55 @@ def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
     """
 
     # First, check the current paths for the target path
-    similar_paths = [
-        path
-        for path in current_paths
-        if _digit_free_path(target_path) == _digit_free_path(path)
-    ]
+    # similar_paths = [
+    #     path
+    #     for path in current_paths
+    #     if _digit_free_path(target_path) == _digit_free_path(path)
+    # ]
 
     # Build a reverse order of indices
-    index_order = [int(part) for part in source_path.split("/")[::-1] if part.isdigit()]
+    source_order = _get_digit_order(source_path)
+    target_order = _get_digit_order(target_path)
+    diff = len(source_order) - len(target_order)
+
+    if diff > 0:
+        source_order = source_order[:-(diff)]
 
     # If there are similar paths, check if the given indices are lower or equal to the
     # ones of the current paths. If so, adjust the indices by adding one
-    if similar_paths:
-        index_order = _update_index_order(similar_paths, index_order)
+    # if similar_paths:
+    #     index_order = _update_index_order(similar_paths, index_order)
 
     # Re-build the path and include the new index order
     new_path = []
+
+    # Check whether the source path relations are longer and
+    # if so use the (length - diff) index for relation
+
+    # Reverse source order
+    source_order = source_order[::-1]
 
     for part in target_path.split("/")[::-1]:
         if not part.isdigit():
             new_path.append(part)
             continue
 
-        if index_order:
-            new_path.append(str(index_order.pop(0)))
+        if source_order:
+            new_path.append(str(source_order.pop(0)))
         else:
             new_path.append(part)
 
     return "/".join(new_path[::-1])
+
+
+def _get_digit_order(path: str):
+    """Extract the digits within paths.
+
+    Args:
+        path (str): The path to parse
+    """
+
+    return [int(part) for part in path.split("/") if part.isdigit()]
 
 
 def _update_index_order(similar_paths: List[str], index_order: List[int]):

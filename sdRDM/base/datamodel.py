@@ -374,7 +374,11 @@ class DataModel(pydantic.BaseModel):
         """Writes the object instance to HDF5."""
         write_hdf5(self, file)
 
-    def convert_to(self, template: Union[str, None, Dict] = None):
+    def convert_to(
+        self,
+        template: Union[str, None, Dict] = None,
+        print_paths: bool = False,
+    ):
         """
         Converts a given data model to another model that has been specified
         in the attributes metadata. This will create a new object model from
@@ -406,7 +410,11 @@ class DataModel(pydantic.BaseModel):
 
         assert isinstance(template, dict), f"Template is not a dictionary"
 
-        return convert_data_model(dataset=self, template=template)
+        return convert_data_model(
+            dataset=self,
+            template=template,
+            print_paths=print_paths,
+        )
 
     def to_sql(self, loc: str):
         """Adds data to a complementary SQL database"""
@@ -932,7 +940,7 @@ class DataModel(pydantic.BaseModel):
 
         tree = self._prune_tree(self.tree(show=False))
         tree_string = ""
-        print(tree)
+
         for branch, stem, node in yield_tree(tree, style="const"):
             if hasattr(node, "value") and node.value is not None:
                 tree_string += f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC} = {str(node.value)}\n"
