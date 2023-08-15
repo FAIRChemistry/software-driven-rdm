@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import uuid
 import h5py
 import pydantic
 import random
@@ -26,6 +27,7 @@ from lxml import etree
 from pydantic import PrivateAttr, validator
 from sqlalchemy.orm import declarative_base
 from typing import List, Dict, Optional, IO, Union, get_args, Callable
+from astropy.units import Unit
 
 from sdRDM.base.importedmodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
@@ -61,9 +63,19 @@ class DataModel(pydantic.BaseModel):
     __node__: Optional[Node] = PrivateAttr(default=None)
     __types__: DottedDict = PrivateAttr(default=dict)
     __parent__: Optional["DataModel"] = PrivateAttr(default=None)
+    __references__: DottedDict = PrivateAttr(default_factory=DottedDict)
+    __id__: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
 
     def __init__(self, **data):
         super().__init__(**data)
+        self._initialize_references()
+
+        for name, value in data.items():
+            if bool(re.match("__[a-zA-Z0-9]*__", name)):
+                continue
+
+            # Store references to other objects and vice versa
+            self._add_reference_to_object(name, value)
 
         for field, value in self.__dict__.items():
             if not isinstance(value, ListPlus):
@@ -83,6 +95,11 @@ class DataModel(pydantic.BaseModel):
                     [subtype for subtype in args if hasattr(subtype, "__fields__")]
                 )
 
+    def _initialize_references(self):
+        """Initialized references for each field present in the data model"""
+        for field in self.__fields__:
+            self.__references__[field] = ListPlus()
+
     # ! Getters
     def get(
         self,
@@ -92,7 +109,7 @@ class DataModel(pydantic.BaseModel):
     ):
         if isinstance(path, Path):
             path = str(path)
-        
+
         if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
@@ -211,7 +228,7 @@ class DataModel(pydantic.BaseModel):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
 
         metapaths = set()
-        for node in LevelOrderIter(cls.create_tree()[0]):
+        for node in LevelOrderIter(cls.meta_tree(show=False)):
             if len(node.node_path) == 1:
                 continue
 
@@ -224,7 +241,7 @@ class DataModel(pydantic.BaseModel):
                     "/".join([n.name for n in node.node_path if n.name[0].islower()])
                 )
 
-        return sorted(metapaths, key=lambda path: len(path.split("/")))
+        return sorted(metapaths)
 
     def query(self, query: str) -> Dict:
         """Takes a graphql query and extracts all data matching the structure and arguments"""
@@ -280,6 +297,8 @@ class DataModel(pydantic.BaseModel):
             elif isinstance(value, (dict)):
                 if not value and exclude_none:
                     continue
+                elif self._is_only_id(value):
+                    continue
 
                 if self._convert_types(value, exclude_none, convert_h5ds):
                     nu_data[key] = self._convert_types(
@@ -296,6 +315,11 @@ class DataModel(pydantic.BaseModel):
                 nu_data[key] = value
 
         return nu_data
+
+    @staticmethod
+    def _is_only_id(value):
+        """Checks whether this object is just made up by its ID"""
+        return all(value == None for name, value in value.items() if name != "id")
 
     def _check_and_convert_sub(self, element, exclude_none, convert_h5ds):
         """Helper function used to trigger recursion on deeply nested lists."""
@@ -352,7 +376,11 @@ class DataModel(pydantic.BaseModel):
         """Writes the object instance to HDF5."""
         write_hdf5(self, file)
 
-    def convert_to(self, template: Union[str, None, Dict] = None):
+    def convert_to(
+        self,
+        template: Union[str, None, Dict] = None,
+        print_paths: bool = False,
+    ):
         """
         Converts a given data model to another model that has been specified
         in the attributes metadata. This will create a new object model from
@@ -384,7 +412,11 @@ class DataModel(pydantic.BaseModel):
 
         assert isinstance(template, dict), f"Template is not a dictionary"
 
-        return convert_data_model(dataset=self, template=template)
+        return convert_data_model(
+            dataset=self,
+            template=template,
+            print_paths=print_paths,
+        )
 
     def to_sql(self, loc: str):
         """Adds data to a complementary SQL database"""
@@ -650,34 +682,46 @@ class DataModel(pydantic.BaseModel):
 
     # ! Utilities
     @classmethod
-    def meta_tree(cls, show: bool = True):
+    def meta_tree(
+        cls,
+        show: bool = True,
+        max_depth: int = 0,
+    ):
         """Builds a tree structure from the class definition and all decending types."""
         tree = build_guide_tree(cls)
 
         if show:
-            print_tree(tree)
+            print_tree(tree, max_depth=max_depth)
 
         return tree
 
-    def tree(self, show: bool = True, values: bool = True):
+    def tree(
+        self,
+        show: bool = True,
+        values: bool = True,
+        max_depth: int = 0,
+    ):
         """Builds a tree structure from the class definition and all decending types."""
         tree = build_guide_tree(self)
 
         if show:
             show_tree = self._prune_tree(tree)
-            print_tree(show_tree, attr_list=["value"] if values else [])
+            print_tree(
+                show_tree,
+                attr_list=["value"] if values else [],
+                max_depth=max_depth,
+            )
 
         return tree
 
     def _prune_tree(self, tree: ClassNode):
         """Prunes leaves that have no value given"""
-        show_tree = deepcopy(tree)
-        for node in levelorder_iter(show_tree):
+        for node in levelorder_iter(tree):
             if hasattr(node, "value") and node.value is None and not node.children:
                 node.children = []
                 node.parent = None
 
-        return show_tree
+        return tree
 
     @classmethod
     def visualize_tree(cls):
@@ -696,6 +740,15 @@ class DataModel(pydantic.BaseModel):
             return str(value)
         else:
             return value
+
+    @validator("*", pre=True, always=True)
+    def unit_validator(cls, v, values, config, field):
+        if field.type_.__name__ == "UnitBase":
+            if isinstance(v, str):
+                return Unit(v)
+            return v
+
+        return v
 
     @staticmethod
     def _convert_numpy_type(value):
@@ -749,18 +802,36 @@ class DataModel(pydantic.BaseModel):
 
     # ! Overloads
     def __setattr__(self, name, value):
-        if name == "__parent__" or name == "__types__":
+        if bool(re.match("__[a-zA-Z0-9]*__", name)):
             return super().__setattr__(name, value)
 
-        self.set_parent_instances(value)
-        self.check_references(name, value)
+        self._add_reference_to_object(name, value)
+        self._set_parent_instances(value)
+        self._check_references(name, value)
 
         super().__setattr__(name, value)
 
         if isinstance(value, list):
             self.__dict__[name].__parent__ = self
 
-    def check_references(self, name, value):
+    def _add_reference_to_object(self, name, value):
+        """Adds the current class to the referenced object to maintain its relation"""
+
+        extra = self.__fields__[name].field_info.extra
+
+        if "reference" not in extra:
+            return
+        elif not hasattr(value, "__fields__"):
+            return
+
+        # Add the relation to the attribute of this field
+        self.__references__[name].append(value)
+
+        # Also add it to the other object
+        target_attr = extra["reference"].split(".")[-1]
+        value.__references__[target_attr].append(self)
+
+    def _check_references(self, name, value):
         """Checks whether references are compliant"""
 
         if self.is_data_model(value):
@@ -779,7 +850,7 @@ class DataModel(pydantic.BaseModel):
                 """
             )
 
-    def set_parent_instances(self, value) -> None:
+    def _set_parent_instances(self, value) -> None:
         """Sets current instance as the parent to objects"""
         if isinstance(value, ListPlus):
             value.__parent__ = self
@@ -871,6 +942,7 @@ class DataModel(pydantic.BaseModel):
 
         tree = self._prune_tree(self.tree(show=False))
         tree_string = ""
+
         for branch, stem, node in yield_tree(tree, style="const"):
             if hasattr(node, "value") and node.value is not None:
                 tree_string += f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC} = {str(node.value)}\n"

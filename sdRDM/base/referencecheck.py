@@ -59,7 +59,7 @@ def traverse_to_root_node(obj: "DataModel", root: str) -> Optional["DataModel"]:
     while True:
         if obj.__class__.__name__ == root:
             return obj
-        elif obj.__parent__ is None:
+        elif hasattr(obj, "__parent__") and obj.__parent__ is None:
             return None
 
         obj = obj.__parent__

@@ -1,3 +1,4 @@
+import json
 import re
 import validators
 from typing import Dict, List, Tuple
@@ -8,7 +9,11 @@ from nob import Nob
 from pydantic.main import ModelMetaclass
 
 
-def convert_data_model(dataset, template: Dict = {}):
+def convert_data_model(
+    dataset,
+    template: Dict = {},
+    print_paths: bool = False,
+):
     """
     Converts a given data model to another model that has been specified
     in the attributes metadata. This will create a new object model from
@@ -28,6 +33,13 @@ def convert_data_model(dataset, template: Dict = {}):
     Args:
         option (str): Key of the attribute metadata, where the destination is stored.
     """
+
+    global __print_paths__
+
+    if print_paths:
+        __print_paths__ = True
+    else:
+        __print_paths__ = False
 
     # Create target roots and map data
     model = template.pop("__model__")
@@ -69,12 +81,15 @@ def _build_source(source: str) -> "DataModel":
 
 
 def _assemble_dataset(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, str],
+    target_class: ModelMetaclass,
 ) -> Dict:
     """Creates an explicit mapping from the source to the target dataset and transfers values."""
 
     target_dataset = {}
     explicit_mapping = _construct_explicit_mapping(dataset, template, target_class)
+
     for source, target in explicit_mapping.items():
         value = dataset.get(source)
 
@@ -87,7 +102,9 @@ def _assemble_dataset(
 
 
 def _construct_explicit_mapping(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, str],
+    target_class: ModelMetaclass,
 ):
     """Creates an explicit mapping between the source and target dataset."""
 
@@ -108,15 +125,23 @@ def _construct_explicit_mapping(
         )
 
         # Adjust indices if necessary
-        target_path = _adjust_index(target_meta_path, source_path)
+        target_path = _adjust_index(
+            target_meta_path, source_path, list(explicit_mapping.values())
+        )
 
         explicit_mapping[source_path] = target_path
+
+    if globals()["__print_paths__"]:
+        for source, target in explicit_mapping.items():
+            print(f"{source} -> {target}")
 
     return explicit_mapping
 
 
 def _gather_paths(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, str],
+    target_class: ModelMetaclass,
 ) -> Tuple[List, Dict, List]:
     """Gathers all the necessary meta and explicit paths.
 
@@ -136,7 +161,9 @@ def _gather_paths(
 
 
 def _get_source_meta_paths(
-    dataset: "DataModel", template: Dict[str, str], target_class: ModelMetaclass
+    dataset: "DataModel",
+    template: Dict[str, Dict],
+    target_class: ModelMetaclass,
 ) -> Dict[str, str]:
     """Get the source meta paths from the template."""
     source_meta_paths = {}
@@ -146,7 +173,7 @@ def _get_source_meta_paths(
             name = ""
 
         for attr, target in obj.items():
-            source_path = "/".join([name, attr])
+            source_path = "/".join([name, attr]).replace(".", "/")
 
             if not target.startswith(target_class.__name__):
                 continue
@@ -193,7 +220,9 @@ def _get_target_meta_path(path: str, target_meta_paths: List[str]):
     if path in digit_free_paths:
         return target_meta_paths[digit_free_paths.index(path)]
 
-    raise ValueError(f"Path {path} not found in {target_meta_paths}")
+    all_paths_string = "\n".join(target_meta_paths)
+
+    raise ValueError(f"Path {path} not found in \n\n {all_paths_string}")
 
 
 def _digit_free_path(path: str):
@@ -201,7 +230,7 @@ def _digit_free_path(path: str):
     return re.sub(r"\/\d+\/", "/", path)
 
 
-def _adjust_index(target_path: str, source_path: str):
+def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
     """This function adjusts the indices of the target path to match the source path
 
     The intend of this method is to preserve the order of the source dataset by
@@ -220,20 +249,92 @@ def _adjust_index(target_path: str, source_path: str):
         attribute/0/attribute2/1/attribute3/1/attribute
     """
 
+    # First, check the current paths for the target path
+    # similar_paths = [
+    #     path
+    #     for path in current_paths
+    #     if _digit_free_path(target_path) == _digit_free_path(path)
+    # ]
+
     # Build a reverse order of indices
-    index_order = [int(part) for part in source_path.split("/")[::-1] if part.isdigit()]
+    source_order = _get_digit_order(source_path)
+    target_order = _get_digit_order(target_path)
+    diff = len(source_order) - len(target_order)
+
+    if diff > 0:
+        source_order = source_order[:-(diff)]
+    elif diff < 0:
+        raise NotImplementedError(
+            f"Target path {target_path} has more indices than source path {source_path}. This functionality is not yet implemented."
+        )
 
     # Re-build the path and include the new index order
     new_path = []
+
+    # Reverse source order
+    source_order = source_order[::-1]
 
     for part in target_path.split("/")[::-1]:
         if not part.isdigit():
             new_path.append(part)
             continue
 
-        if index_order:
-            new_path.append(str(index_order.pop(0)))
+        if source_order:
+            new_path.append(str(source_order.pop(0)))
         else:
             new_path.append(part)
 
     return "/".join(new_path[::-1])
+
+
+def _get_digit_order(path: str):
+    """Extract the digits within paths.
+
+    Args:
+        path (str): The path to parse
+    """
+
+    return [int(part) for part in path.split("/") if part.isdigit()]
+
+
+def _update_index_order(similar_paths: List[str], index_order: List[int]):
+    """Updates the index order to prevent redundant indices.
+
+    Specifically, this function checks if the given index order is lower or equal
+    to the maximum index order of the similar paths. If so, the index order is
+    increased by one.
+
+    Example:
+
+        Suppose the following paths are given to be mapped to the same target:
+
+        source1_tgt = "path/0/path2/0/path3"
+        source2_tgt = "path/0/path2/0/path3"
+
+        Then, to prevent redundant indices, the index order of the second path
+        will be increased by one. Resulting in:
+
+        source1_tgt = "path/0/path2/0/path3"
+        source2_tgt = "path/0/path2/1/path3"
+
+    Args:
+        similar_paths (List[str]): List of similar meta paths
+        index_order (List[int]): Index order of the current path
+
+    Returns:
+        List[int]: Updated index order
+    """
+
+    max_index_order = max(
+        [
+            [int(part) for part in path.split("/")[::-1] if part.isdigit()]
+            for path in similar_paths
+        ]
+    )
+
+    if max_index_order == index_order:
+        return [index + 1 for index in max_index_order]
+    elif max_index_order[-1] >= index_order[-1]:
+        index_order[-1] = max_index_order[-1] + 1
+
+    return index_order
