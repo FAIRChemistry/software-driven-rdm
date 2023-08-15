@@ -1,6 +1,7 @@
+from copy import deepcopy
 import re
 import validators
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from bigtree import dict_to_tree, levelorder_iter, tree_to_dict
 from dotted_dict import DottedDict
@@ -93,49 +94,106 @@ def _has_tag_or_commit(source: str) -> bool:
     return True
 
 
-def _has_commit(source: str) -> bool:
-    """Checks whether the given source has a commit."""
-
-    if "@" not in source:
-        return False
-
-    tag = re.split(r"@", source)[1].strip()
-
-    print("CHECK", validators.sha256(tag))
-
-    return validators.sha256(tag)  # type: ignore
-
-
 def _assemble_dataset(
     dataset: "DataModel",
-    template: Dict[str, str],
+    template: Dict[str, Dict],
     target_class: ModelMetaclass,
 ) -> Dict:
     """Creates an explicit mapping from the source to the target dataset and transfers values."""
 
-    target_dataset = {}
-    explicit_mapping = _construct_explicit_mapping(dataset, template, target_class)
+    template = deepcopy(template)
 
+    target_dataset = {}
+    explicit_mapping, constants = _construct_explicit_mapping(
+        dataset,
+        template,
+        target_class,
+    )
+
+    # Map from dataset to target
     for source, target in explicit_mapping.items():
         value = dataset.get(source)
 
         if isinstance(value, list) and len(value) == 1:
             value = value[0]
 
-        target_dataset[target] = {"value": value}
+        context = "/".join(_digit_free_path(source).split("/")[:-1])
 
-    return _convert_value_tree_to_dict(dict_to_tree(target_dataset))
+        if not context:
+            context = "/"
+
+        target_dataset[target] = {
+            "value": value,
+            "context": context,
+        }
+
+    # Map constants
+    constants_mapping = {}
+    for constant in constants:
+        target = constant.pop("target")
+        constants_mapping.update(
+            _process_constant_target(target_dataset, target, constant)
+        )
+
+    # Add them to the target dataset
+    target_dataset.update(constants_mapping)
+
+    return _convert_value_tree_to_dict(dict_to_tree(target_dataset))  # type: ignore
+
+
+def _process_constant_target(
+    target_dataset: Dict,
+    target: str,
+    config: Dict,
+) -> Dict:
+    target_parent = "/" + "/".join(target.split("/")[:-1])
+    constants_mapping = {}
+
+    matching_parent_paths = _find_matching_parent_paths(
+        target_dataset,
+        target_parent,
+        config["context"],
+    )
+
+    if len(matching_parent_paths) == 1:
+        constants_mapping[target] = {"value": config["value"]}
+        return constants_mapping
+
+    for parent_path in matching_parent_paths:
+        full_path = "/".join([parent_path, target.split("/")[-1]])
+        constants_mapping[full_path] = {"value": config["value"]}
+
+    return constants_mapping
+
+
+def _find_matching_parent_paths(
+    target_dataset: Dict,
+    target_parent: str,
+    context: str,
+):
+    matching_parents = []
+
+    for path, config in target_dataset.items():
+        meta_parent_path = "/".join(_digit_free_path(path).split("/")[:-1])
+        same_context = config["context"] == context
+
+        if meta_parent_path == target_parent and same_context:
+            matching_parents.append("/".join(path.split("/")[:-1]))
+
+    return list(set(matching_parents))
 
 
 def _construct_explicit_mapping(
     dataset: "DataModel",
-    template: Dict[str, str],
+    template: Dict[str, Dict],
     target_class: ModelMetaclass,
 ):
     """Creates an explicit mapping between the source and target dataset."""
 
-    dataset_paths, source_meta_paths, target_meta_paths = _gather_paths(
-        dataset, template, target_class
+    dataset_paths, source_meta_paths, target_meta_paths, constants = _gather_paths(
+        dataset,
+        template,
+        target_class,
     )
 
     explicit_mapping = {}
@@ -155,44 +213,124 @@ def _construct_explicit_mapping(
             target_meta_path, source_path, list(explicit_mapping.values())
         )
 
+        if target_path in explicit_mapping.values():
+            target_path = _process_duplicate_path(
+                target_path,
+                source_path,
+                explicit_mapping,
+            )
+
         explicit_mapping[source_path] = target_path
 
     if globals()["__print_paths__"]:
         for source, target in explicit_mapping.items():
             print(f"{source} -> {target}")
 
-    return explicit_mapping
+    return explicit_mapping, constants
+
+
+def _process_duplicate_path(
+    target_path: str,
+    source_path: str,
+    explicit_mapping: Dict[str, str],
+):
+    """Processes duplicate paths and increments based on the depth diff of both models"""
+
+    same_paths = _get_similar_paths(
+        target_path,
+        list(explicit_mapping.values()),
+    )
+
+    n_digits_source = len(_get_digit_order(source_path))
+    n_digits_target = len(_get_digit_order(target_path))
+
+    # Get the diff and thus the index to increment
+    diff = n_digits_source - n_digits_target
+
+    if diff < 0:
+        raise NotImplementedError(
+            f"Target path {target_path} has more indices than source path {source_path}. This functionality is not yet implemented."
+        )
+
+    return _adjust_diff_index(target_path, same_paths, diff)
+
+
+def _adjust_diff_index(
+    target_path: str,
+    same_paths: List[str],
+    diff: int,
+):
+    """Increments the first index found in the target path"""
+
+    # Get the maximum first index
+    max_first_index = _get_max_diff_index(same_paths, diff)
+
+    # Reconstruct the path with the first index incremented by one
+    new_path = []
+    digit_index = 0
+
+    for part in target_path.split("/"):
+        if part.isdigit() and digit_index == diff:
+            new_path.append(str(max_first_index + 1))
+            digit_index += 1
+            continue
+        elif part.isdigit() and digit_index != diff:
+            digit_index += 1
+        else:
+            new_path.append(part)
+
+    return "/".join(new_path)
+
+
+def _get_max_diff_index(same_paths: List[str], diff: int):
+    """Gets the maximum first index from a list of paths"""
+
+    return max(
+        [
+            [int(part) for part in path.split("/") if part.isdigit()][diff]
+            for path in same_paths
+        ]
+    )
+
+
+def _get_similar_paths(path: str, paths: List[str]):
+    """Gets all paths that are similar to the given path."""
+
+    return [p for p in paths if _digit_free_path(path) == _digit_free_path(p)]
 
 
 def _gather_paths(
     dataset: "DataModel",
-    template: Dict[str, str],
+    template: Dict[str, Dict],
     target_class: ModelMetaclass,
-) -> Tuple[List, Dict, List]:
+) -> Tuple[List, Dict, List, List]:
     """Gathers all the necessary meta and explicit paths.
 
     Explicit in the sense of strict list indices within the path
     """
 
-    source_meta_paths = _get_source_meta_paths(dataset, template, target_class)
+    source_meta_paths, constants = _get_source_meta_paths(
+        dataset, template, target_class
+    )
     dataset_paths = [
         str(path)
         for path in dataset.paths()
         if re.sub(r"\/\d+\/", "/", str(path)) in source_meta_paths
     ]
 
-    target_meta_paths = list(tree_to_dict(target_class.meta_tree(show=False)).keys())
+    target_meta_paths = list(tree_to_dict(target_class.meta_tree(show=False)).keys())  # type: ignore
 
-    return dataset_paths, source_meta_paths, target_meta_paths
+    return dataset_paths, source_meta_paths, target_meta_paths, constants
 
 
 def _get_source_meta_paths(
     dataset: "DataModel",
     template: Dict[str, Dict],
     target_class: ModelMetaclass,
-) -> Dict[str, str]:
+) -> Tuple[Dict[str, str], List[Dict]]:
     """Get the source meta paths from the template."""
     source_meta_paths = {}
+    constants = []
 
     for name, obj in template.items():
         if name == dataset.__class__.__name__:
@@ -200,6 +338,18 @@ def _get_source_meta_paths(
 
         for attr, target in obj.items():
             source_path = "/".join([name, attr]).replace(".", "/")
+            context = "/" + "/".join(source_path.split("/")[:-1])
+
+            if isinstance(target, dict):
+                constants += [
+                    {
+                        "target": target,
+                        "value": constant_value,
+                        "context": context,
+                    }
+                    for constant_value, target in target.items()
+                ]
+                continue
 
             if not target.startswith(target_class.__name__):
                 continue
@@ -211,7 +361,7 @@ def _get_source_meta_paths(
 
             source_meta_paths[source_path] = target
 
-    return source_meta_paths
+    return source_meta_paths, constants
 
 
 def _convert_value_tree_to_dict(target_dataset: Dict) -> Dict:
