@@ -263,17 +263,13 @@ def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
 
     if diff > 0:
         source_order = source_order[:-(diff)]
-
-    # If there are similar paths, check if the given indices are lower or equal to the
-    # ones of the current paths. If so, adjust the indices by adding one
-    # if similar_paths:
-    #     index_order = _update_index_order(similar_paths, index_order)
+    elif diff < 0:
+        raise NotImplementedError(
+            f"Target path {target_path} has more indices than source path {source_path}. This functionality is not yet implemented."
+        )
 
     # Re-build the path and include the new index order
     new_path = []
-
-    # Check whether the source path relations are longer and
-    # if so use the (length - diff) index for relation
 
     # Reverse source order
     source_order = source_order[::-1]
