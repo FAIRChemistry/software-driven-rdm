@@ -25,6 +25,7 @@ from h5py._hl.files import File as H5File
 from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
 from pydantic import PrivateAttr, validator
+from pydantic.main import ModelMetaclass
 from sqlalchemy.orm import declarative_base
 from typing import List, Dict, Optional, IO, Union, get_args, Callable
 from astropy.units import Unit
@@ -52,7 +53,13 @@ from sdRDM.tools.gitutils import (
 )
 
 
-class DataModel(pydantic.BaseModel):
+class Meta(ModelMetaclass):
+    def __str__(cls):
+        cls.meta_tree()
+        return ""
+
+
+class DataModel(pydantic.BaseModel, metaclass=Meta):
     class Config:
         validate_assignment = True
         use_enum_values = True
