@@ -75,34 +75,35 @@ def _build_source(source: str) -> "DataModel":
 def _get_git_source(source: str, data_model: "DataModel") -> "DataModel":
     """Fetches a git source from the given string."""
 
-    if _has_commit(source):
-        tag = None
-        commit = re.split(r"@", source)[1]
-        url = re.split(r"@", source)[0]
-    elif _has_tag(source):
-        commit = None
-        tag = re.split(r"#", source)[1]
-        url = re.split(r"#", source)[0]
+    if _has_tag_or_commit(source):
+        commit = re.split(r"@", source)[1].strip()
+        url = re.split(r"@", source)[0].strip()
+
+        return data_model.from_git(url=url, commit=commit)
     else:
-        commit = None
-        tag = None
-        url = source
-
-    return data_model.from_git(
-        url=url,
-        tag=tag,
-        commit=commit,
-    )
+        return data_model.from_git(url=source)
 
 
-def _has_tag(source: str) -> bool:
+def _has_tag_or_commit(source: str) -> bool:
     """Checks whether the given source has a tag."""
-    return bool(re.match(r".*#.*", source))
+
+    if "@" not in source:
+        return False
+
+    return True
 
 
 def _has_commit(source: str) -> bool:
     """Checks whether the given source has a commit."""
-    return bool(re.match(r".*@.*", source))
+
+    if "@" not in source:
+        return False
+
+    tag = re.split(r"@", source)[1].strip()
+
+    print("CHECK", validators.sha256(tag))
+
+    return validators.sha256(tag)  # type: ignore
 
 
 def _assemble_dataset(
