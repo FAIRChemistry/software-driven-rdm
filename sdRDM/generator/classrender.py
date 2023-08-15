@@ -130,7 +130,7 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
 
     is_multiple = "multiple" in attribute
     is_required = attribute["required"]
-    is_all_optional = _is_optional_single_dtype(attribute, objects)
+    is_all_optional = _is_optional_single_dtype(attribute, objects, obj_name)
     has_reference = "reference" in attribute
     attribute["type"] = [
         f'"{dtype}"' if dtype == obj_name else dtype for dtype in attribute["type"]
@@ -153,7 +153,11 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
     )
 
 
-def _is_optional_single_dtype(attribute: Dict, objects: List[Dict]) -> bool:
+def _is_optional_single_dtype(
+    attribute: Dict,
+    objects: List[Dict],
+    obj_name: str,
+) -> bool:
     if len(attribute["type"]) > 1:
         # Has multiplem types
         return False
@@ -164,6 +168,9 @@ def _is_optional_single_dtype(attribute: Dict, objects: List[Dict]) -> bool:
     object = get_object(attribute["type"][0], objects)
 
     if object["type"] == "enum":
+        return False
+    elif obj_name == attribute["type"][0]:
+        # Recursion is not possible
         return False
 
     return all(attr["required"] is False for attr in object["attributes"])
