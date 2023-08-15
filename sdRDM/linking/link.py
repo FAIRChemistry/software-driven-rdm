@@ -1,4 +1,3 @@
-import json
 import re
 import validators
 from typing import Dict, List, Tuple
@@ -67,17 +66,43 @@ def _build_source(source: str) -> "DataModel":
 
     from sdRDM import DataModel
 
-    if bool(validators.url(source)):
-        url, *tag = re.split(r"@|#", source)
-
-        if tag:
-            tag = tag[0]
-        else:
-            tag = None
-
-        return DataModel.from_git(url=url, tag=tag)
+    if bool(validators.url(source)):  # type: ignore
+        return _get_git_source(source, DataModel)
 
     return DataModel.from_markdown(source)
+
+
+def _get_git_source(source: str, data_model: "DataModel") -> "DataModel":
+    """Fetches a git source from the given string."""
+
+    if _has_commit(source):
+        tag = None
+        commit = re.split(r"@", source)[1]
+        url = re.split(r"@", source)[0]
+    elif _has_tag(source):
+        commit = None
+        tag = re.split(r"#", source)[1]
+        url = re.split(r"#", source)[0]
+    else:
+        commit = None
+        tag = None
+        url = source
+
+    return data_model.from_git(
+        url=url,
+        tag=tag,
+        commit=commit,
+    )
+
+
+def _has_tag(source: str) -> bool:
+    """Checks whether the given source has a tag."""
+    return bool(re.match(r".*#.*", source))
+
+
+def _has_commit(source: str) -> bool:
+    """Checks whether the given source has a commit."""
+    return bool(re.match(r".*@.*", source))
 
 
 def _assemble_dataset(
