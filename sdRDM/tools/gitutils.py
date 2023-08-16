@@ -3,13 +3,11 @@ import glob
 import importlib
 import os
 import random
-import subprocess
 import sys
 import tempfile
 import toml
 import yaml
 
-from functools import lru_cache
 from typing import Optional, Union, Type, Dict
 
 CACHE_SIZE = 20
@@ -31,7 +29,6 @@ class ObjectNode:
         return repr(self.cls)
 
 
-@lru_cache(maxsize=CACHE_SIZE)
 def build_library_from_git_specs(
     url: str,
     tmpdirname: str,
@@ -55,7 +52,7 @@ def build_library_from_git_specs(
 
     # Import generator to prevent circular import
     from sdRDM.generator.codegen import generate_python_api
-    
+
     tmpdirname = tempfile.mkdtemp()
 
     # Fetch from github
@@ -73,7 +70,6 @@ def build_library_from_git_specs(
     # Get possible linking templates
     links = {}
     for path in glob.glob(os.path.join(tmpdirname, "links", "*")):
-
         if path.endswith("toml"):
             linking_template = toml.load(open(path))
         elif path.endswith("yaml") or path.endswith("yml"):
@@ -98,14 +94,13 @@ def build_library_from_git_specs(
         only_classes=only_classes,
         use_formatter=False,
     )
-    
+
     if only_classes:
         return cls_defs
 
     return _import_library(api_loc=api_loc, lib_name=lib_name), links
-    
 
-@lru_cache(maxsize=CACHE_SIZE)
+
 def _import_library(api_loc: str, lib_name: str):
     spec = importlib.util.spec_from_file_location(  # type: ignore
         lib_name, os.path.join(api_loc, "core", "__init__.py")
