@@ -287,7 +287,7 @@ def _get_max_diff_index(same_paths: List[str], diff: int):
 
     return max(
         [
-            [int(part) for part in path.split("/") if part.isdigit()][diff]
+            [int(part) for part in path.split("/") if part.isdigit()][-diff]
             for path in same_paths
         ]
     )
