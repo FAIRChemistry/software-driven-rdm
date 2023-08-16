@@ -1,4 +1,3 @@
-from copy import deepcopy
 import inspect
 import json
 import os
@@ -24,10 +23,11 @@ from bigtree import print_tree, levelorder_iter, yield_tree
 from h5py._hl.files import File as H5File
 from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
+from functools import lru_cache
 from pydantic import PrivateAttr, validator
 from pydantic.main import ModelMetaclass
 from sqlalchemy.orm import declarative_base
-from typing import List, Dict, Optional, IO, Union, get_args, Callable
+from typing import List, Dict, Optional, IO, Union, get_args, Callable, get_origin
 from astropy.units import Unit
 
 from sdRDM.base.importedmodules import ImportedModules
@@ -304,7 +304,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             elif isinstance(value, (dict)):
                 if not value and exclude_none:
                     continue
-                elif self._is_only_id(value):
+                elif self._is_empty(value):
                     continue
 
                 if self._convert_types(value, exclude_none, convert_h5ds):
@@ -323,10 +323,23 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         return nu_data
 
-    @staticmethod
-    def _is_only_id(value):
+    def _is_empty(self, value):
         """Checks whether this object is just made up by its ID"""
-        return all(value == None for name, value in value.items() if name != "id")
+
+        is_empty = True
+
+        for name, value in value.items():
+            if name == "id":
+                continue
+
+            if isinstance(value, list):
+                is_empty = all([self._is_empty(subvalue) for subvalue in value])
+            elif isinstance(value, dict):
+                is_empty = self._is_empty(value)
+            else:
+                is_empty = value == None
+
+        return is_empty
 
     def _check_and_convert_sub(self, element, exclude_none, convert_h5ds):
         """Helper function used to trigger recursion on deeply nested lists."""
@@ -601,6 +614,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         return cls._extract_modules(lib=lib, links={})
 
     @classmethod
+    @lru_cache(maxsize=128)
     def from_git(
         cls,
         url: str,
@@ -757,6 +771,19 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         return v
 
+    @validator("*", pre=True, always=True)
+    def convert_lists_to_ndarray(cls, value, values, config, field):
+        if cls._has_ndarray(field.type_) and isinstance(value, list):
+            return np.array(value)
+
+        return value
+
+    @staticmethod
+    def _has_ndarray(dtype):
+        return any(
+            t.__name__ == "ndarray" for t in get_args(dtype) if hasattr(t, "__name__")
+        )
+
     @staticmethod
     def _convert_numpy_type(value):
         """Helper function to convert numpy strings into builtin"""
@@ -804,6 +831,27 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             raise TypeError(
                 f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
             )
+
+        return value
+
+    @validator("*", pre=True, always=True)
+    def convert_numpy_to_appropriate_type(cls, value, config, field):
+        """Converts numpy arrays to the appropriate native numeric type, if possible."""
+
+        if not isinstance(value, np.ndarray):
+            # Skip if not a numpy array
+            return value
+
+        is_multiple = get_origin(field.outer_type_) is list
+        is_numeric = any(dtype in (int, float) for dtype in get_args(field.outer_type_))
+
+        if not is_numeric:
+            return value
+
+        if isinstance(value, np.ndarray) and is_multiple:
+            return value.tolist()
+        elif isinstance(value, np.ndarray) and not is_multiple:
+            return field.type_(value)
 
         return value
 
