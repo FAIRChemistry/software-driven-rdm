@@ -27,10 +27,22 @@ from functools import lru_cache
 from pydantic import PrivateAttr, validator
 from pydantic.main import ModelMetaclass
 from sqlalchemy.orm import declarative_base
-from typing import List, Dict, Optional, IO, Union, get_args, Callable, get_origin
+from typing import (
+    Any,
+    List,
+    Dict,
+    Optional,
+    IO,
+    Tuple,
+    Union,
+    get_args,
+    Callable,
+    get_origin,
+)
 from astropy.units import Unit
 
 from sdRDM.base.importedmodules import ImportedModules
+from sdRDM.linking.link import _digit_free_path
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.referencecheck import (
     object_is_compliant_to_references,
@@ -123,9 +135,9 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         if not bool(re.search(r"\/\d*\/", path)):
             return self._get_by_meta_path(path, attribute, target)
 
-        return self._filter_model(path, attribute, target)
+        return self._get_by_absolute_path(path, attribute, target)
 
-    def _filter_model(
+    def _get_by_absolute_path(
         self,
         path: str,
         attribute: Optional[str] = None,
@@ -136,26 +148,13 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         query = self._setup_query(target)
         model = Nob(self.to_dict(warn=False, convert_h5ds=False))
 
-        assert model.find(path), f"Path '{path}' does not exist in the model."
-
         path = model.find(path)
 
-        if attribute is None and target is None:
-            return self._traverse_model_by_path(self, path[0])
-        else:
-            object = self._traverse_model_by_path(self, path[0])
+        assert path, f"Path '{path}' does not exist in the model."
 
-            if isinstance(object, ListPlus):
-                result = object.get(query=query, attr=attribute)  # type: ignore
+        object = self._traverse_model_by_path(self, path[0])
 
-                if len(result) == 1:
-                    return result[0]
-                else:
-                    return result
-
-            else:
-                if hasattr(object, attribute) and query(getattr(object, attribute)):
-                    return object
+        return self._check_query(object, attribute, query)
 
     def _get_by_meta_path(
         self: "DataModel",
@@ -171,23 +170,18 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         references = []
         search_kwargs = {"attribute": attribute, "target": target}
 
-        for subpath in self.paths():
-            meta_path = self.process_path_to_meta(str(subpath))
+        # Get all the paths that end with the last part
+        last_part = path.split("/")[-1].strip("/")
+        model = Nob(self.to_dict(warn=False, convert_h5ds=False))
 
-            if meta_path != path:
-                continue
+        paths = model.find(last_part)
+        matching_paths = [p for p in paths if _digit_free_path(str(p)) == path]
 
-            reference = self._filter_model(str(subpath), **search_kwargs)
+        references = []
+        for path in matching_paths:  # type: ignore
+            references.append(self._traverse_model_by_path(self, path))
 
-            if reference is None:
-                continue
-
-            if not isinstance(reference, list):
-                reference = [reference]
-
-            references += reference
-
-        return list(set(references))
+        return references
 
     @staticmethod
     def _setup_query(
@@ -202,22 +196,63 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         return target
 
+    def _check_query(
+        self,
+        value: Any,
+        attribute: Optional[str],
+        query: Optional[Callable],
+    ):
+        """Performs a query on a given object and attribute"""
+
+        # No query given
+        if query is None:
+            return value
+
+        is_list = isinstance(value, (list, ListPlus))
+        is_all_objects = (
+            all([self.is_data_model(v) for v in value]) if is_list else False
+        )
+        is_object = self.is_data_model(value)
+
+        # Object case
+        if is_object:
+            return self._query_object(value, attribute, query)
+        elif is_all_objects:
+            return [self._query_object(v, attribute, query) for v in value]
+        elif is_list:
+            return [self._query_value(v, attribute, query) for v in value]
+        else:
+            return query(value)
+
+    @staticmethod
+    def _query_object(
+        obj: "DataModel",
+        attribute: Optional[str],
+        query: Callable,
+    ):
+        assert attribute is not None, f"Attribute must be specified for query."
+
+        if not hasattr(obj, attribute):
+            raise ValueError(
+                f"Object '{obj.__class__.__name__}' does not have attribute '{attribute}'"
+            )
+
+        return query(getattr(obj, attribute))
+
     def _traverse_model_by_path(self, object, path):
         """Traverses a give sdRDM model by using a path"""
 
-        if path[0].isdigit():
-            object = object[int(path[0])]
-        else:
-            object = getattr(object, path[0])
+        # Split path into commands
+        commands = str(path).strip("/").split("/")
 
-        if len(path) == 1:
-            return object
-        else:
-            return self._traverse_model_by_path(object, path[1::])
+        current = self
+        for command in commands:
+            if command.isdigit():
+                current = current[int(command)]  # type: ignore
+            else:
+                current = getattr(current, command)
 
-    @staticmethod
-    def process_path_to_meta(path: str) -> str:
-        return "/".join([part for part in str(path).split("/") if not part.isdigit()])
+        return current
 
     def paths(self, leaves: bool = False):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
@@ -327,6 +362,9 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         """Checks whether this object is just made up by its ID"""
 
         is_empty = True
+
+        if not isinstance(value, dict):
+            return False
 
         for name, value in value.items():
             if name == "id":
