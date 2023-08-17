@@ -178,7 +178,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         paths = model.find(last_part)
         matching_paths = [p for p in paths if _digit_free_path(str(p)) == path]
 
-        references = []
+        references = ListPlus()
         for path in matching_paths:  # type: ignore
             reference = self._check_query(
                 self._traverse_model_by_path(self, path),
