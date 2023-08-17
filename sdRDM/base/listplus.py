@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Union
+from typing import Any, Callable, List, Optional, Union
 
 
 class ListPlus(List[Any]):
@@ -53,7 +53,12 @@ class ListPlus(List[Any]):
 
             entry.__parent__ = parent
 
-    def get(self, query: Callable, attr: str = "id"):
+    def get(
+        self,
+        query: Union[Callable, str, None] = None,
+        attr: str = "id",
+        path: Optional[str] = None,
+    ):
         """Given an a query, returns all objects that match
 
         Adding an attribute allows to scan classes too, if
@@ -63,7 +68,20 @@ class ListPlus(List[Any]):
 
         """
 
-        if not all([self._is_builtin(obj) for obj in self]):
+        is_only_builtin = all(self._is_builtin(obj) for obj in self)
+
+        if isinstance(query, str):
+            query = lambda x: x == query
+
+        if path and attr and not is_only_builtin:
+            l = ListPlus()
+
+            for value in self:
+                l += value.get(path)
+
+            return l
+
+        if not is_only_builtin:
             # Check for objects
             search_fun = lambda obj: query(obj.__dict__[attr])
         else:

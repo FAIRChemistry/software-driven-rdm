@@ -129,6 +129,9 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         if isinstance(path, Path):
             path = str(path)
 
+        # Remove trailing slash
+        path = path.rstrip("/")
+
         if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
@@ -167,19 +170,24 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         if not path.startswith("/"):
             path = "/" + path
 
-        references = []
-        search_kwargs = {"attribute": attribute, "target": target}
-
         # Get all the paths that end with the last part
         last_part = path.split("/")[-1].strip("/")
         model = Nob(self.to_dict(warn=False, convert_h5ds=False))
+        query = self._setup_query(target)
 
         paths = model.find(last_part)
         matching_paths = [p for p in paths if _digit_free_path(str(p)) == path]
 
         references = []
         for path in matching_paths:  # type: ignore
-            references.append(self._traverse_model_by_path(self, path))
+            reference = self._check_query(
+                self._traverse_model_by_path(self, path),
+                attribute,
+                query,
+            )
+
+            if reference:
+                references.append(reference)
 
         return references
 
@@ -215,12 +223,16 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         is_object = self.is_data_model(value)
 
         # Object case
-        if is_object:
+        if is_object and not is_list:
             return self._query_object(value, attribute, query)
-        elif is_all_objects:
-            return [self._query_object(v, attribute, query) for v in value]
+        elif is_all_objects and is_list:
+            l = ListPlus()
+            for v in value:
+                if self._query_object(v, attribute, query):
+                    l.append(v)
+            return l
         elif is_list:
-            return [self._query_value(v, attribute, query) for v in value]
+            return ListPlus([v for v in value if query(v)])
         else:
             return query(value)
 
