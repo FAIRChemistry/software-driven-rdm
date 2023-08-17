@@ -245,7 +245,10 @@ def _process_duplicate_path(
     n_digits_target = len(_get_digit_order(target_path))
 
     # Get the diff and thus the index to increment
-    diff = n_digits_source - n_digits_target
+    diff = min(
+        n_digits_source - n_digits_target,
+        n_digits_target - 1,
+    )
 
     if diff < 0:
         raise NotImplementedError(
@@ -424,13 +427,6 @@ def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
         attribute/0/attribute2/1/attribute3/0/attribute4
         attribute/0/attribute2/1/attribute3/1/attribute
     """
-
-    # First, check the current paths for the target path
-    # similar_paths = [
-    #     path
-    #     for path in current_paths
-    #     if _digit_free_path(target_path) == _digit_free_path(path)
-    # ]
 
     # Build a reverse order of indices
     source_order = _get_digit_order(source_path)
