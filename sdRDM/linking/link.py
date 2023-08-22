@@ -279,6 +279,7 @@ def _adjust_diff_index(
             continue
         elif part.isdigit() and digit_index != diff:
             digit_index += 1
+            new_path.append(part)
         else:
             new_path.append(part)
 
@@ -428,17 +429,29 @@ def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
         attribute/0/attribute2/1/attribute3/1/attribute
     """
 
-    # Build a reverse order of indices
+    # Get the indices order of both paths and its difference
     source_order = _get_digit_order(source_path)
     target_order = _get_digit_order(target_path)
     diff = len(source_order) - len(target_order)
 
     if diff > 0:
         source_order = source_order[:-(diff)]
+        return _rebuild_shallow_path(target_path, source_order)
     elif diff < 0:
-        raise NotImplementedError(
-            f"Target path {target_path} has more indices than source path {source_path}. This functionality is not yet implemented."
+        return _rebuild_deep_path(
+            target_path,
+            source_order,
+            target_order,
+            diff,
         )
+
+
+def _rebuild_shallow_path(target_path: str, source_order: List[int]):
+    """Rebuilds the path with the given source order when the difference is greater than zero.
+
+    Effectively, here the target path is shallow and the source path is deep.
+
+    """
 
     # Re-build the path and include the new index order
     new_path = []
@@ -457,6 +470,34 @@ def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
             new_path.append(part)
 
     return "/".join(new_path[::-1])
+
+
+def _rebuild_deep_path(
+    target_path: str,
+    source_order: List[int],
+    target_order: List[int],
+    diff: int,
+):
+    """Rebuilds the path with the given source order when the difference is less than zero.
+
+    Effectively, here the target path is deep and the source path is shallow.
+
+    """
+
+    # Replace the abs(diff) last indices with the source order
+    target_order[abs(diff) : :] = source_order
+
+    # Re-build the path and include the new index order
+    new_path = []
+
+    for part in target_path.split("/"):
+        if not part.isdigit():
+            new_path.append(part)
+            continue
+
+        new_path.append(str(target_order.pop(0)))
+
+    return "/".join(new_path)
 
 
 def _get_digit_order(path: str):
