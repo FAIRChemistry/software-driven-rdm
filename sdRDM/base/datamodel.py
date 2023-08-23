@@ -77,6 +77,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         use_enum_values = True
         arbitrary_types_allowed = True
         allow_population_by_field_name = True
+        smart_union = True
 
     # * Private attributes
     __node__: Optional[Node] = PrivateAttr(default=None)
@@ -373,23 +374,23 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
     def _is_empty(self, value):
         """Checks whether this object is just made up by its ID"""
 
-        is_empty = True
-
         if not isinstance(value, dict):
             return False
 
-        for name, value in value.items():
+        is_empty = []
+
+        for name, attribute in value.items():
             if name == "id":
                 continue
 
-            if isinstance(value, list):
-                is_empty = all([self._is_empty(subvalue) for subvalue in value])
-            elif isinstance(value, dict):
-                is_empty = self._is_empty(value)
+            if isinstance(attribute, list):
+                is_empty.append(len(attribute) == 0)
+            elif isinstance(attribute, dict):
+                is_empty.append(self._is_empty(value))
             else:
-                is_empty = value == None
+                is_empty.append(value == None)
 
-        return is_empty
+        return all(is_empty)
 
     def _check_and_convert_sub(self, element, exclude_none, convert_h5ds):
         """Helper function used to trigger recursion on deeply nested lists."""
@@ -802,7 +803,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
     # ! Validators
     @validator("*")
-    def convert_extended_list_and_numpy_strings(cls, value):
+    def _convert_extended_list_and_numpy_strings(cls, value):
         """Validator used to convert any list into a ListPlus."""
 
         if isinstance(value, list):
@@ -813,7 +814,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             return value
 
     @validator("*", pre=True, always=True)
-    def unit_validator(cls, v, values, config, field):
+    def _unit_validator(cls, v, values, config, field):
         if field.type_.__name__ == "UnitBase":
             if isinstance(v, str):
                 return Unit(v)
@@ -822,7 +823,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         return v
 
     @validator("*", pre=True, always=True)
-    def convert_lists_to_ndarray(cls, value, values, config, field):
+    def _convert_lists_to_ndarray(cls, value, values, config, field):
         if cls._has_ndarray(field.type_) and isinstance(value, list):
             return np.array(value)
 
@@ -1050,7 +1051,12 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         for branch, stem, node in yield_tree(tree, style="const"):
             if hasattr(node, "value") and node.value is not None:
-                tree_string += f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC} = {str(node.value)}\n"
+                if isinstance(node.value, (list, ListPlus)):
+                    value = f"[{', '.join([str(v) for v in node.value[0:5]])}, ...]"
+                else:
+                    value = str(node.value)
+
+                tree_string += f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC} = {value}\n"
             elif hasattr(node, "value") and node.value is None:
                 tree_string += (
                     f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC}\n"
