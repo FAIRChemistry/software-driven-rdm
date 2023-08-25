@@ -309,7 +309,11 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
-        data = self._convert_types(data, exclude_none, convert_h5ds)
+        data = self._convert_types_and_remove_empty_objects(
+            data,
+            exclude_none,
+            convert_h5ds,
+        )
 
         # Add source for reproducibility
         data["__source__"] = {"root": self.__class__.__name__}
@@ -331,7 +335,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         return data
 
-    def _convert_types(self, data, exclude_none, convert_h5ds):
+    def _convert_types_and_remove_empty_objects(self, data, exclude_none, convert_h5ds):
         """Converts als ListPlus items back to lists."""
 
         nu_data = {}
@@ -355,8 +359,10 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
                 elif self._is_empty(value):
                     continue
 
-                if self._convert_types(value, exclude_none, convert_h5ds):
-                    nu_data[key] = self._convert_types(
+                if self._convert_types_and_remove_empty_objects(
+                    value, exclude_none, convert_h5ds
+                ):
+                    nu_data[key] = self._convert_types_and_remove_empty_objects(
                         value, exclude_none, convert_h5ds
                     )
 
@@ -386,9 +392,9 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             if isinstance(attribute, list):
                 is_empty.append(len(attribute) == 0)
             elif isinstance(attribute, dict):
-                is_empty.append(self._is_empty(value))
+                is_empty.append(self._is_empty(attribute))
             else:
-                is_empty.append(value == None)
+                is_empty.append(attribute == None)
 
         return all(is_empty)
 
@@ -401,7 +407,9 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         if element.__class__.__module__ == "builtins" and not isinstance(element, dict):
             return element
 
-        return self._convert_types(element, exclude_none, convert_h5ds)
+        return self._convert_types_and_remove_empty_objects(
+            element, exclude_none, convert_h5ds
+        )
 
     def json(self, indent: int = 2, **kwargs):
         return json.dumps(
