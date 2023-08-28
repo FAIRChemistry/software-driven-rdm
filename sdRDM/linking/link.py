@@ -444,6 +444,13 @@ def _adjust_index(target_path: str, source_path: str, current_paths: List[str]):
             target_order,
             diff,
         )
+    else:
+        return _rebuild_deep_path(
+            target_path,
+            source_order,
+            target_order,
+            len(target_order) - 1,
+        )
 
 
 def _rebuild_shallow_path(target_path: str, source_order: List[int]):
