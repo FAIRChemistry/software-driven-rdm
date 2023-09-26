@@ -45,13 +45,11 @@ from sdRDM.base.referencecheck import (
 )
 from sdRDM.base.utils import generate_model
 from sdRDM.base.ioutils.xml import write_xml, read_xml
-from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
 from sdRDM.base.graphql import parse_query_to_selections, traverse_graphql_query
 from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.linking.nodes import ClassNode
 from sdRDM.linking.utils import build_guide_tree, generate_template
-from sdRDM.database.utils import add_to_database
 from sdRDM.tools.utils import YAMLDumper
 from sdRDM.tools.gitutils import (
     ObjectNode,
@@ -450,7 +448,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         """Writes the object instance to HDF5."""
 
         try:
-            import h5py
+            from sdRDM.base.ioutils.hdf5 import write_hdf5
         except ImportError:
             raise ImportError(
                 "HDF5 is not installed. Please install it via 'pip install h5py'"
@@ -538,11 +536,11 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         return cls.from_dict(read_xml(xml_string.encode(), cls))
 
     @classmethod
-    def from_hdf5(cls, file: h5py.File):
+    def from_hdf5(cls, file):
         """Reads a hdf5 file from path into the class model."""
 
         try:
-            import h5py
+            from sdRDM.base.ioutils.hdf5 import read_hdf5
         except ImportError:
             raise ImportError(
                 "HDF5 is not installed. Please install it via 'pip install h5py'"
@@ -635,8 +633,13 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
     @staticmethod
     def _is_hdf5(path: str):
-        import deepdish as dd
-        from tables.exceptions import HDF5ExtError
+        try:
+            import deepdish as dd
+            from tables.exceptions import HDF5ExtError
+        except ImportError:
+            raise ImportError(
+                "HDF5 is not installed. Please install it via 'pip install h5py deepdish'"
+            )
 
         try:
             dd.io.load(path)
