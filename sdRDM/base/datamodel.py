@@ -4,7 +4,6 @@ import os
 import re
 import shutil
 import uuid
-import h5py
 import pydantic
 import random
 import tempfile
@@ -20,20 +19,16 @@ from dotted_dict import DottedDict
 from enum import Enum
 from anytree import Node, LevelOrderIter
 from bigtree import print_tree, levelorder_iter, yield_tree
-from h5py._hl.files import File as H5File
-from h5py._hl.dataset import Dataset as H5Dataset
 from lxml import etree
 from functools import lru_cache
 from pydantic import PrivateAttr, validator
 from pydantic.main import ModelMetaclass
-from sqlalchemy.orm import declarative_base
 from typing import (
     Any,
     List,
     Dict,
     Optional,
     IO,
-    Tuple,
     Union,
     get_args,
     Callable,
@@ -48,7 +43,7 @@ from sdRDM.base.referencecheck import (
     object_is_compliant_to_references,
     value_is_compliant_to_references,
 )
-from sdRDM.base.utils import object_to_orm, generate_model
+from sdRDM.base.utils import generate_model
 from sdRDM.base.ioutils.xml import write_xml, read_xml
 from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
 from sdRDM.base.graphql import parse_query_to_selections, traverse_graphql_query
@@ -451,8 +446,16 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             tree, pretty_print=True, xml_declaration=True, encoding="UTF-8"
         ).decode("utf-8")
 
-    def hdf5(self, file: Union[H5File, str]) -> None:
+    def hdf5(self, file: Union["H5File", str]) -> None:
         """Writes the object instance to HDF5."""
+
+        try:
+            import h5py
+        except ImportError:
+            raise ImportError(
+                "HDF5 is not installed. Please install it via 'pip install h5py'"
+            )
+
         write_hdf5(self, file)
 
     def convert_to(
@@ -497,19 +500,6 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             print_paths=print_paths,
         )
 
-    def to_sql(self, loc: str):
-        """Adds data to a complementary SQL database"""
-        add_to_database(self, loc)
-
-    @classmethod
-    def build_orm(cls):
-        """Builds an ORM model to build a database and fetch from"""
-
-        Base = declarative_base()
-        object_to_orm(cls, Base)
-
-        return Base
-
     @classmethod
     def generate_linking_template(
         cls, path: str = "linking_template.toml", simple: bool = True
@@ -550,6 +540,14 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
     @classmethod
     def from_hdf5(cls, file: h5py.File):
         """Reads a hdf5 file from path into the class model."""
+
+        try:
+            import h5py
+        except ImportError:
+            raise ImportError(
+                "HDF5 is not installed. Please install it via 'pip install h5py'"
+            )
+
         return read_hdf5(cls, file)
 
     # ! Dynamic initializers
