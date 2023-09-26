@@ -212,7 +212,9 @@ def _is_none(value):
 def _convert_multiple_tag_options(options: str, value: Any):
     """Checks, whether there are multiple options for a tag, by native types"""
 
-    if not bool(re.match(r"^\{.*\}$", options)):
+    if not options:
+        return None
+    elif not bool(re.match(r"^\{.*\}$", options)):
         return options
 
     if isinstance(value, ListPlus):
