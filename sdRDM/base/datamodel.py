@@ -359,9 +359,6 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
                         value, exclude_none, convert_h5ds
                     )
 
-            elif isinstance(value, H5Dataset) and convert_h5ds:
-                nu_data[key] = value[:].tolist()
-
             elif isinstance(value, np.ndarray):
                 nu_data[key] = value.tolist()
 
