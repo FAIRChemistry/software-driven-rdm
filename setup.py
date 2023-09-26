@@ -13,6 +13,7 @@ setup(
     install_requires=[
         "pydantic <= 1.10.11",
         "numpy",
+        "pandas",
         "lxml",
         "jinja2",
         "black",
