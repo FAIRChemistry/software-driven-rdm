@@ -13,7 +13,7 @@ setup(
     install_requires=[
         "pydantic <= 1.10.11",
         "numpy",
-        "deepdish",
+        "pandas",
         "lxml",
         "jinja2",
         "black",
@@ -25,9 +25,6 @@ setup(
         "joblib",
         "nob",
         "validators",
-        "sqlalchemy",
-        "sqlalchemy-utils",
-        "h5py",
         "GitPython",
         "termcolor",
         "redbaron==0.9.2",
@@ -40,5 +37,9 @@ setup(
         "email-validator",
         "astropy",
     ],
-    extras_require={"test": ["pytest"], "dataverse": ["easyDataverse"]},
+    extras_require={
+        "test": ["pytest"],
+        "dataverse": ["easyDataverse"],
+        "hdf5": ["h5py", "deepdish"],
+    },
 )
