@@ -1,7 +1,8 @@
 import ast
 import re
 
-from optparse import OptionParser
+from collections import defaultdict
+from typing import List, Dict
 from enum import Enum, auto
 
 # Constants
@@ -9,6 +10,8 @@ REFERENCE_PATTERN = r"get_[A-Za-z0-9\_]*_reference"
 ADDER_PATTERN = r"add_to_[A-Za-z0-9\_]*"
 INHERITANCE_PATTERN = r"class [A-Za-z0-9\_\.]*\(([A-Za-z0-9\_\.]*)\)\:"
 ATTRIBURE_PATTERN = r"description=(\"|\')[A-Za-z0-9\_\.]*"
+FUNCTION_PATTERN = r"def ([a-zA-Z0-9_]+)\("
+FUNCTION_NAME_PATTERN = r"def ([a-zA-Z0-9_]+)\("
 
 
 class ModuleOrder(Enum):
@@ -43,17 +46,69 @@ def preserve_custom_functions(rendered_class: str, path: str) -> str:
         path (str): Path to the previous file
     """
 
+    custom_methods = extract_custom_methods(rendered_class, path)
+
     # Turn the rendered class into an Abstract Syntax Tree and get the class
     new_module = ast.parse(rendered_class)
     previous_module = ast.parse(open(path).read())
 
-    # Format data model class
-    _format_classes(new_module, previous_module)
-
     # Format and merge imports
     _format_imports(new_module, previous_module)
 
-    return _stylize_class(ast.unparse(previous_module))
+    # Get the class body
+    new_class = _stylize_class(ast.unparse(new_module))
+
+    # Merge the previous custom methods with the new class
+    return "\n".join([new_class, custom_methods])
+
+
+def extract_custom_methods(rendered_class: str, path: str) -> List[str]:
+    with open(path, "r") as file:
+        previous_class = file.read().split("\n")
+    custom_method_names = get_custom_method_names(rendered_class, previous_class)
+
+    # Identify lines where functions start and end
+    method_starts = [
+        line_count
+        for line_count, line in enumerate(previous_class)
+        if re.findall(FUNCTION_PATTERN, line)
+    ]
+
+    method_ends = [fun_start - 1 for fun_start in method_starts[1:]]
+    method_ends.append(len(previous_class))
+
+    # Create slices for each function that is not part of the new class
+    methods = []
+    for method_name in custom_method_names:
+        for start, end in zip(method_starts, method_ends):
+            if method_name in previous_class[start]:
+                methods.append("\n".join(previous_class[start:end]))
+
+    return "\n".join(methods)
+
+
+def get_custom_method_names(rendered_class: str, previous_class: str) -> List[str]:
+    """Returns the names of custom functions that exist in the previous class"""
+
+    generated_methods = []
+    for line in rendered_class.split("\n"):
+        if not bool(re.findall(FUNCTION_PATTERN, line)):
+            continue
+
+        generated_methods.append(re.findall(FUNCTION_NAME_PATTERN, line)[0])
+
+    previous_methods = []
+    for line in previous_class:
+        if not bool(re.findall(FUNCTION_PATTERN, line)):
+            continue
+
+        previous_methods.append(re.findall(FUNCTION_NAME_PATTERN, line)[0])
+
+    custom_methods = [
+        method for method in previous_methods if method not in generated_methods
+    ]
+
+    return custom_methods
 
 
 def _stylize_class(rendered: str):
@@ -84,83 +139,6 @@ def _insert_new_lines(rendered: str):
     return f"{rendered[0:split_index]}\n{rendered[split_index::]}"
 
 
-def _format_classes(new_module, previous_module):
-    """Re-formats a given class to preserve custom functions that would otherwise be overwritten"""
-
-    # Return the new class from the module
-    new_class = next(
-        filter(lambda element: isinstance(element, ast.ClassDef), new_module.body)  # type: ignore
-    )
-
-    # Get all the attributes present in the new module
-    new_attributes = {
-        attr.target.id: attr
-        for attr in new_class.body
-        if isinstance(attr, ast.AnnAssign)
-    }
-
-    new_enums = {
-        enum.targets[0].id: enum
-        for enum in new_class.body
-        if isinstance(enum, ast.Assign)
-    }
-
-    new_methods = {
-        method.name: method
-        for method in new_class.body
-        if isinstance(method, ast.FunctionDef)
-    }
-    # Load the previous script as an AST
-    previous_class = next(
-        filter(lambda element: isinstance(element, ast.ClassDef), previous_module.body)  # type: ignore
-    )
-
-    # Iterate over the old syntax tree and delete/add where necessary
-    nu_body = []
-    for element in previous_class.body:
-        if isinstance(element, ast.AnnAssign):
-            # If the attribute is part of the new module, add it
-            if element.target.id in new_attributes and ast.unparse(
-                element
-            ) == ast.unparse(new_attributes[element.target.id]):
-                del new_attributes[element.target.id]
-            else:
-                continue
-
-        elif isinstance(element, ast.Assign):
-            # If the enum value is part of the new module, add it
-            if element.targets[0].id in new_enums:
-                del new_enums[element.targets[0].id]
-            else:
-                continue
-
-        elif isinstance(element, ast.FunctionDef):
-            # If the method is part of the new module, add it
-            if bool(re.match(ADDER_PATTERN, element.name)):
-                # Skip adder functions
-                continue
-            elif bool(re.match(REFERENCE_PATTERN, element.name)):
-                # Skip generated reference getters
-                continue
-            elif element.name in new_methods:
-                if ast.unparse(element) != ast.unparse(new_methods[element.name]):
-                    element = new_methods[element.name]
-
-                del new_methods[element.name]
-            else:
-                element = element
-
-        nu_body.append(element)
-
-    # Add the remaining attributes and methods
-    nu_body += list(new_attributes.values())
-    nu_body += list(new_methods.values())
-    nu_body += list(new_enums.values())
-
-    # Set the new body for the class
-    previous_class.body = sorted(nu_body, key=_sort_class_body)
-
-
 def _sort_class_body(element) -> int:
     """Sorts bodies of classes according to Expressions > Annotations > Methods"""
 
@@ -179,102 +157,64 @@ def _sort_class_body(element) -> int:
         raise ValueError(f"Unknown type {type(element)} in sort algorithm")
 
 
-def _format_imports(new_module, previous_model):
-    """Formats given inputs and merges the new imports to the previous ones"""
+def _format_imports(new_module, previous_module):
+    """Formats given inputs and merges previous imports to the new ones"""
 
     # Get all imports
-    new_imports = [
-        element
-        for element in new_module.body
-        if isinstance(element, (ast.ImportFrom, ast.Import))
-    ]
+    imports = []  # import ...
+    from_imports = []  # from ... import ...
 
-    # Check if inheritance is given
-    inherited_class = re.findall(INHERITANCE_PATTERN, ast.unparse(new_module))[0]
-
-    types = _get_module_types(new_module)
-    previous_model.body += new_imports
-
-    used_imports = set()
-    nu_body = []
-
-    for element in previous_model.body:
-        if ast.unparse(element) in used_imports:
+    # Get all imports from the new module
+    for node in ast.walk(new_module):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
 
-        if isinstance(element, (ast.Import, ast.ImportFrom)):
-            imp = ast.unparse(element)
+        if isinstance(node, ast.Import) and ast.unparse(node) not in [
+            ast.unparse(imp) for imp in imports
+        ]:
+            imports.append(node)
 
-            if "from ." in imp:
-                if element.names[0].name == inherited_class:
-                    used_imports.add(ast.unparse(element))
-                elif element.names[0].name not in types:
+        if isinstance(node, ast.Import):
+            continue
+
+        if ast.unparse(node) not in [ast.unparse(imp) for imp in from_imports]:
+            from_imports.append(node)
+
+    # Get all imports from the previous module
+    for node in ast.walk(previous_module):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+
+        if isinstance(node, ast.Import) and ast.unparse(node) not in [
+            ast.unparse(imp) for imp in imports
+        ]:
+            imports.append(node)
+
+        if isinstance(node, ast.Import):
+            continue
+
+        if node.module not in [imp.module for imp in from_imports]:
+            from_imports.append(node)
+        else:
+            # Add submodules to existing imports
+            for imp in from_imports:
+                if imp.module != node.module:
                     continue
-                elif imp not in used_imports:
-                    # Add unique import
-                    used_imports.add(ast.unparse(element))
-                else:
-                    continue
-            else:
-                used_imports.add(ast.unparse(element))
+                for sub_module in node.names:
+                    if sub_module.name not in [submod.name for submod in imp.names]:
+                        imp.names.append(sub_module)
+
+    # Add modified imports to the new module
+    nu_body = []
+    for element in new_module.body:
+        if isinstance(element, (ast.Import, ast.ImportFrom)):
+            continue
 
         nu_body.append(element)
 
-    previous_model.body = sorted(nu_body, key=_sort_module)
+    nu_body += imports + from_imports
 
-
-def _get_module_types(module):
-    """Parses an AST module and returns all types that are used and need to be imported"""
-
-    types = set()
-    for element in module.body:
-        if isinstance(
-            element, (ast.Import, ast.ImportFrom)
-        ) and "from ." not in ast.unparse(element):
-            types.add(element.names[0].name)
-
-        elif isinstance(element, ast.ClassDef):
-            types.update(_get_cls_types(element))
-
-    return types
-
-
-def _get_cls_types(cls_obj):
-    """Retrieves all types found in a class"""
-
-    types = set()
-    for element in cls_obj.body:
-        if isinstance(element, ast.AnnAssign):
-            if hasattr(element.annotation, "slice"):
-                # Parse nested types such as List[SomeType]
-                try:
-                    types.add(element.annotation.slice.id)
-                except AttributeError:
-                    # Preserve imports from Union Types
-                    for dtype in element.annotation.slice.elts:
-                        if hasattr(dtype, "id"):
-                            types.add(dtype.id)
-            else:
-                # Parse lone attributes
-                types.add(element.annotation.id)
-
-        elif isinstance(element, ast.FunctionDef):
-            for arg in element.args.args:
-                annotation = arg.annotation
-
-                if annotation and hasattr(annotation, "slice"):
-                    try:
-                        types.add(arg.annotation.slice.id)
-                    except AttributeError:
-                        # Preserve imports from Union Types
-                        for dtype in arg.annotation.slice.elts:
-                            if hasattr(dtype, "id"):
-                                types.add(dtype.id)
-
-                elif annotation:
-                    types.add(annotation.id)
-
-    return types
+    new_module.body = sorted(nu_body, key=_sort_module)
 
 
 def _sort_module(element):
