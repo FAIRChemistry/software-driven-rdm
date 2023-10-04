@@ -59,7 +59,7 @@ def preserve_custom_functions(rendered_class: str, path: str) -> str:
     new_class = _stylize_class(ast.unparse(new_module))
 
     # Merge the previous custom methods with the new class
-    return "\n".join([new_class, custom_methods])
+    return "\n".join([new_class, "\n", custom_methods])
 
 
 def extract_custom_methods(rendered_class: str, path: str) -> List[str]:
@@ -134,27 +134,8 @@ def _stylize_class(rendered: str):
 def _insert_new_lines(rendered: str):
     """Inserts new lines for imports"""
     rendered = rendered.replace("import sdRDM", "import sdRDM\n")
-    split_index = rendered.find("@forge_signature")
 
-    return f"{rendered[0:split_index]}\n{rendered[split_index::]}"
-
-
-def _sort_class_body(element) -> int:
-    """Sorts bodies of classes according to Expressions > Annotations > Methods"""
-
-    if isinstance(element, (ast.Expression, ast.Expr)):
-        return ClassOrder.DOCSTRING.value
-    elif isinstance(element, ast.AnnAssign):
-        if not element.target.id.startswith("__"):
-            return ClassOrder.ATTRIBUTES.value
-        else:
-            return ClassOrder.PRIV_ATTRIBUTES.value
-    elif isinstance(element, ast.Assign):
-        return ClassOrder.ATTRIBUTES.value
-    elif isinstance(element, ast.FunctionDef):
-        return ClassOrder.METHODS.value
-    else:
-        raise ValueError(f"Unknown type {type(element)} in sort algorithm")
+    return rendered
 
 
 def _format_imports(new_module, previous_module):
