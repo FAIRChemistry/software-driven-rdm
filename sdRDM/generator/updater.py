@@ -65,24 +65,32 @@ def preserve_custom_functions(rendered_class: str, path: str) -> str:
 def extract_custom_methods(rendered_class: str, path: str) -> List[str]:
     with open(path, "r") as file:
         previous_class = file.read().split("\n")
-    custom_method_names = get_custom_method_names(rendered_class, previous_class)
+    # custom_method_names = get_custom_method_names(rendered_class, previous_class)
 
     # Identify lines where functions start and end
-    method_starts = [
-        line_count
-        for line_count, line in enumerate(previous_class)
-        if re.findall(FUNCTION_PATTERN, line)
-    ]
+    method_starts = []
+    for line_count, line in enumerate(previous_class):
+        if not re.findall(FUNCTION_PATTERN, line):
+            continue
 
+        # Ignore adder functions
+        if re.findall(ADDER_PATTERN, line):
+            continue
+
+        # Account for decorators
+        if previous_class[line_count - 1].strip().startswith("@"):
+            method_starts.append(line_count - 1)
+        else:
+            method_starts.append(line_count)
+
+    # Deduct the end of each function
     method_ends = [fun_start - 1 for fun_start in method_starts[1:]]
     method_ends.append(len(previous_class))
 
-    # Create slices for each function that is not part of the new class
+    # Extract each custom method
     methods = []
-    for method_name in custom_method_names:
-        for start, end in zip(method_starts, method_ends):
-            if method_name in previous_class[start]:
-                methods.append("\n".join(previous_class[start:end]))
+    for start, end in zip(method_starts, method_ends):
+        methods.append("\n".join(previous_class[start:end]))
 
     return "\n".join(methods)
 
