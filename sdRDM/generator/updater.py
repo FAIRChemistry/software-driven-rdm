@@ -64,7 +64,6 @@ def preserve_custom_functions(rendered_class: str, path: str) -> str:
 def extract_custom_methods(rendered_class: str, path: str) -> List[str]:
     with open(path, "r") as file:
         previous_class = file.read().split("\n")
-    # custom_method_names = get_custom_method_names(rendered_class, previous_class)
 
     # Identify lines where functions start and end
     method_starts = []
@@ -94,30 +93,6 @@ def extract_custom_methods(rendered_class: str, path: str) -> List[str]:
     return "\n".join(methods)
 
 
-def get_custom_method_names(rendered_class: str, previous_class: str) -> List[str]:
-    """Returns the names of custom functions that exist in the previous class"""
-
-    generated_methods = []
-    for line in rendered_class.split("\n"):
-        if not bool(re.findall(FUNCTION_PATTERN, line)):
-            continue
-
-        generated_methods.append(re.findall(FUNCTION_NAME_PATTERN, line)[0])
-
-    previous_methods = []
-    for line in previous_class:
-        if not bool(re.findall(FUNCTION_PATTERN, line)):
-            continue
-
-        previous_methods.append(re.findall(FUNCTION_NAME_PATTERN, line)[0])
-
-    custom_methods = [
-        method for method in previous_methods if method not in generated_methods
-    ]
-
-    return custom_methods
-
-
 def _stylize_class(rendered: str):
     """Inserts newlines to render the code more readable"""
 
@@ -127,7 +102,9 @@ def _stylize_class(rendered: str):
     nu_render = []
     for line in rendered.split("\n"):
         if bool(re.findall(r"[Field|PrivateAttr]", line)) and ": " in line:
+            # restore formatting for attributes
             if bool(re.findall(ATTRIBURE_PATTERN, line)):
+                line = line[:-1] + "," + line[-1]
                 nu_render.append("\n")
 
             nu_render.append(line)
