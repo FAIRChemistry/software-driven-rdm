@@ -1,8 +1,7 @@
 import ast
 import re
 
-from collections import defaultdict
-from typing import List, Dict
+from typing import List
 from enum import Enum, auto
 
 # Constants
