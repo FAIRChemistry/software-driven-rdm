@@ -114,6 +114,10 @@ class MarkdownParser:
             if not "parent" in object:
                 continue
 
+            # Avoid duplication of inheritance cases
+            if object["name"] in [inherit["child"] for inherit in self.inherits]:
+                continue
+
             self.inherits.append({"parent": object["parent"], "child": object["name"]})
 
     def get_compositions(self) -> None:

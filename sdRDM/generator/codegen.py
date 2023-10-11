@@ -10,6 +10,7 @@ from .classrender import render_object
 from .enumrender import render_enum
 from .initrender import render_core_init_file, render_library_init_file
 from .schemagen import generate_mermaid_schema
+from .updater import preserve_custom_functions
 
 
 def generate_python_api(
@@ -105,6 +106,9 @@ def write_classes(
 
 def save_rendered_to_file(rendered: str, path: str, use_formatter: bool = True) -> None:
     """Saves a rendered Object, Enum or Init to a file"""
+
+    if os.path.isfile(path):
+        rendered = preserve_custom_functions(rendered, path)
 
     with open(path, "w") as f:
         f.write(rendered)
