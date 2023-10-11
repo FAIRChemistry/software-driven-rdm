@@ -128,7 +128,7 @@ def _format_imports(new_module, previous_module):
 
     # Get all imports
     imports = []  # import ...
-    from_imports = []  # from ... import ...
+    from_modules = []  # from ... import ...
 
     # Get all imports from the new module
     for node in ast.walk(new_module):
@@ -143,8 +143,8 @@ def _format_imports(new_module, previous_module):
         if isinstance(node, ast.Import):
             continue
 
-        if ast.unparse(node) not in [ast.unparse(imp) for imp in from_imports]:
-            from_imports.append(node)
+        if node.module not in [imp.module for imp in from_modules]:
+            from_modules.append(node)
 
     # Get all imports from the previous module
     for node in ast.walk(previous_module):
@@ -159,11 +159,11 @@ def _format_imports(new_module, previous_module):
         if isinstance(node, ast.Import):
             continue
 
-        if node.module not in [imp.module for imp in from_imports]:
-            from_imports.append(node)
+        if node.module not in [imp.module for imp in from_modules]:
+            from_modules.append(node)
         else:
             # Add submodules to existing imports
-            for imp in from_imports:
+            for imp in from_modules:
                 if imp.module != node.module:
                     continue
                 for sub_module in node.names:
@@ -178,7 +178,7 @@ def _format_imports(new_module, previous_module):
 
         nu_body.append(element)
 
-    nu_body += imports + from_imports
+    nu_body += imports + from_modules
 
     new_module.body = sorted(nu_body, key=_sort_module)
 
