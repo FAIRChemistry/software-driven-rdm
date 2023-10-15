@@ -11,7 +11,7 @@ Software-driven Research Data Management (sdRDM) is a concept and library that b
 - Link your data model to any other data model and setup __workflows__
 
 ## ⚡️ Quick start
-Get started with PyEnzyme by running the following command 
+Get started by running the following command 
 
 ```
 # Using PIP
