@@ -12,6 +12,7 @@ import validators
 import yaml
 import warnings
 import numpy as np
+import hashlib
 
 from nob import Nob
 from nob.path import Path
@@ -1027,18 +1028,18 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         data = df.to_dict(orient="records")[0]
         to_hash = [f"{key}={data[key]}" for key in sorted(data.keys())]  # type: ignore
 
-        return hash(tuple(to_hash))
+        return hashlib.md5(tuple(to_hash))
 
     def __eq__(self, __value: object) -> bool:
         """Compares two objects based on their content"""
 
         try:
-            hash(__value)
+            hashlib.md5(__value)
         except TypeError:
             raise TypeError(
                 f"Can't compare '{self.__class__.__name__}' to type '{type(__value)}'"
             )
-        return hash(self) == hash(__value)
+        return hashlib.md5(self) == hashlib.md5(__value)
 
     def __str__(self) -> str:
         class bcolors:
