@@ -3,6 +3,7 @@ import re
 from typing import List, Tuple, Dict, IO
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
+from pydantic import BaseModel
 
 from sdRDM.generator.utils import camel_to_snake
 
@@ -10,13 +11,12 @@ from .enumutils import parse_markdown_enumerations
 from .objectutils import parse_markdown_module
 
 
-class MarkdownParser:
-    def __init__(self) -> None:
-        self.objects = []
-        self.enums = []
-        self.inherits = []
-        self.compositions = []
-        self.external_objects = {}
+class MarkdownParser(BaseModel):
+    objects: List = []
+    enums: List = []
+    inherits: List = []
+    compositions: List = []
+    external_objects: Dict = {}
 
     @classmethod
     def parse(cls, handle: IO):
