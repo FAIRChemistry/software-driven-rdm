@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name="sdRDM",
-    version="0.0.4",
+    version="0.0.5",
     author="Range, Jan",
     author_email="jan.range@simtech.uni-stuttgart.de",
     license="MIT License",
