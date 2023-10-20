@@ -42,6 +42,24 @@ def generate_python_api(
     if only_classes:
         return parser
 
+    generate_api_from_parser(
+        parser=parser,
+        dirpath=dirpath,
+        libname=libname,
+        url=url,
+        commit=commit,
+        use_formatter=use_formatter,
+    )
+
+
+def generate_api_from_parser(
+    parser: str,
+    dirpath: str,
+    libname: str,
+    url: Optional[str] = None,
+    commit: Optional[str] = None,
+    use_formatter: bool = True,
+):
     # Create directory structure
     libpath = create_directory_structure(dirpath, libname)
 
