@@ -1020,26 +1020,23 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
     # ! Dunder methods
     def __hash__(self) -> int:
-        """Hashes the object based on its content"""
+        """Hashes the object based on its `dict` content"""
 
-        import pandas as pd
+        data = [f"{key}={dict(self)[key]}" for key in sorted(dict(self).keys())]  # type: ignore
+        data_string = "".join(data)
 
-        df = pd.json_normalize(self.to_dict(warn=False), sep="_")
-        data = df.to_dict(orient="records")[0]
-        to_hash = [f"{key}={data[key]}" for key in sorted(data.keys())]  # type: ignore
-
-        return hashlib.md5(tuple(to_hash))
+        return hashlib.md5(data_string.encode()).hexdigest()
 
     def __eq__(self, __value: object) -> bool:
-        """Compares two objects based on their content"""
+        """Compares two objects based on their hashes"""
 
         try:
-            hashlib.md5(__value)
+            __value.__hash__()
         except TypeError:
             raise TypeError(
                 f"Can't compare '{self.__class__.__name__}' to type '{type(__value)}'"
             )
-        return hashlib.md5(self) == hashlib.md5(__value)
+        return self.__hash__() == __value.__hash__()
 
     def __str__(self) -> str:
         class bcolors:
