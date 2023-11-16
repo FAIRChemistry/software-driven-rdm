@@ -309,13 +309,11 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             convert_h5ds,
         )
 
-        # Add source for reproducibility
-        data["__source__"] = {"root": self.__class__.__name__}
-
         try:
             # Add git specs if available
             data["__source__"].update(
                 {
+                    "root": self.__class__.__name__,
                     "repo": self.__repo__,  # type: ignore
                     "commit": self.__commit__,  # type: ignore
                     "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
