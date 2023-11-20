@@ -311,7 +311,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         try:
             # Add git specs if available
-            data["__source__"].update(
+            data["__source__"] = (
                 {
                     "root": self.__class__.__name__,
                     "repo": self.__repo__,  # type: ignore
