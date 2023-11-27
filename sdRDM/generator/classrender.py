@@ -139,7 +139,8 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
     if is_multiple:
         attribute["default_factory"] = "ListPlus"
     elif not is_multiple and is_all_optional:
-        attribute["default"] = f"{attribute['type'][0]}()"
+        attribute["default_factory"] = f"{attribute['type'][0]}"
+        del attribute["default"]
 
     if has_reference:
         reference_types = get_reference_type(attribute["reference"], objects)
