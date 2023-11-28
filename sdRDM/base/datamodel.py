@@ -316,9 +316,9 @@ class DataModel(pydantic.BaseModel):
             # Add git specs if available
             data["__source__"] = {
                 "root": self.__class__.__name__,
-                "repo": self.__repo__,  # type: ignore
-                "commit": self.__commit__,  # type: ignore
-                "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
+                "repo": self._repo,  # type: ignore
+                "commit": self._commit,  # type: ignore
+                "url": self._repo.replace(".git", "") + f"/tree/{self._commit}",  # type: ignore
             }  # type: ignore
         except AttributeError:
             if warn:
@@ -431,9 +431,9 @@ class DataModel(pydantic.BaseModel):
         try:
             tree.attrib.update(
                 {
-                    "repo": self.__repo__,  # type: ignore
-                    "commit": self.__commit__,  # type: ignore
-                    "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
+                    "repo": self._repo,  # type: ignore
+                    "commit": self._commit,  # type: ignore
+                    "url": self._repo.replace(".git", f"/tree/{self._commit}"),  # type: ignore
                 }
             )
         except AttributeError:
@@ -877,6 +877,9 @@ class DataModel(pydantic.BaseModel):
     @field_validator("*")
     @classmethod
     def check_list_values(cls, values, info):
+        if not isinstance(values, (list, ListPlus)):
+            return values
+
         field_type = cls.model_fields[info.field_name].annotation
 
         if get_args(field_type):
