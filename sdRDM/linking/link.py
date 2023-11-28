@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Tuple
 from bigtree import dict_to_tree, levelorder_iter, tree_to_dict
 from dotted_dict import DottedDict
 from nob import Nob
-from pydantic.main import ModelMetaclass
 
 
 def convert_data_model(
@@ -97,7 +96,7 @@ def _has_tag_or_commit(source: str) -> bool:
 def _assemble_dataset(
     dataset: "DataModel",
     template: Dict[str, Dict],
-    target_class: ModelMetaclass,
+    target_class,
 ) -> Dict:
     """Creates an explicit mapping from the source to the target dataset and transfers values."""
 
@@ -186,7 +185,7 @@ def _find_matching_parent_paths(
 def _construct_explicit_mapping(
     dataset: "DataModel",
     template: Dict[str, Dict],
-    target_class: ModelMetaclass,
+    target_class,
 ):
     """Creates an explicit mapping between the source and target dataset."""
 
@@ -306,7 +305,7 @@ def _get_similar_paths(path: str, paths: List[str]):
 def _gather_paths(
     dataset: "DataModel",
     template: Dict[str, Dict],
-    target_class: ModelMetaclass,
+    target_class,
 ) -> Tuple[List, Dict, List, List]:
     """Gathers all the necessary meta and explicit paths.
 
@@ -330,7 +329,7 @@ def _gather_paths(
 def _get_source_meta_paths(
     dataset: "DataModel",
     template: Dict[str, Dict],
-    target_class: ModelMetaclass,
+    target_class,
 ) -> Tuple[Dict[str, str], List[Dict]]:
     """Get the source meta paths from the template."""
     source_meta_paths = {}

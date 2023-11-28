@@ -113,7 +113,7 @@ def _construct_signature(cls):
     parameters = []
 
     for name, parameter in cls.__signature__.parameters.items():
-        if f"{name}_" in cls.__fields__:
+        if f"{name}_" in cls.model_fields:
             name = f"{name}_"
 
         parameters.append(

@@ -24,7 +24,7 @@ class ImportedModules(DottedDict):
             if hasattr(node, "cls"):
                 # Add all classes
                 setattr(self, name, node.cls)
-            elif hasattr(node, "__fields__"):
+            elif hasattr(node, "model_fields"):
                 # Add classes that are not presented as a node
                 setattr(self, name, node)
             elif isinstance(node, dict):

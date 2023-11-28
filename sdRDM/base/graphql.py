@@ -17,7 +17,6 @@ def traverse_graphql_query(selections, object):
     data = {}
 
     for selection in selections:
-
         attr = selection["name"]["value"]
         value = object.get(attr)
         arguments = extract_arguments(selection["arguments"])
@@ -60,4 +59,4 @@ def is_data_model(object) -> bool:
     if not isinstance(object, list):
         object = [object]
 
-    return all(hasattr(subobject, "__fields__") for subobject in object)
+    return all(hasattr(subobject, "model_fields") for subobject in object)

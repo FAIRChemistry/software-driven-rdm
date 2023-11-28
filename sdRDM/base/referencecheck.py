@@ -59,16 +59,16 @@ def traverse_to_root_node(obj: "DataModel", root: str) -> Optional["DataModel"]:
     while True:
         if obj.__class__.__name__ == root:
             return obj
-        elif hasattr(obj, "__parent__") and obj.__parent__ is None:
+        elif hasattr(obj, "_parent") and obj._parent is None:
             return None
 
-        obj = obj.__parent__
+        obj = obj._parent
 
 
 def get_fields_to_check(obj: "DataModel") -> Dict:
     """Extracts all fields and their corresponding compliance check"""
     checks = {}
-    for name, field in obj.__class__.__fields__.items():
+    for name, field in obj.__class__.model_fields.items():
         if not has_reference_check(field):
             continue
 
@@ -81,7 +81,13 @@ def get_fields_to_check(obj: "DataModel") -> Dict:
 
 def has_reference_check(field) -> bool:
     """Checks whether a field has a reference info"""
-    return "references" in field.field_info.extra
+
+    if not hasattr(field, "json_schema_extra"):
+        return False
+    elif field.json_schema_extra is None:
+        return False
+
+    return "references" in field.json_schema_extra
 
 
 def get_field_reference_check(field) -> Tuple[str, str]:

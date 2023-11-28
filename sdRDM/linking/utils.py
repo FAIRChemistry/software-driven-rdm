@@ -2,7 +2,6 @@ import yaml
 import toml
 
 from anytree import LevelOrderIter
-from pydantic.main import ModelMetaclass
 from typing import get_origin
 
 from sdRDM.linking.nodes import AttributeNode, ClassNode, ListNode
@@ -19,10 +18,12 @@ def build_guide_tree(obj: "DataModel") -> ClassNode:
         ClassNode: Tree of AttributeNodes and ClassNodes representing the data model
     """
 
-    if isinstance(obj, ModelMetaclass):
-        return _build_class_tree(obj)
+    from sdRDM.base.datamodel import DataModel
 
-    return _build_instance_tree(obj)
+    if isinstance(obj, DataModel):
+        return _build_instance_tree(obj)
+
+    return _build_class_tree(obj)
 
 
 def _build_class_tree(obj: "DataModel", parent=None):
@@ -31,30 +32,32 @@ def _build_class_tree(obj: "DataModel", parent=None):
     if parent is None:
         parent = ClassNode(obj.__name__, parent=parent)
 
-    for name, field in obj.__fields__.items():
-        if _is_recursive(obj, field.type_):
-            AttributeNode(f"{name} (Recursive - {field.type_.__name__})", parent=parent)
+    for name, field in obj.model_fields.items():
+        if _is_recursive(obj, field.annotation):
+            AttributeNode(
+                f"{name} (Recursive - {field.annotation.__name__})", parent=parent
+            )
             continue
 
         attr_node = AttributeNode(name, parent=parent)
 
-        if _is_multiple_type(field.outer_type_, field.type_):
+        if _is_multiple_type(field.annotation, field.annotation):
             attr_node = ListNode("0", parent=attr_node)
 
-        if hasattr(field.type_, "__fields__"):
-            _build_class_tree(field.type_, parent=attr_node)
+        if hasattr(field.annotation, "model_fields"):
+            _build_class_tree(field.annotation, parent=attr_node)
 
     return parent
 
 
 def _is_recursive(obj: "DataModel", type) -> bool:
     """Checks whether the given type is recursive"""
-    return hasattr(type, "__fields__") and obj.__fields__ == type.__fields__
+    return hasattr(type, "model_fields") and obj.model_fields == type.model_fields
 
 
 def _is_multiple_type(outer_type, type) -> bool:
     """Checcks whether the given outer type is an iterable"""
-    return get_origin(outer_type) == list and hasattr(type, "__fields__")
+    return get_origin(outer_type) == list and hasattr(type, "model_fields")
 
 
 def _build_instance_tree(obj: "DataModel", parent=None) -> ClassNode:
@@ -81,7 +84,7 @@ def _build_instance_tree(obj: "DataModel", parent=None) -> ClassNode:
 
 def _is_data_model(obj):
     """Checks if an object is a data model."""
-    return hasattr(obj, "__fields__")
+    return hasattr(obj, "model_fields")
 
 
 def generate_template(obj, out: str, simple: bool = True) -> None:

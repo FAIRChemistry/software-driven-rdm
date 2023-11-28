@@ -27,9 +27,9 @@ def gather_object_types(obj) -> Dict:
 
     objects = {obj.__name__: obj}
 
-    for field in obj.__fields__.values():
-        if hasattr(field.type_, "__fields__"):
-            subobject = field.type_
+    for field in obj.model_fields.values():
+        if hasattr(field.annotation, "model_fields"):
+            subobject = field.annotation
             objects[subobject.__name__] = subobject
             objects.update(
                 {**gather_object_types(subobject), subobject.__name__: subobject}
@@ -60,9 +60,9 @@ def prepare_xml_parsing(object: "DataModel") -> Tuple[Dict, Dict, List[str]]:
     objects = []
 
     # Prepare for expected attributes
-    for name, attr in object.__fields__.items():
-        is_multiple = get_origin(attr.outer_type_) == list
-        is_object = hasattr(attr.type_, "__fields__")
+    for name, attr in object.model_fields.items():
+        is_multiple = get_origin(attr.annotation) == list
+        is_object = hasattr(attr.annotation, "model_fields")
 
         alias_map[name] = name
 
@@ -71,7 +71,7 @@ def prepare_xml_parsing(object: "DataModel") -> Tuple[Dict, Dict, List[str]]:
             objects.append(name)
         elif is_object and not is_multiple:
             attributes[name] = None
-            alias_map[attr.type_.__name__] = name
+            alias_map[attr.annotation.__name__] = name
             objects.append(name)
         elif not is_object and is_multiple:
             attributes[name] = []
@@ -119,15 +119,15 @@ def write_xml(obj, pascal: bool = True):
         snake_to_camel(obj.__class__.__name__, pascal=pascal), attrib={}, nsmap={}
     )
 
-    for name, field in obj.__fields__.items():
+    for name, field in obj.model_fields.items():
         value = obj.__dict__[name]
 
         if _is_none(value):
             # Skip None and empty values
             continue
 
-        dtype = field.type_
-        outer = field.outer_type_
+        dtype = field.annotation
+        outer = field.annotation
         xml_option = _convert_multiple_tag_options(
             field.field_info.extra.get("xml"),
             value,
@@ -141,7 +141,7 @@ def write_xml(obj, pascal: bool = True):
         if hasattr(outer, "__origin__"):
             outer = outer.__origin__.__name__
 
-        if hasattr(dtype, "__fields__") or hasattr(value, "__fields__"):
+        if hasattr(dtype, "model_fields") or hasattr(value, "model_fields"):
             # Trigger recursion if a complex type
             # is encountered --> Creates a sub node
 

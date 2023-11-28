@@ -13,6 +13,7 @@ import yaml
 import warnings
 import numpy as np
 import hashlib
+import rich
 
 from nob import Nob
 from nob.path import Path
@@ -22,8 +23,7 @@ from anytree import Node, LevelOrderIter
 from bigtree import print_tree, levelorder_iter, yield_tree
 from lxml import etree
 from functools import lru_cache
-from pydantic import PrivateAttr, validator
-from pydantic.main import ModelMetaclass
+from pydantic import PrivateAttr, field_validator
 from typing import (
     Any,
     List,
@@ -59,26 +59,25 @@ from sdRDM.tools.gitutils import (
 )
 
 
-class Meta(ModelMetaclass):
-    def __str__(cls):
-        cls.meta_tree()
-        return ""
+# class Meta(type):
+#     def __str__(cls):
+#         cls.meta_tree()
+#         return ""
 
 
-class DataModel(pydantic.BaseModel, metaclass=Meta):
+class DataModel(pydantic.BaseModel):
     class Config:
         validate_assignment = True
         use_enum_values = True
         arbitrary_types_allowed = True
-        allow_population_by_field_name = True
-        smart_union = True
+        populate_by_name = True
 
     # * Private attributes
-    __node__: Optional[Node] = PrivateAttr(default=None)
-    __types__: DottedDict = PrivateAttr(default=dict)
-    __parent__: Optional["DataModel"] = PrivateAttr(default=None)
-    __references__: DottedDict = PrivateAttr(default_factory=DottedDict)
-    __id__: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
+    _node: Optional[Node] = PrivateAttr(default=None)
+    _types: DottedDict = PrivateAttr(default=dict)
+    _parent: Optional["DataModel"] = PrivateAttr(default=None)
+    _references: DottedDict = PrivateAttr(default_factory=DottedDict)
+    _id: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -95,24 +94,28 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
             if not isinstance(value, ListPlus):
                 continue
 
-            self.__dict__[field].__parent__ = self
+            self.__dict__[field]._parent = self
             self.__dict__[field].__attribute__ = field
 
-        self.__types__ = DottedDict()
-        for name, field in self.__fields__.items():
-            args = get_args(field.type_)
+        self._types = DottedDict()
+        for name, field in self.model_fields.items():
+            args = get_args(field.annotation)
 
-            if not args and hasattr(field.type_, "__fields__"):
-                self.__types__[name] = field.type_
+            if not args and hasattr(field.annotation, "model_fields"):
+                self._types[name] = field.annotation
             elif args:
-                self.__types__[name] = tuple(
-                    [subtype for subtype in args if hasattr(subtype, "__fields__")]
+                self._types[name] = tuple(
+                    [subtype for subtype in args if hasattr(subtype, "model_fields")]
                 )
 
     def _initialize_references(self):
         """Initialized references for each field present in the data model"""
-        for field in self.__fields__:
-            self.__references__[field] = ListPlus()
+        for field in self.model_fields.values():
+            self._references[field] = ListPlus()
+
+    def __repr__(self):
+        rich.print(self)
+        return ""
 
     # ! Getters
     def get(
@@ -299,7 +302,11 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
     # ! Exporters
     def to_dict(self, exclude_none=True, warn=True, convert_h5ds=True, **kwargs):
-        data = super().dict(exclude_none=exclude_none, by_alias=True, **kwargs)
+        data = super().model_dump(
+            exclude_none=exclude_none,
+            by_alias=True,
+            **kwargs,
+        )
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
@@ -311,14 +318,12 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         try:
             # Add git specs if available
-            data["__source__"] = (
-                {
-                    "root": self.__class__.__name__,
-                    "repo": self.__repo__,  # type: ignore
-                    "commit": self.__commit__,  # type: ignore
-                    "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
-                }
-            )  # type: ignore
+            data["__source__"] = {
+                "root": self.__class__.__name__,
+                "repo": self.__repo__,  # type: ignore
+                "commit": self.__commit__,  # type: ignore
+                "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
+            }  # type: ignore
         except AttributeError:
             if warn:
                 warnings.warn(
@@ -402,7 +407,9 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
     def json(self, indent: int = 2, **kwargs):
         return json.dumps(
-            self.to_dict(**kwargs), indent=indent, default=self._json_dump
+            self.to_dict(**kwargs),
+            indent=indent,
+            default=self._json_dump,
         )
 
     @staticmethod
@@ -745,11 +752,11 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         """
 
         for definition in classes.values():
-            for field in definition.cls.__fields__.values():
-                if "Union" not in repr(field.type_) and issubclass(
-                    field.type_, DataModel
+            for field in definition.cls.model_fields.values():
+                if "Union" not in repr(field.annotation) and issubclass(
+                    field.annotation, DataModel
                 ):
-                    classes[field.type_.__name__].add_parent_class(definition)
+                    classes[field.annotation.__name__].add_parent_class(definition)
 
         roots = list(
             filter(lambda definition: not definition.parent_classes, classes.values())
@@ -807,7 +814,8 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         )
 
     # ! Validators
-    @validator("*")
+    @field_validator("*")
+    @classmethod
     def _convert_extended_list_and_numpy_strings(cls, value):
         """Validator used to convert any list into a ListPlus."""
 
@@ -818,18 +826,22 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         else:
             return value
 
-    @validator("*", pre=True, always=True)
-    def _unit_validator(cls, v, values, config, field):
-        if field.type_.__name__ == "UnitBase":
+    @field_validator("*", mode="before")
+    @classmethod
+    def _unit_field_validator(cls, v, info):
+        field_type = cls.model_fields[info.field_name].annotation
+
+        if field_type == "UnitBase":
             if isinstance(v, str):
                 return Unit(v)
             return v
 
         return v
 
-    @validator("*", pre=True, always=True)
-    def _convert_lists_to_ndarray(cls, value, values, config, field):
-        if cls._has_ndarray(field.type_) and isinstance(value, list):
+    @field_validator("*", mode="before")
+    def _convert_lists_to_ndarray(cls, value, info):
+        field_type = cls.model_fields[info.field_name].annotation
+        if cls._has_ndarray(field_type) and isinstance(value, list):
             return np.array(value)
 
         return value
@@ -866,40 +878,45 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         return report
 
-    @validator("*", each_item=True)
-    def check_list_values(cls, value, config, field):
-        if hasattr(field.type_, "regex"):
-            if not bool(field.type_.regex.match(value)):
+    @field_validator("*")
+    def check_list_values(cls, value, info):
+        field_type = cls.model_fields[info.field_name].annotation
+
+        if hasattr(field_type, "regex"):
+            if not bool(field_type.regex.match(value)):
                 raise TypeError(
-                    f"List element of value '{value}' cannot be added due to not matching the requried regex '{field.type_.regex}'"
+                    f"List element of value '{value}' cannot be added due to not matching the requried regex '{field_type.regex}'"
                 )
             else:
                 return value
 
-        if "pydantic" in field.type_.__module__:
+        if "pydantic" in field_type.__module__:
             try:
-                field.type_(value)
+                field_type(value)
             except ValueError:
                 raise TypeError(
-                    f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
+                    f"List element of type '{type(value)}' cannot be added. Expected type '{field_type}'"
                 )
-        elif not isinstance(value, field.type_) and not issubclass(field.type_, Enum):
+        elif not isinstance(value, field_type) and not issubclass(field_type, Enum):
             raise TypeError(
-                f"List element of type '{type(value)}' cannot be added. Expected type '{field.type_}'"
+                f"List element of type '{type(value)}' cannot be added. Expected type '{field_type}'"
             )
 
         return value
 
-    @validator("*", pre=True, always=True)
-    def convert_numpy_to_appropriate_type(cls, value, config, field):
+    @field_validator("*", mode="before")
+    @classmethod
+    def convert_numpy_to_appropriate_type(cls, value, info):
         """Converts numpy arrays to the appropriate native numeric type, if possible."""
+
+        field_type = cls.model_fields[info.field_name].annotation
 
         if not isinstance(value, np.ndarray):
             # Skip if not a numpy array
             return value
 
-        is_multiple = get_origin(field.outer_type_) is list
-        is_numeric = any(dtype in (int, float) for dtype in get_args(field.outer_type_))
+        is_multiple = get_origin(field_type) is list
+        is_numeric = any(dtype in (int, float) for dtype in get_args(field_type))
 
         if not is_numeric:
             return value
@@ -907,7 +924,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         if isinstance(value, np.ndarray) and is_multiple:
             return value.tolist()
         elif isinstance(value, np.ndarray) and not is_multiple:
-            return field.type_(value)
+            return field_type(value)
 
         return value
 
@@ -923,24 +940,29 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         super().__setattr__(name, value)
 
         if isinstance(value, list):
-            self.__dict__[name].__parent__ = self
+            self.__dict__[name]._parent = self
 
     def _add_reference_to_object(self, name, value):
         """Adds the current class to the referenced object to maintain its relation"""
 
-        extra = self.__fields__[name].field_info.extra
-
-        if "reference" not in extra:
+        if name.startswith("_"):
             return
-        elif not hasattr(value, "__fields__"):
+
+        extra = self.model_fields[name].json_schema_extra
+
+        if extra is None:
+            return
+        elif "reference" not in extra:
+            return
+        elif not hasattr(value, "model_fields"):
             return
 
         # Add the relation to the attribute of this field
-        self.__references__[name].append(value)
+        self._references[name].append(value)
 
         # Also add it to the other object
         target_attr = extra["reference"].split(".")[-1]
-        value.__references__[target_attr].append(self)
+        value._references[target_attr].append(self)
 
     def _check_references(self, name, value):
         """Checks whether references are compliant"""
@@ -964,7 +986,7 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
     def _set_parent_instances(self, value) -> None:
         """Sets current instance as the parent to objects"""
         if isinstance(value, ListPlus):
-            value.__parent__ = self
+            value._parent = self
             for i in range(len(value)):
                 self.set_parent_to_object_field(value[i])
         else:
@@ -973,10 +995,10 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
     def set_parent_to_object_field(self, value):
         """Sets a reference to the parent element found in the data model"""
 
-        if not hasattr(value, "__fields__"):
+        if not hasattr(value, "model_fields"):
             return
 
-        value.__parent__ = self
+        value._parent = self
 
     def check_object_references(self, value) -> Dict:
         """Checks if any (sub)-object fulfills the conditions of the model"""
@@ -1012,9 +1034,9 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
         """Checks whether this object is of type 'DataModel'"""
 
         if isinstance(value, list):
-            return all(hasattr(subval, "__fields__") for subval in value)
+            return all(hasattr(subval, "model_fields") for subval in value)
 
-        return hasattr(value, "__fields__")
+        return hasattr(value, "model_fields")
 
     # ! Dunder methods
     def __hash__(self) -> int:

@@ -27,8 +27,8 @@ class ListPlus(List[Any]):
 
     def append(self, *args):
         for arg in args:
-            if hasattr(arg, "__fields__") and self.is_part_of_model():
-                arg.__parent__ = self.__parent__
+            if hasattr(arg, "model_fields") and self.is_part_of_model():
+                arg._parent = self.__parent__
                 arg._check_references(self.__attribute__, arg)
 
             super().append(arg)
@@ -40,18 +40,18 @@ class ListPlus(List[Any]):
     def __setattr__(self, name: str, value: Any) -> None:
         if name == "__parent__" and value is not None:
             self.set_parent_for_object_entries(value)
-        elif hasattr(value, "__fields__") and self.__parent__ is not None:
-            value.__parent__ = self.__parent__
+        elif hasattr(value, "model_fields") and self.__parent__ is not None:
+            value._parent = self.__parent__
 
         return super().__setattr__(name, value)
 
     def set_parent_for_object_entries(self, parent):
         """Adds parent relation so object entries once it has been set"""
         for entry in self:
-            if not hasattr(entry, "__fields__"):
+            if not hasattr(entry, "model_fields"):
                 continue
 
-            entry.__parent__ = parent
+            entry._parent = parent
 
     def get(
         self,
