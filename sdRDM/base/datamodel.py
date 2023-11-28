@@ -114,10 +114,6 @@ class DataModel(pydantic.BaseModel):
         for field in self.model_fields.values():
             self._references[field] = ListPlus()
 
-    def __repr__(self):
-        rich.print(self)
-        return ""
-
     # ! Getters
     def get(
         self,
