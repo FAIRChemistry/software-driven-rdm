@@ -36,7 +36,6 @@ setup(
         "anytree",
         "email-validator",
         "astropy",
-        "rich",
     ],
     extras_require={
         "test": ["pytest"],

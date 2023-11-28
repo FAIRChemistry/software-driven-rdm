@@ -13,7 +13,6 @@ import yaml
 import warnings
 import numpy as np
 import hashlib
-import rich
 
 from nob import Nob
 from nob.path import Path
