@@ -30,6 +30,7 @@ from typing import (
     Dict,
     Optional,
     IO,
+    Tuple,
     Union,
     get_args,
     Callable,
@@ -879,30 +880,38 @@ class DataModel(pydantic.BaseModel):
         return report
 
     @field_validator("*")
-    def check_list_values(cls, value, info):
+    @classmethod
+    def check_list_values(cls, values, info):
         field_type = cls.model_fields[info.field_name].annotation
 
-        if hasattr(field_type, "regex"):
-            if not bool(field_type.regex.match(value)):
-                raise TypeError(
-                    f"List element of value '{value}' cannot be added due to not matching the requried regex '{field_type.regex}'"
-                )
-            else:
-                return value
+        if get_args(field_type):
+            field_type = get_args(field_type)
+        else:
+            field_type = [field_type]
 
-        if "pydantic" in field_type.__module__:
-            try:
-                field_type(value)
-            except ValueError:
-                raise TypeError(
-                    f"List element of type '{type(value)}' cannot be added. Expected type '{field_type}'"
-                )
-        elif not isinstance(value, field_type) and not issubclass(field_type, Enum):
-            raise TypeError(
-                f"List element of type '{type(value)}' cannot be added. Expected type '{field_type}'"
-            )
+        for value in values:
+            checks = [
+                cls._check_list_value(value, dtype)
+                for dtype in field_type
+                if dtype != type(None)
+            ]
 
-        return value
+            if not any([check[1] for check in checks]):
+                error_messages = "\n".join(
+                    [msg for msg, check in checks if check is False]
+                )
+                raise TypeError(error_messages)
+
+        return values
+
+    @staticmethod
+    def _check_list_value(value: Any, field_type) -> Tuple[str, bool]:
+        msg = f"List element of type '{type(value)}' cannot be added. Expected type '{field_type}'"
+
+        if not isinstance(value, field_type) and not issubclass(field_type, Enum):
+            return msg, False
+
+        return "", True
 
     @field_validator("*", mode="before")
     @classmethod
