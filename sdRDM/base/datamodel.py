@@ -311,14 +311,12 @@ class DataModel(pydantic.BaseModel, metaclass=Meta):
 
         try:
             # Add git specs if available
-            data["__source__"] = (
-                {
-                    "root": self.__class__.__name__,
-                    "repo": self.__repo__,  # type: ignore
-                    "commit": self.__commit__,  # type: ignore
-                    "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
-                }
-            )  # type: ignore
+            data["__source__"] = {
+                "root": self.__class__.__name__,
+                "repo": self.__repo__,  # type: ignore
+                "commit": self.__commit__,  # type: ignore
+                "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
+            }  # type: ignore
         except AttributeError:
             if warn:
                 warnings.warn(
