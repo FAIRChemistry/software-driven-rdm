@@ -76,10 +76,18 @@ def generate_api_from_parser(
 
     # Write init files
     core_init = render_core_init_file(parser.objects, parser.enums)
-    save_rendered_to_file(core_init, os.path.join(libpath, "core", "__init__.py"))
+    save_rendered_to_file(
+        core_init,
+        os.path.join(libpath, "core", "__init__.py"),
+        use_formatter=use_formatter,
+    )
 
     lib_init = render_library_init_file(parser.objects, parser.enums, url, commit)
-    save_rendered_to_file(lib_init, os.path.join(libpath, "__init__.py"))
+    save_rendered_to_file(
+        lib_init,
+        os.path.join(libpath, "__init__.py"),
+        use_formatter=use_formatter,
+    )
 
     # Write schema to library
     generate_mermaid_schema(os.path.join(libpath, "schemes"), libname, parser)
@@ -122,7 +130,11 @@ def write_classes(
         save_rendered_to_file(rendered, path, use_formatter)
 
 
-def save_rendered_to_file(rendered: str, path: str, use_formatter: bool = True) -> None:
+def save_rendered_to_file(
+    rendered: str,
+    path: str,
+    use_formatter: bool,
+) -> None:
     """Saves a rendered Object, Enum or Init to a file"""
 
     if os.path.isfile(path):
