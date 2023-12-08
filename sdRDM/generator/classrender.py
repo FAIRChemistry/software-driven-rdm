@@ -1,14 +1,12 @@
 from copy import deepcopy
-from enum import Enum
-import re
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Union
 from jinja2 import Template
 from importlib import resources as pkg_resources
 
 from sdRDM.generator.datatypes import DataTypes
 from sdRDM.generator import templates as jinja_templates
 
-from .utils import camel_to_snake, clean_imports
+from .utils import camel_to_snake
 
 
 def render_object(
