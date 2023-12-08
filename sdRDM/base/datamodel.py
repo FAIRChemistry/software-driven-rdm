@@ -7,7 +7,6 @@ import uuid
 import pydantic
 import random
 import tempfile
-import toml
 import validators
 import yaml
 import warnings
@@ -38,31 +37,21 @@ from typing import (
 from astropy.units import Unit
 
 from sdRDM.base.importedmodules import ImportedModules
-from sdRDM.linking.link import _digit_free_path
 from sdRDM.base.listplus import ListPlus
 from sdRDM.base.referencecheck import (
     object_is_compliant_to_references,
     value_is_compliant_to_references,
 )
 from sdRDM.base.utils import generate_model
+from sdRDM.base.tree import _digit_free_path, build_guide_tree, ClassNode
 from sdRDM.base.ioutils.xml import write_xml, read_xml
-from sdRDM.base.graphql import parse_query_to_selections, traverse_graphql_query
-from sdRDM.linking.link import convert_data_model
 from sdRDM.generator.codegen import generate_python_api
-from sdRDM.linking.nodes import ClassNode
-from sdRDM.linking.utils import build_guide_tree, generate_template
 from sdRDM.tools.utils import YAMLDumper
 from sdRDM.tools.gitutils import (
     ObjectNode,
     build_library_from_git_specs,
     _import_library,
 )
-
-
-# class Meta(type):
-#     def __str__(cls):
-#         cls.meta_tree()
-#         return ""
 
 
 class DataModel(pydantic.BaseModel):
@@ -291,11 +280,6 @@ class DataModel(pydantic.BaseModel):
 
         return sorted(metapaths)
 
-    def query(self, query: str) -> Dict:
-        """Takes a graphql query and extracts all data matching the structure and arguments"""
-        selections = parse_query_to_selections(query)
-        return traverse_graphql_query(selections, self)
-
     # ! Exporters
     def to_dict(self, exclude_none=True, warn=True, convert_h5ds=True, **kwargs):
         data = super().model_dump(
@@ -454,56 +438,6 @@ class DataModel(pydantic.BaseModel):
             )
 
         write_hdf5(self, file)
-
-    def convert_to(
-        self,
-        template: Union[str, None, Dict] = None,
-        print_paths: bool = False,
-    ):
-        """
-        Converts a given data model to another model that has been specified
-        in the attributes metadata. This will create a new object model from
-        the current.
-
-        Example:
-            ## Origin
-            class DataModel(sdRDM.DataModel):
-                foo: str = Field(... another_model="AnotherModel.sub.bar")
-
-            --> The goal is to project the data from 'DataModel' to 'AnotherModel'
-                which maps the 'foo' attribute to the nested 'bar' attribute.
-
-        This function provides the utility to map in between data models and
-        offer an exchange of data without explicit code.
-        """
-
-        if isinstance(template, str):
-            if template.lower().endswith(".yaml") or template.lower().endswith(".yml"):
-                template = yaml.safe_load(open(template))
-            elif template.lower().endswith(".toml"):
-                template = toml.load(open(template))
-            else:
-                raise TypeError(
-                    f"Linking template format of '{template.split('.')[-1]}' is not supported. Please consider using TOML or YAML."
-                )
-        elif template is None:
-            template = {}
-
-        assert isinstance(template, dict), f"Template is not a dictionary"
-
-        return convert_data_model(
-            dataset=self,
-            template=template,
-            print_paths=print_paths,
-        )
-
-    @classmethod
-    def generate_linking_template(
-        cls, path: str = "linking_template.toml", simple: bool = True
-    ):
-        """Generates a template that can be used to link between two data models."""
-
-        generate_template(cls, path, simple)
 
     # ! Inherited Initializers
     @classmethod
