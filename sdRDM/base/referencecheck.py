@@ -92,5 +92,6 @@ def has_reference_check(field) -> bool:
 
 def get_field_reference_check(field) -> Tuple[str, str]:
     """Extracts root and path from a refrence field"""
-    root, *path = field.field_info.extra["references"].split(".")
+
+    root, *path = field.json_schema_extra["references"].split(".")
     return (root, "/".join(path))
