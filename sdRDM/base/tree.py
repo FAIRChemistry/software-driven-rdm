@@ -1,5 +1,5 @@
 import re
-from typing import get_origin
+from typing import get_args, get_origin
 from bigtree import Node
 
 
@@ -68,12 +68,23 @@ def _build_class_tree(obj: "DataModel", parent=None):
             continue
 
         attr_node = AttributeNode(name, parent=parent)
+        is_multiple = get_origin(field.annotation) == list
+        is_object = any(_is_data_model(item) for item in get_args(field.annotation))
+        extra = field.json_schema_extra
 
-        if _is_multiple_type(field.annotation, field.annotation):
+        if extra and extra.get("reference"):
+            continue
+
+        if not is_object:
+            continue
+
+        if is_multiple:
             attr_node = ListNode("0", parent=attr_node)
 
-        if hasattr(field.annotation, "model_fields"):
-            _build_class_tree(field.annotation, parent=attr_node)
+        dtype = [
+            dtype for dtype in get_args(field.annotation) if _is_data_model(dtype)
+        ][0]
+        _build_class_tree(dtype, parent=attr_node)
 
     return parent
 
@@ -83,9 +94,13 @@ def _is_recursive(obj: "DataModel", type) -> bool:
     return hasattr(type, "model_fields") and obj.model_fields == type.model_fields
 
 
-def _is_multiple_type(outer_type, type) -> bool:
+def _is_multiple_type(dtype) -> bool:
     """Checcks whether the given outer type is an iterable"""
-    return get_origin(outer_type) == list and hasattr(type, "model_fields")
+
+    is_mulitple = get_origin(dtype) == list
+    is_data_model = any(_is_data_model(item) for item in get_args(dtype))
+
+    return is_mulitple and is_data_model
 
 
 def _build_instance_tree(obj: "DataModel", parent=None) -> ClassNode:
