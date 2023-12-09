@@ -34,7 +34,7 @@ from typing import (
     Callable,
     get_origin,
 )
-from astropy.units import Unit
+from astropy.units import Unit, UnitBase
 
 from sdRDM.base.importedmodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
@@ -67,24 +67,33 @@ class DataModel(pydantic.BaseModel):
     _parent: Optional["DataModel"] = PrivateAttr(default=None)
     _references: DottedDict = PrivateAttr(default_factory=DottedDict)
     _id: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
+    _attribute: Optional[str] = PrivateAttr(default=None)
 
     def __init__(self, **data):
         super().__init__(**data)
         self._initialize_references()
 
         for name, value in data.items():
-            if bool(re.match("__[a-zA-Z0-9]*__", name)):
+            if bool(re.match("_[a-zA-Z0-9]*", name)):
                 continue
 
             # Store references to other objects and vice versa
-            self._add_reference_to_object(name, value)
+            # self._add_reference_to_object(name, value)
 
         for field, value in self.__dict__.items():
-            if not isinstance(value, ListPlus):
+            is_object = hasattr(value, "model_fields")
+            is_list = isinstance(value, (list, ListPlus))
+
+            if is_list:
+                is_object = all([self.is_data_model(v) for v in value])
+
+            if not is_object and not is_list:
+                continue
+            elif not is_object and is_list:
                 continue
 
             self.__dict__[field]._parent = self
-            self.__dict__[field].__attribute__ = field
+            self.__dict__[field]._attribute = field
 
         self._types = DottedDict()
         for name, field in self.model_fields.items():
@@ -280,6 +289,34 @@ class DataModel(pydantic.BaseModel):
 
         return sorted(metapaths)
 
+    def _meta_path(self):
+        """
+        Returns the meta path of the DataModel object.
+
+        The meta path is a string representation of the path from the root DataModel object to the current object.
+        It is constructed by traversing the parent-child relationship of the objects and appending the attribute names
+        to the path.
+
+        Returns:
+            str: The meta path of the DataModel object.
+        """
+
+        if not self._attribute or not self._parent:
+            return self.__class__.__name__
+
+        path = []
+        obj = self
+
+        while True:
+            if not obj._parent:
+                path.append(type(obj).__name__)
+                break
+
+            path.append(obj._attribute)
+            obj = obj._parent
+
+        return "/".join(path[::-1])
+
     # ! Exporters
     def to_dict(self, exclude_none=True, warn=True, convert_h5ds=True, **kwargs):
         data = super().model_dump(
@@ -424,7 +461,10 @@ class DataModel(pydantic.BaseModel):
             pass
 
         return etree.tostring(
-            tree, pretty_print=True, xml_declaration=True, encoding="UTF-8"
+            tree,
+            pretty_print=True,  # type: ignore
+            xml_declaration=True,  # type: ignore
+            encoding="UTF-8",  # type: ignore
         ).decode("utf-8")
 
     def hdf5(self, file: Union["H5File", str]) -> None:
@@ -761,7 +801,7 @@ class DataModel(pydantic.BaseModel):
     def _unit_field_validator(cls, v, info):
         field_type = cls.model_fields[info.field_name].annotation
 
-        if field_type == "UnitBase":
+        if field_type == UnitBase:
             if isinstance(v, str):
                 return Unit(v)
             return v
@@ -871,7 +911,7 @@ class DataModel(pydantic.BaseModel):
 
     # ! Overloads
     def __setattr__(self, name, value):
-        if bool(re.match("__[a-zA-Z0-9]*__", name)):
+        if bool(re.match("_[a-zA-Z0-9]*", name)):
             return super().__setattr__(name, value)
 
         self._add_reference_to_object(name, value)
@@ -880,8 +920,9 @@ class DataModel(pydantic.BaseModel):
 
         super().__setattr__(name, value)
 
-        if isinstance(value, list):
+        if isinstance(value, (list, ListPlus)):
             self.__dict__[name]._parent = self
+            self.__dict__[name]._attribute = name
 
     def _add_reference_to_object(self, name, value):
         """Adds the current class to the referenced object to maintain its relation"""
