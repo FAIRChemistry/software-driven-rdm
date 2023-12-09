@@ -44,10 +44,10 @@ class ImportedModules(DottedDict):
         if self.links is None:
             return
 
-        for name, link in self.links.items():
-            obj = getattr(self, link["__model__"])
-            converter = lambda self: self.convert_to(template=deepcopy(link))
-            setattr(obj, f"to_{name.replace(' ', '_')}", converter)
+        for name, (root_cls, link_fun) in self.links.items():
+            obj = getattr(self, root_cls)
+            fun = lambda self: link_fun(self)
+            setattr(obj, name, fun)
 
     def __repr__(self) -> str:
         GROUPS = ["Objects", "enums", "links"]
