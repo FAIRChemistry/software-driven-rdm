@@ -188,7 +188,7 @@ def write_xml(obj, pascal: bool = True):
 
         # Create boolean checks
         is_multiple = outer == list
-        is_object = all([hasattr(inner, "model_fields") for inner in inners])
+        is_object = any([hasattr(inner, "model_fields") for inner in inners])
 
         # Exit if the value is None or empty
         if _is_none(value):
@@ -301,11 +301,18 @@ def _handle_single_base_type(
     Returns:
         None
     """
+
+    if value is None:
+        return
+    if isinstance(value, bool):
+        value = str(value).lower()  # type: ignore
+
     if xml_option.startswith("@"):
         node.attrib[xml_option.replace("@", "")] = str(value)
     else:
         element = etree.Element(xml_option, attrib={}, nsmap={})
         element.text = str(value)
+
         node.append(element)
 
 
