@@ -8,15 +8,15 @@ class ListPlus(List[Any]):
     attributes.
     """
 
-    __parent__: "DataModel"
+    _parent: "DataModel"
     __types__: List["DataModel"]
-    __attribute__: str
+    _attribute: Optional[str]
 
     def __init__(self, *args, **kwargs):
         super(ListPlus, self).__init__()
 
-        self.__parent__ = None
-        self.__attribute__ = None
+        self._parent = None
+        self._attribute = None
 
         for arg in args:
             if "generator object" in repr(arg):
@@ -28,20 +28,24 @@ class ListPlus(List[Any]):
     def append(self, *args):
         for arg in args:
             if hasattr(arg, "model_fields") and self.is_part_of_model():
-                arg._parent = self.__parent__
-                arg._check_references(self.__attribute__, arg)
+                arg._parent = self._parent
+                arg._attribute = self._attribute
+                arg._check_references(self._attribute, arg)
 
             super().append(arg)
 
     def is_part_of_model(self) -> bool:
         """Checks whether this list is already integrated"""
-        return self.__parent__ is not None and self.__attribute__ is not None
+        return self._parent is not None
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if name == "__parent__" and value is not None:
+        if name == "_parent" and value is not None:
             self.set_parent_for_object_entries(value)
-        elif hasattr(value, "model_fields") and self.__parent__ is not None:
-            value._parent = self.__parent__
+        elif name == "_attribute" and value is not None:
+            self.set_attribute_for_object_entries(value)
+        elif hasattr(value, "model_fields") and self._parent is not None:
+            value._parent = self._parent
+            value._attribute = self._attribute
 
         return super().__setattr__(name, value)
 
@@ -52,6 +56,14 @@ class ListPlus(List[Any]):
                 continue
 
             entry._parent = parent
+
+    def set_attribute_for_object_entries(self, attribute):
+        """Adds attribute relation so object entries once it has been set"""
+        for entry in self:
+            if not hasattr(entry, "model_fields"):
+                continue
+
+            entry._attribute = attribute
 
     def get(
         self,
