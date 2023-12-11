@@ -10,8 +10,20 @@ class DataTypes(Enum):
     int = ("int", None)
     integer = ("int", None)
     bytes = ("bytes", None)
-    UnitClass = ("UnitBase", ["from astropy.units import UnitBase"])
-    unitclass = ("UnitBase", ["from astropy.units import UnitBase"])
+    UnitClass = (
+        "Union[UnitBase, str, UnitType, Unit]",
+        [
+            "from astropy.units import UnitBase, Unit",
+            "from sdRDM.base.datatypes import UnitType",
+        ],
+    )
+    unitclass = (
+        "Union[UnitBase, str, UnitType, Unit]",
+        [
+            "from astropy.units import UnitBase, Unit",
+            "from sdRDM.base.datatypes import UnitType",
+        ],
+    )
     EmailStr = ("EmailStr", ["from pydantic import EmailStr"])
     Email = ("EmailStr", ["from pydantic import EmailStr"])
     HttpUrl = ("HttpUrl", ["from pydantic import HttpUrl"])

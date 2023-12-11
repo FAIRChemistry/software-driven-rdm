@@ -816,6 +816,43 @@ class DataModel(pydantic.BaseModel):
 
         return value
 
+    @field_validator("*")
+    def _convert_unit(cls, unit, info):
+        """
+        Convert the value `v` to the appropriate unit type based on the field annotation.
+
+        Args:
+            v: The value to be converted.
+            info: Additional information about the field.
+
+        Returns:
+            The converted value.
+
+        """
+
+        from .datatypes import UnitType
+
+        field_type = cls.model_fields[info.field_name].annotation
+        has_unit_type = any(
+            dtype in [UnitBase, UnitType, Unit] for dtype in get_args(field_type)
+        )
+
+        if not has_unit_type:
+            return unit
+
+        if isinstance(unit, str) and has_unit_type:
+            return UnitType.from_string(unit)
+        elif issubclass(type(unit), UnitBase) and has_unit_type:
+            return UnitType.from_astropy_unit(unit)  # type: ignore
+        elif isinstance(unit, UnitType) and has_unit_type:
+            return unit
+        elif isinstance(unit, Unit) and has_unit_type:
+            return UnitType.from_astropy_unit(unit)
+        else:
+            raise ValueError(
+                f"Value {unit} is not a valid unit. Must be a string, UnitBase, UnitType, or Unit."
+            )
+
     @staticmethod
     def _has_ndarray(dtype):
         return any(
