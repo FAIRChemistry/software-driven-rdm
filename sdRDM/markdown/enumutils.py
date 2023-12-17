@@ -12,7 +12,6 @@ def parse_markdown_enumerations(enumerations: List[Token]) -> List[Dict]:
 
     enum_stack = []
     for index, element in enumerate(enumerations):
-
         if element.level == 1 and enumerations[index - 1].tag == "h3":
             enum_stack.append(
                 {
