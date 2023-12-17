@@ -1,6 +1,6 @@
 import sdRDM
 
-from typing import Union
+from typing import List, Union
 from astropy.units import UnitBase, Unit, CompositeUnit
 from pydantic import field_serializer, field_validator, PrivateAttr
 
@@ -23,8 +23,8 @@ class UnitType(sdRDM.DataModel):
     """
 
     scale: float
-    bases: list[Union[str, UnitBase]]
-    powers: list[float]
+    bases: List[Union[str, UnitBase]]
+    powers: List[float]
     _unit: Union[UnitBase, UnitBase] = PrivateAttr()
     _hash: int = PrivateAttr()
 
@@ -53,7 +53,7 @@ class UnitType(sdRDM.DataModel):
         return [Unit(base) for base in v]
 
     @field_serializer("bases")
-    def _serialize_bases(self, bases: list[Union[str, UnitBase]]):
+    def _serialize_bases(self, bases: List[Union[str, UnitBase]]):
         return [str(base) for base in bases]
 
     @classmethod
