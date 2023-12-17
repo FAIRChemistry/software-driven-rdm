@@ -215,7 +215,12 @@ def process_type_option(
 
 def is_remote_type(dtype: str) -> bool:
     """Checks whether the given type points to a remote model"""
-    return "@" in dtype and "github" in dtype
+
+    if not isinstance(dtype, str):
+        return False
+
+    pattern = r"https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9-]+\.git\@[A-Za-z0-9-]+"
+    return bool(re.match(pattern, dtype))
 
 
 def has_small_type(dtype: str) -> bool:
