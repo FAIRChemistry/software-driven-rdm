@@ -1,7 +1,10 @@
+import pytest
+
 from datetime import date, datetime
 from pydantic_core import Url
 
 
+@pytest.mark.e2e
 def test_dataset_creation(model_all, model_all_dataset):
     """Tests whether the data that is passed to the model is correctly parsed"""
 

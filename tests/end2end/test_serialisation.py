@@ -1,6 +1,8 @@
+import pytest
 import json, yaml
 
 
+@pytest.mark.e2e
 def test_json_serialisation(model_all_dataset):
     """Checks the json serialisation of the model"""
 
@@ -10,6 +12,7 @@ def test_json_serialisation(model_all_dataset):
     assert given == expected, "JSON serialisation does not match"
 
 
+@pytest.mark.e2e
 def test_yaml_serialisation(model_all_dataset):
     """Checks the yaml serialisation of the model"""
 

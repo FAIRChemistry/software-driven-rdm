@@ -1,8 +1,11 @@
+import pytest
+
 from datetime import date, datetime
 from pydantic import PositiveFloat, PositiveInt, AnyHttpUrl, EmailStr
 from typing import List, Union, Optional
 
 
+@pytest.mark.e2e
 def test_scheme(model_all):
     """Tests whether the schemes of a given model are matching with what has been parsed"""
 

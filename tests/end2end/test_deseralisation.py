@@ -1,3 +1,7 @@
+import pytest
+
+
+@pytest.mark.e2e
 def test_json_deserialisation(model_all, model_all_dataset):
     """Checks whether the parsed JSON file is correctly deserialised"""
 
@@ -9,6 +13,7 @@ def test_json_deserialisation(model_all, model_all_dataset):
     assert given == expected, "JSON deserialisation does not match"
 
 
+@pytest.mark.e2e
 def test_yaml_deserialisation(model_all, model_all_dataset):
     """Checks whether the parsed YAML file is correctly deserialised"""
 

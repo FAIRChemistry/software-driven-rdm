@@ -1,4 +1,4 @@
-name: Unit Tests
+name: End-to-end tests
 
 on: [push]
 
@@ -27,4 +27,4 @@ jobs:
 
       - name: Run tests with pytest
         run: |
-            pytest
+          pytest -v -m e2e

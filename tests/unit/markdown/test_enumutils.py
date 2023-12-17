@@ -7,6 +7,7 @@ import pytest
 
 class TestParseMarkdownEnumerations:
     # The function correctly parses enumerations defined in a markdown model.
+    @pytest.mark.unit
     def test_correctly_parses_enumerations(self, correct_enum_tokens):
         """
         Tests whether enums are parsed correctly. The following markdown is used:
@@ -60,6 +61,7 @@ class TestParseMarkdownEnumerations:
         assert parse_markdown_enumerations(correct_enum_tokens) == expected_result
 
     # The function raises an AssertionError if a mapping does not follow the syntax rules.
+    @pytest.mark.unit
     def test_raises_assertion_error_for_invalid_mapping(
         self,
         incorrect_mapping_enum_tokens,
@@ -68,6 +70,7 @@ class TestParseMarkdownEnumerations:
             parse_markdown_enumerations(incorrect_mapping_enum_tokens)
 
     # The function correctly handles empty enumerations (i.e. no mappings).
+    @pytest.mark.unit
     def test_correctly_handles_empty_enumerations(
         self,
         empty_mapping_enum_tokens,
