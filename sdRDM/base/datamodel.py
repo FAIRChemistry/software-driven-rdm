@@ -318,10 +318,18 @@ class DataModel(pydantic.BaseModel):
         return "/".join(path[::-1])
 
     # ! Exporters
-    def to_dict(self, exclude_none=True, warn=True, convert_h5ds=True, **kwargs):
+    def to_dict(
+        self,
+        exclude_none=True,
+        warn=True,
+        convert_h5ds=True,
+        mode="json",
+        **kwargs,
+    ):
         data = super().model_dump(
             exclude_none=exclude_none,
             by_alias=True,
+            mode=mode,
             **kwargs,
         )
 
