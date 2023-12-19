@@ -4,10 +4,12 @@ import pytest
 
 from sdRDM.markdown.objectutils import (
     attribute_has_default,
+    get_attribute_name,
     has_small_type,
     is_linked_type,
     is_reference_type,
     is_remote_type,
+    is_required,
     process_option,
     process_type_option,
 )
@@ -363,3 +365,140 @@ class TestProcessOption:
 
         with pytest.raises(AssertionError):
             process_option(invalid_option, object_stack, external_types)
+
+
+class TestIsRequired:
+    # Returns True if a bold element is present in the list of children
+    @pytest.mark.unit
+    def test_returns_true_if_bold_element_present(
+        self,
+        required_token,
+        non_required_token,
+    ):
+        # Arrange
+        children = [required_token, non_required_token]
+
+        # Act
+        result = is_required(children)
+
+        # Assert
+        assert result == True
+
+    # Returns False if no bold element is present in the list of children
+    def test_returns_false_if_no_bold_element_present(self, non_required_token):
+        # Arrange
+        children = [non_required_token]
+
+        # Act
+        result = is_required(children)
+
+        # Assert
+        assert result == False
+
+    # Handles a single bold element in the list of children
+    @pytest.mark.unit
+    def test_handles_single_bold_element(self, required_token):
+        # Arrange
+        children = [required_token]
+
+        # Act
+        result = is_required(children)
+
+        # Assert
+        assert result == True
+
+    # Handles an empty list of children
+    @pytest.mark.unit
+    def test_handles_empty_list_of_children(self):
+        # Arrange
+        children = []
+
+        # Act
+        result = is_required(children)
+
+        # Assert
+        assert result == False
+
+    # Handles a list of children with no bold elements
+    def test_handles_list_with_no_bold_elements(self, non_required_token):
+        # Arrange
+        children = [non_required_token, non_required_token]
+
+        # Act
+        result = is_required(children)
+
+        # Assert
+        assert result == False
+
+
+class TestGetAttributeName:
+    # Returns the name of the first child element with type "text" and non-empty content
+    def test_returns_name_of_first_child_with_non_empty_content(
+        self,
+        attribute_token,
+    ):
+        children = [
+            attribute_token("attribute1"),
+        ]
+        result = get_attribute_name(children)
+        assert result == "attribute1"
+
+    # Handles a list of children with multiple elements of type "text" and non-empty content
+    def test_handles_list_of_children_with_multiple_elements_with_non_empty_content(
+        self,
+        attribute_token,
+    ):
+        children = [
+            attribute_token("attribute1"),
+            attribute_token("attribute2"),
+            attribute_token("attribute2"),
+        ]
+        result = get_attribute_name(children)
+        assert result == "attribute1"
+
+    # Handles a list of children with elements of type "text" and empty content
+    def test_handles_list_of_children_with_elements_with_empty_content(
+        self,
+        attribute_token,
+        empty_attribute_token,
+    ):
+        children = [
+            empty_attribute_token,
+            attribute_token("attribute2"),
+            empty_attribute_token,
+        ]
+        result = get_attribute_name(children)
+        assert result == "attribute2"
+
+    # Raises an exception if the input list is empty
+    def test_raises_exception_if_input_list_is_empty(self):
+        children = []
+        with pytest.raises(ValueError):
+            get_attribute_name(children)
+
+    # Raises an exception if none of the child elements have type "text"
+    def test_raises_exception_if_none_of_child_elements_have_type_text(
+        self,
+        attribute_token_wrong_type,
+    ):
+        children = [
+            attribute_token_wrong_type("attribute1"),
+            attribute_token_wrong_type("attribute2"),
+            attribute_token_wrong_type("attribute3"),
+        ]
+
+        with pytest.raises(ValueError):
+            get_attribute_name(children)
+
+    # Raises an exception if all child elements have empty content
+    def test_raises_exception_if_all_child_elements_have_empty_content(
+        self,
+        empty_attribute_token,
+    ):
+        children = [
+            empty_attribute_token,
+            empty_attribute_token,
+            empty_attribute_token,
+        ]
+        with pytest.raises(ValueError):
+            get_attribute_name(children)
