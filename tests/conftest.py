@@ -8,6 +8,12 @@ from tests.fixtures.code.enumutils import (
     _correct_enum_tokens,
     _incorrect_mapping_enum_tokens,
 )
+from tests.fixtures.code.objectutils import (
+    _correct_option,
+    _invalid_option,
+    _multiple_option,
+    _type_option,
+)
 
 
 @pytest.fixture
@@ -69,3 +75,24 @@ def incorrect_mapping_enum_tokens():
 @pytest.fixture
 def empty_mapping_enum_tokens():
     return _empty_mapping_enum_tokens()
+
+
+## Objectutils fixtures
+@pytest.fixture
+def correct_option():
+    return _correct_option()
+
+
+@pytest.fixture
+def invalid_option():
+    return _invalid_option()
+
+
+@pytest.fixture
+def type_option():
+    return _type_option()
+
+
+@pytest.fixture
+def multiple_option():
+    return _multiple_option()
