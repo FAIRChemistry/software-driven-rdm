@@ -163,11 +163,21 @@ def process_option(
 
 def attribute_has_default(object_stack: List[Dict]) -> bool:
     """Checks whether the current attribute has a default value or not"""
-    return "default" in object_stack[-1]["attributes"][-1]
+
+    if not object_stack:
+        return False
+    elif not object_stack[-1]["attributes"]:
+        return False
+
+    last_attr = object_stack[-1]["attributes"][-1]
+
+    return "default" in last_attr or "default_factory" in last_attr
 
 
 def process_type_option(
-    dtypes: str, object_stack: List, external_types: Dict[str, "MarkdownParser"]
+    dtypes: str,
+    object_stack: List,
+    external_types: Dict[str, "MarkdownParser"],
 ) -> List[str]:
     """Processes the specific type option and extracts references as well as multiple types"""
 
@@ -207,6 +217,8 @@ def process_type_option(
 
             dtype, attribute = match.groups()
             object_stack[-1]["attributes"][-1]["reference"] = f"{dtype}.{attribute}"
+        elif "." in dtype:
+            raise ValueError(f"Reference type '{dtype}' is not valid.")
 
         processed_types.append(dtype)
 
