@@ -3,10 +3,13 @@
 import pytest
 
 from sdRDM.markdown.objectutils import (
+    attribute_has_default,
     has_small_type,
     is_linked_type,
     is_reference_type,
     is_remote_type,
+    process_option,
+    process_type_option,
 )
 
 
@@ -139,3 +142,224 @@ class TestIsRemoteType:
     @pytest.mark.unit
     def test_invalid_url_format(self):
         assert is_remote_type("https://github.com/username/repo.git") == False
+
+
+class TestHasSmallType:
+    # Returns True when input string contains a small type pattern.
+    @pytest.mark.unit
+    def test_contains_small_type_pattern(self):
+        assert has_small_type("{name: type, name: type}") == True
+        assert has_small_type("{name: type}") == True
+        assert has_small_type("{name: type, name: type, ...}") == True
+        assert has_small_type("{name: type, name: type, ...") == False
+        assert has_small_type("name: type, name: type}") == False
+        assert has_small_type("") == False
+        assert has_small_type("   ") == False
+
+    # Returns False when input string does not contain a small type pattern.
+    @pytest.mark.unit
+    def test_does_not_contain_small_type_pattern(self):
+        assert has_small_type("name: type") == False
+        assert has_small_type("name: type, name: type") == False
+        assert has_small_type("name: type, name: type, ...") == False
+        assert has_small_type("name: type, name: type, ...") == False
+        assert has_small_type("name: type, name: type, ...") == False
+
+    # Returns False when input string is empty.
+    @pytest.mark.unit
+    def test_empty_string(self):
+        assert has_small_type("") == False
+
+    # Returns False when input string contains only whitespace characters.
+    @pytest.mark.unit
+    def test_whitespace_string(self):
+        assert has_small_type("   ") == False
+
+    # Returns False when input string contains an opening brace but no closing brace.
+    @pytest.mark.unit
+    def test_missing_closing_brace(self):
+        assert has_small_type("{name: type") == False
+
+    # Returns False when input string contains a closing brace but no opening brace.
+    @pytest.mark.unit
+    def test_missing_opening_brace(self):
+        assert has_small_type("name: type}") == False
+
+
+class TestAttributeHasDefault:
+    # Returns True if the current attribute has a default value
+    @pytest.mark.unit
+    def test_returns_true_if_attribute_has_default(self):
+        object_stack = [{"attributes": [{"default": "default_value"}]}]
+        assert attribute_has_default(object_stack) is True
+
+    # Returns False if the current attribute does not have a default value
+    @pytest.mark.unit
+    def test_returns_false_if_attribute_does_not_have_default(self):
+        object_stack = [{"attributes": [{"name": "attribute_name"}]}]
+        assert attribute_has_default(object_stack) is False
+
+    # Returns False if object_stack is empty
+    @pytest.mark.unit
+    def test_returns_false_if_object_stack_is_empty(self):
+        object_stack = []
+        assert attribute_has_default(object_stack) is False
+
+    # Returns False if attributes list is empty
+    @pytest.mark.unit
+    def test_returns_false_if_attributes_list_is_empty(self):
+        object_stack = [{"attributes": []}]
+        assert attribute_has_default(object_stack) is False
+
+    # Returns False if the last attribute in the attributes list does not have a 'default' key
+    @pytest.mark.unit
+    def test_returns_false_if_last_attribute_does_not_have_default_key(self):
+        object_stack = [{"attributes": [{"name": "attribute_name"}]}]
+        assert attribute_has_default(object_stack) is False
+
+    # Returns True if the last attribute in the attributes list has a 'default_factory' key
+    @pytest.mark.unit
+    def test_returns_true_if_last_attribute_has_default_factory_key(self):
+        object_stack = [{"attributes": [{"default_factory": "default_factory_value"}]}]
+        assert attribute_has_default(object_stack) is True
+
+
+class TestProcessTypeOption:
+    # Processes a single type option with no subtypes or references
+    @pytest.mark.unit
+    def test_single_type_no_subtypes_or_references(self):
+        # Arrange
+        dtypes = "int"
+        object_stack = []
+        external_types = {}
+
+        # Act
+        result = process_type_option(dtypes, object_stack, external_types)
+
+        # Assert
+        assert result == ["int"]
+
+    # Processes multiple type options with no subtypes or references
+    @pytest.mark.unit
+    def test_multiple_types_no_subtypes_or_references(self):
+        # Arrange
+        dtypes = "int, float, str"
+        object_stack = []
+        external_types = {}
+
+        # Act
+        result = process_type_option(dtypes, object_stack, external_types)
+
+        # Assert
+        assert result == ["int", "float", "str"]
+
+    # Raises an AssertionError when processing a reference type with an invalid syntax
+    @pytest.mark.unit
+    def test_reference_type_invalid_syntax(self):
+        # Arrange
+        dtypes = "ReferenceType.invalid"
+        object_stack = []
+        external_types = {}
+
+        # Act & Assert
+        with pytest.raises(ValueError):
+            process_type_option(dtypes, object_stack, external_types)
+
+    # Does not add empty types to the processed types list
+    @pytest.mark.unit
+    def test_empty_types_not_added_to_processed_list(self):
+        # Arrange
+        dtypes = "int, , float, , str"
+        object_stack = []
+        external_types = {}
+
+        # Act
+        result = process_type_option(dtypes, object_stack, external_types)
+
+        # Assert
+        assert result == ["int", "float", "str"]
+
+    @pytest.mark.unit
+    def test_small_type_added_to_processed_types(self):
+        # Arrange
+        dtypes = "{name: integer}"
+        object_stack = [
+            {
+                "name": "Name",
+                "subtypes": [],
+                "attributes": [
+                    {
+                        "name": "attr_name",
+                        "default": "default_value",
+                    }
+                ],
+            }
+        ]
+
+        external_types = {}
+
+        # Act
+        result = process_type_option(dtypes, object_stack, external_types)
+
+        # Assert
+        assert result == ["AttrName"]
+
+
+class TestProcessOption:
+    # Successfully processes a valid option and adds it to the recent attribute of the recent object
+    @pytest.mark.unit
+    def test_valid_option_added_to_attribute(self, correct_option):
+        object_stack = [
+            {
+                "attributes": [
+                    {
+                        "name": "attribute_name",
+                        "default": "default_value",
+                    }
+                ]
+            }
+        ]
+        external_types = {}
+
+        process_option(correct_option, object_stack, external_types)
+
+        assert object_stack[-1]["attributes"][-1]["option"] == "value"
+
+    # Handles the 'type' option correctly by calling 'process_type_option' and adding the result to the attribute
+    @pytest.mark.unit
+    def test_type_option_processed_correctly(self, type_option):
+        object_stack = [
+            {
+                "attributes": [
+                    {
+                        "name": "attribute_name",
+                        "default": "default_value",
+                    }
+                ]
+            }
+        ]
+        external_types = {}
+
+        process_option(type_option, object_stack, external_types)
+
+        assert object_stack[-1]["attributes"][-1]["type"] == ["int"]
+
+    # Handles the 'multiple' option correctly by deleting the default value and adding a 'ListPlus()' default factory to the attribute
+    @pytest.mark.unit
+    def test_multiple_option_processed_correctly(self, multiple_option):
+        object_stack = [{"attributes": [{"default": "default_value"}]}]
+        external_types = {}
+
+        process_option(multiple_option, object_stack, external_types)
+
+        assert "default" not in object_stack[-1]["attributes"][-1]
+        assert object_stack[-1]["attributes"][-1]["default_factory"] == "ListPlus()"
+
+    # Raises an AssertionError if the option content does not match the expected pattern
+    @pytest.mark.unit
+    def test_assertion_error_raised_for_invalid_option(self, invalid_option):
+        object_stack = [{"attributes": []}]
+        external_types = {}
+
+        with pytest.raises(AssertionError):
+            process_option(invalid_option, object_stack, external_types)
