@@ -9,9 +9,14 @@ from tests.fixtures.code.enumutils import (
     _incorrect_mapping_enum_tokens,
 )
 from tests.fixtures.code.objectutils import (
+    _attribute_token,
+    _attribute_token_wrong_type,
     _correct_option,
+    _empty_attribute_token,
     _invalid_option,
     _multiple_option,
+    _non_required_token,
+    _required_token,
     _type_option,
 )
 
@@ -96,3 +101,28 @@ def type_option():
 @pytest.fixture
 def multiple_option():
     return _multiple_option()
+
+
+@pytest.fixture
+def required_token():
+    return _required_token()
+
+
+@pytest.fixture
+def non_required_token():
+    return _non_required_token()
+
+
+@pytest.fixture
+def attribute_token():
+    return _attribute_token
+
+
+@pytest.fixture
+def empty_attribute_token():
+    return _empty_attribute_token()
+
+
+@pytest.fixture
+def attribute_token_wrong_type():
+    return _attribute_token_wrong_type
