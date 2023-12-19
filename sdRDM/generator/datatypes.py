@@ -156,4 +156,4 @@ class DataTypes(Enum):
 
     @classmethod
     def get_value_list(cls):
-        return [member.value[0] for member in cls.__members__.values()]
+        return [member.value[0] for member in cls]
