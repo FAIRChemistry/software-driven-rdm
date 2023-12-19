@@ -113,12 +113,14 @@ def process_attribute(element: Token, object_stack: List, **kwargs) -> None:
 
     assert element.children, f"Element {element.content} has no children"
 
+    any_required = is_required(element.children)
+
     attribute = {
         "name": get_attribute_name(element.children),
-        "required": is_required(element.children),
+        "required": any_required,
     }
 
-    if not is_required(element.children):
+    if not any_required:
         attribute["default"] = None
 
     object_stack[-1]["attributes"].append(attribute)
@@ -133,9 +135,19 @@ def is_required(children: List[Token]) -> bool:
 def get_attribute_name(children: List[Token]) -> str:
     """Retrieves the name of an attribute"""
 
-    return next(
-        filter(lambda element: element.type == "text" and element.content, children)
-    ).content
+    if not children:
+        raise ValueError("Attribute has no children")
+
+    attr_names = [
+        element.content
+        for element in children
+        if element.type == "text" and element.content
+    ]
+
+    if not attr_names:
+        raise ValueError("Not attribute name found")
+
+    return attr_names[0]
 
 
 def process_option(
