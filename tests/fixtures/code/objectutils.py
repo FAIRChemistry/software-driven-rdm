@@ -18,11 +18,11 @@ def _multiple_option():
 
 
 def _required_token():
-    return Token(type="inline", tag="strong", nesting=0, content="attr_name")
+    return Token(type="text", tag="strong", nesting=0, content="attr_name")
 
 
 def _non_required_token():
-    return Token(type="inline", tag="", nesting=0, content="attr_name")
+    return Token(type="text", tag="", nesting=0, content="attr_name")
 
 
 def _attribute_token(name: str):
