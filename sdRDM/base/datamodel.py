@@ -21,7 +21,7 @@ from anytree import Node, LevelOrderIter
 from bigtree import print_tree, levelorder_iter, yield_tree
 from lxml import etree
 from functools import lru_cache
-from pydantic import PrivateAttr, field_validator
+from pydantic import ConfigDict, PrivateAttr, field_validator
 from typing import (
     Any,
     List,
@@ -55,11 +55,13 @@ from sdRDM.tools.gitutils import (
 
 
 class DataModel(pydantic.BaseModel):
-    class Config:
-        validate_assignment = True
-        use_enum_values = True
-        arbitrary_types_allowed = True
-        populate_by_name = True
+    # * Config
+    model_config = ConfigDict(
+        validate_assignment=True,
+        use_enum_values=True,
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
+    )
 
     # * Private attributes
     _node: Optional[Node] = PrivateAttr(default=None)
@@ -490,7 +492,7 @@ class DataModel(pydantic.BaseModel):
     # ! Inherited Initializers
     @classmethod
     def from_dict(cls, obj: Dict):
-        return cls.parse_obj(obj)
+        return cls.model_validate(obj)
 
     @classmethod
     def from_json_string(cls, json_string: str):
