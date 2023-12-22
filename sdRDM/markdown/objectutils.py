@@ -20,10 +20,21 @@ TAG_MAPPING = {
 
 
 def parse_markdown_module(
-    name: str, module: List[Token], external_types: Dict[str, "MarkdownParser"]
+    name: str,
+    module: List[Token],
+    external_types: Dict[str, "MarkdownParser"],
 ) -> List[Dict]:
-    """Parses the part of a markdown model that follows after an H2 heading"""
+    """Parses the part of a markdown model that follows after an H2 heading
 
+    Args:
+        name (str): The name of the module.
+        module (List[Token]): The list of tokens representing the markdown module.
+        external_types (Dict[str, "MarkdownParser"]): A dictionary of external types.
+
+    Returns:
+        List[Dict]: The list of parsed objects.
+
+    """
     TOKEN_MAPPING = {
         MarkdownTokens.OBJECT: process_object,
         MarkdownTokens.DESCRIPTION: process_description,
@@ -84,12 +95,22 @@ def process_object(element: Token, object_stack: List, **kwargs) -> None:
 
 def get_object_name(children: List[Token]) -> str:
     """Gets the name of an object"""
-    return children[0].content.replace("[", "").strip()
+
+    if len(children) == 0:
+        raise IndexError("Object has no children")
+
+    return re.sub(r"\[|\]", "", children[0].content).strip()
 
 
 def has_parent(children: List[Token]) -> bool:
     """Checks whether an object inherits from another one"""
-    return any(element.level == 1 for element in children)
+
+    lvl1_children = list(filter(lambda element: element.level == 1, children))
+
+    if len(lvl1_children) > 1:
+        raise ValueError("Object has more than one parent, which is not allowed.")
+
+    return len(lvl1_children) > 0
 
 
 def get_parent(children: List[Token]) -> str:
@@ -286,13 +307,16 @@ def process_remote_type(dtype: str) -> Tuple[str, Dict, str]:
     return obj, cls_defs, url
 
 
-def gather_objects_to_keep(name, objs, objects_to_keep=[]):
+def gather_objects_to_keep(name, objs, objects_to_keep=None):
     """Traverse a data model and extracts a list of objects to keep.
 
     This function is intended to use in conjunction with nested data models
     that are referencing a remote repository. Here, only parts of the model
     need to be extracted that the object of interest requires.
     """
+
+    if objects_to_keep is None:
+        objects_to_keep = []
 
     try:
         # Get the dtype from the objects, if given
