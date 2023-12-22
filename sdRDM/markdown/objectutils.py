@@ -44,6 +44,7 @@ def parse_markdown_module(
     }
 
     object_stack = []
+    has_options = False
 
     for index, element in enumerate(module):
         if not element.content:
@@ -52,6 +53,7 @@ def parse_markdown_module(
         if element.level == 1:
             token = TAG_MAPPING[module[index - 1].tag]
         elif element.level == 3:
+            check_previous_attribute(object_stack)
             token = MarkdownTokens.ATTRIBUTE
         elif element.level > 3:
             token = MarkdownTokens.OPTION
@@ -63,6 +65,25 @@ def parse_markdown_module(
         )
 
     return add_module_name_to_objects(name, object_stack)
+
+
+def check_previous_attribute(object_stack: List[Dict]) -> None:
+    """Validates the previous attribute and raises an error if it is not valid"""
+
+    if len(object_stack) == 0:
+        return
+
+    last_obj = object_stack[-1]
+
+    if not last_obj["attributes"]:
+        return
+
+    last_attr = last_obj["attributes"][-1]
+
+    if "type" not in last_attr:
+        raise ValueError(
+            f"Attribute '{last_attr['name']}' has no type. Please add via '- Type: <dtype>'"
+        )
 
 
 def add_module_name_to_objects(name: str, object_stack: List[Dict]) -> List[Dict]:
