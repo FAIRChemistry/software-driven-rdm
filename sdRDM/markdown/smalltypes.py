@@ -46,6 +46,8 @@ def _extract_attributes(dtypes: str, attr_name: str) -> List[Dict]:
             )
 
         name, dtype = attribute.split(":")
+        dtype = re.sub(r"\s+|\}", "", dtype)
+        name = re.sub(r"\s+|\{", "", name)
 
         # Perform checks on the attribute
         _validate_attribute(attribute, attr_name, name, dtype)
@@ -53,7 +55,7 @@ def _extract_attributes(dtypes: str, attr_name: str) -> List[Dict]:
         attributes.append(
             {
                 "name": name.strip(),
-                "type": [attribute.split(":")[1].strip()],
+                "type": [dtype.strip("}")],
                 "required": False,
             }
         )
