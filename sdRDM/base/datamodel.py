@@ -1,4 +1,3 @@
-import inspect
 import json
 import os
 import re
@@ -228,7 +227,8 @@ class DataModel(pydantic_xml.BaseXmlModel):
         elif is_list:
             return ListPlus([v for v in value if query(v)])
         else:
-            return query(value)
+            if query(value):
+                return value
 
     @staticmethod
     def _query_object(
@@ -243,7 +243,8 @@ class DataModel(pydantic_xml.BaseXmlModel):
                 f"Object '{obj.__class__.__name__}' does not have attribute '{attribute}'"
             )
 
-        return query(getattr(obj, attribute))
+        if query(getattr(obj, attribute)):
+            return obj
 
     def _traverse_model_by_path(self, object, path):
         """Traverses a give sdRDM model by using a path"""
