@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "software-driven rdm"
+name = "sdRDM"
 version = "0.2.0"
 description = "Software-driven RDM converts markdown data models into powerful objects that can be serialized to JSON, XML, YAML and HDF5"
 authors = ["Jan Range <range.jan@web.de>"]
@@ -28,6 +28,7 @@ email-validator = "^2.1.0.post1"
 astropy = "^6.0.0"
 markdown-it-py = "^3.0.0"
 rich = "^13.7.0"
+lxml = "^5.1.0"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.4.0"
@@ -42,7 +43,11 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-dvuploader = "sdRDM.cli:app"
+sdrdm = "sdRDM.cli:app"
 
 [tool.pytest.ini_options]
 addopts = ["-v", "--cov=sdRDM"]
+markers = [
+    "e2e",
+    "unit",
+]
