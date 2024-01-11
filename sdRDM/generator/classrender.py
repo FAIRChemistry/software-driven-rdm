@@ -118,18 +118,27 @@ def render_class(
     )
 
 
-def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str:
+def render_attribute(
+    attribute: Dict,
+    objects: List[Dict],
+    obj_name: str,
+) -> str:
     """Renders an attributeibute to code using a Jinja2 template"""
 
     attribute = deepcopy(attribute)
     template = Template(
-        pkg_resources.read_text(jinja_templates, "attribute_template.jinja2")
+        pkg_resources.read_text(
+            jinja_templates,
+            "attribute_template.jinja2",
+        )
     )
 
     is_multiple = "multiple" in attribute
     is_required = attribute["required"]
     is_all_optional = _is_optional_single_dtype(attribute, objects, obj_name)
     has_reference = "reference" in attribute
+
+    tag = _extract_xml_alias(attribute)
     attribute["type"] = [
         f'"{dtype}"' if dtype == obj_name else dtype for dtype in attribute["type"]
     ]
@@ -144,12 +153,42 @@ def render_attribute(attribute: Dict, objects: List[Dict], obj_name: str) -> str
         reference_types = get_reference_type(attribute["reference"], objects)
         attribute["type"] += reference_types
 
+    if is_multiple and tag != "None":
+        xml_alias = tag
+        tag = attribute["type"][0]
+        wrapped = True
+    else:
+        tag = attribute["type"][0]
+        xml_alias = None
+        wrapped = False
+
     return template.render(
         name=attribute.pop("name"),
         required=attribute.pop("required"),
         dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
         metadata=stringize_option_values(attribute),
+        field_type=_get_field_type(attribute),
+        wrapped=wrapped,
+        tag=tag,
+        xml_alias=xml_alias,
     )
+
+
+def _get_field_type(attribute: Dict) -> str:
+    if "xml" not in attribute:
+        return "element"
+
+    if attribute["xml"].lstrip('"').startswith("@"):
+        return "attr"
+
+    return "element"
+
+
+def _extract_xml_alias(attribute: Dict) -> Optional[str]:
+    if "xml" not in attribute:
+        return attribute["name"]
+
+    return attribute["xml"].split("@")[-1]
 
 
 def _is_optional_single_dtype(
@@ -272,6 +311,10 @@ def render_add_methods(object: Dict, objects: List[Dict], small_types: Dict) -> 
         complex_types = get_complex_types(attribute, objects)
         is_single_type = len(complex_types) == 1
 
+        if "Unit" in attribute["type"]:
+            add_methods.append(render_unit_add_method(attribute["name"]))
+            continue
+
         for type in complex_types:
             add_methods.append(
                 render_single_add_method(
@@ -379,6 +422,23 @@ def render_single_add_method(
         signature=assemble_signature(type, objects, obj_name, small_types),
         summary=f"This method adds an object of type '{type}' to attribute {attribute['name']}",
     )
+
+
+def render_unit_add_method(name: str):
+    """
+    Renders the template for adding a method to a unit.
+
+    Args:
+        name (str): The name of the method.
+
+    Returns:
+        str: The rendered template.
+    """
+    template = Template(
+        pkg_resources.read_text(jinja_templates, "add_unit_template.jinja2")
+    )
+
+    return template.render(name=name)
 
 
 def assemble_signature(
