@@ -12,6 +12,8 @@ from h5py._hl.group import Group as H5Group
 
 import h5py
 
+from sdRDM.base.listplus import ListPlus
+
 
 def write_hdf5(dataset, file: Union[H5File, str]):
     """Writes a given sdRDM model to HDF5"""
@@ -34,9 +36,15 @@ def write_hdf5(dataset, file: Union[H5File, str]):
         data = dataset.get(path)
         prefix, attribute = path.split()
         prefix = str(prefix)
+        is_array = isinstance(data, (np.ndarray, H5Dataset))
 
-        if isinstance(data, list) and len(data) == 1:
-            data = data[0]
+        if isinstance(data, (list, ListPlus)):
+            is_multiple_numeric = all(isinstance(value, (float, int)) for value in data)
+        else:
+            is_multiple_numeric = False
+
+        # if isinstance(data, list) and len(data) == 1:
+        #     data = data[0]
 
         if prefix == "/":
             # Write root attributes directly
@@ -46,8 +54,11 @@ def write_hdf5(dataset, file: Union[H5File, str]):
         # Fetch or create a group
         group = _get_group(file, prefix)
 
-        if isinstance(data, (np.ndarray, H5Dataset)):
+        if is_array and not is_multiple_numeric:
             _write_array(attribute, data, group)
+        elif not is_array and is_multiple_numeric:
+            print(np.array(data), np.array(data).shape)
+            _write_array(attribute, np.array(data), group)
         else:
             _write_attr(attribute, data, group)  # type: ignore
 
@@ -55,8 +66,11 @@ def write_hdf5(dataset, file: Union[H5File, str]):
         file.close()
 
 
-def read_hdf5(obj, file):
-    tree, _ = obj.create_tree()
+def read_hdf5(
+    obj: "DataModel",
+    file: H5File,
+):
+    tree, _ = obj.meta_tree()
     meta_paths = obj.meta_paths(leaves=True)
 
     for path in meta_paths:
