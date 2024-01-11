@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 import uuid
-import pydantic
+import pydantic_xml
 import random
 import tempfile
 import validators
@@ -19,7 +19,6 @@ from dotted_dict import DottedDict
 from enum import Enum
 from anytree import Node, LevelOrderIter
 from bigtree import print_tree, levelorder_iter, yield_tree
-from lxml import etree
 from functools import lru_cache
 from pydantic import ConfigDict, PrivateAttr, field_validator
 from typing import (
@@ -34,7 +33,6 @@ from typing import (
     Callable,
     get_origin,
 )
-from astropy.units import Unit, UnitBase
 
 from sdRDM.base.importedmodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
@@ -44,8 +42,8 @@ from sdRDM.base.referencecheck import (
 )
 from sdRDM.base.utils import generate_model
 from sdRDM.base.tree import _digit_free_path, build_guide_tree, ClassNode
-from sdRDM.base.ioutils.xml import write_xml, read_xml
 from sdRDM.generator.codegen import generate_python_api
+from sdRDM.generator.utils import extract_modules
 from sdRDM.tools.utils import YAMLDumper
 from sdRDM.tools.gitutils import (
     ObjectNode,
@@ -54,7 +52,7 @@ from sdRDM.tools.gitutils import (
 )
 
 
-class DataModel(pydantic.BaseModel):
+class DataModel(pydantic_xml.BaseXmlModel):
     # * Config
     model_config = ConfigDict(
         validate_assignment=True,
@@ -72,6 +70,8 @@ class DataModel(pydantic.BaseModel):
     _attribute: Optional[str] = PrivateAttr(default=None)
 
     def __init__(self, **data):
+        self._convert_units(self, data)
+
         super().__init__(**data)
         self._initialize_references()
 
@@ -456,26 +456,13 @@ class DataModel(pydantic.BaseModel):
             sort_keys=False,
         )
 
-    def xml(self, pascal: bool = True):
-        tree = write_xml(self, pascal=pascal)
-
-        try:
-            tree.attrib.update(
-                {
-                    "repo": self._repo,  # type: ignore
-                    "commit": self._commit,  # type: ignore
-                    "url": self._repo.replace(".git", f"/tree/{self._commit}"),  # type: ignore
-                }
-            )
-        except AttributeError:
-            pass
-
-        return etree.tostring(
-            tree,
-            pretty_print=True,  # type: ignore
-            xml_declaration=True,  # type: ignore
-            encoding="UTF-8",  # type: ignore
-        ).decode("utf-8")
+    def xml(self):
+        return self.to_xml(
+            pretty_print=True,
+            encoding="UTF-8",
+            skip_empty=True,
+            xml_declaration=True,
+        ).decode()  # type: ignore
 
     def hdf5(self, file: Union["H5File", str]) -> None:
         """Writes the object instance to HDF5."""
@@ -512,11 +499,11 @@ class DataModel(pydantic.BaseModel):
 
     @classmethod
     def from_xml(cls, handler: IO):
-        return cls.from_dict(read_xml(handler.read().encode(), cls))
+        return super().from_xml(handler.read())
 
     @classmethod
     def from_xml_string(cls, xml_string: str):
-        return cls.from_dict(read_xml(xml_string.encode(), cls))
+        return super().from_xml(xml_string)
 
     @classmethod
     def from_hdf5(cls, file):
@@ -654,7 +641,7 @@ class DataModel(pydantic.BaseModel):
 
             lib = _import_library(api_loc, lib_name)
 
-        return cls._extract_modules(lib=lib, links={})
+        return extract_modules(lib=lib, links={})
 
     @classmethod
     @lru_cache(maxsize=128)
@@ -702,26 +689,7 @@ class DataModel(pydantic.BaseModel):
         if only_classes:
             return lib
 
-        return cls._extract_modules(lib, links)
-
-    @classmethod
-    def _extract_modules(cls, lib, links) -> ImportedModules:
-        """Extracts root nodes and specified modules from a generated API"""
-
-        # Get all classes present
-        classes = {
-            obj.__name__: ObjectNode(obj)
-            for obj in lib.__dict__.values()
-            if inspect.isclass(obj) and issubclass(obj, DataModel)
-        }
-
-        enums = {
-            obj.__name__: ObjectNode(obj)
-            for obj in lib.__dict__.values()
-            if inspect.isclass(obj) and issubclass(obj, Enum)
-        }
-
-        return ImportedModules(classes=classes, enums=enums, links=links)
+        return extract_modules(lib, links)
 
     @staticmethod
     def _find_root_objects(classes: Dict):
@@ -787,12 +755,6 @@ class DataModel(pydantic.BaseModel):
 
         return tree
 
-    @classmethod
-    def visualize_tree(cls):
-        raise NotImplementedError(
-            "This function has been removed. In order to visualize the tree, use the `tree` function for an instance or 'meta_tree' for an uninstantiated model instead."
-        )
-
     # ! Validators
     @field_validator("*")
     @classmethod
@@ -807,61 +769,12 @@ class DataModel(pydantic.BaseModel):
             return value
 
     @field_validator("*", mode="before")
-    @classmethod
-    def _unit_field_validator(cls, v, info):
-        field_type = cls.model_fields[info.field_name].annotation
-
-        if field_type == UnitBase:
-            if isinstance(v, str):
-                return Unit(v)
-            return v
-
-        return v
-
-    @field_validator("*", mode="before")
     def _convert_lists_to_ndarray(cls, value, info):
         field_type = cls.model_fields[info.field_name].annotation
         if cls._has_ndarray(field_type) and isinstance(value, list):
             return np.array(value)
 
         return value
-
-    @field_validator("*")
-    def _convert_unit(cls, unit, info):
-        """
-        Convert the value `v` to the appropriate unit type based on the field annotation.
-
-        Args:
-            v: The value to be converted.
-            info: Additional information about the field.
-
-        Returns:
-            The converted value.
-
-        """
-
-        from .datatypes import UnitType
-
-        field_type = cls.model_fields[info.field_name].annotation
-        has_unit_type = any(
-            dtype in [UnitBase, UnitType, Unit] for dtype in get_args(field_type)
-        )
-
-        if not has_unit_type:
-            return unit
-
-        if isinstance(unit, str) and has_unit_type:
-            return UnitType.from_string(unit)
-        elif issubclass(type(unit), UnitBase) and has_unit_type:
-            return UnitType.from_astropy_unit(unit)  # type: ignore
-        elif isinstance(unit, UnitType) and has_unit_type:
-            return unit
-        elif isinstance(unit, Unit) and has_unit_type:
-            return UnitType.from_astropy_unit(unit)
-        else:
-            raise ValueError(
-                f"Value {unit} is not a valid unit. Must be a string, UnitBase, UnitType, or Unit."
-            )
 
     @staticmethod
     def _has_ndarray(dtype):
@@ -956,10 +869,60 @@ class DataModel(pydantic.BaseModel):
 
         return value
 
+    # ! Pre-validators
+    def _convert_units(self, model, data):
+        unit_fields = [
+            name
+            for name, field in model.model_fields.items()
+            if self._is_unit_type(field)
+        ]
+
+        for name in unit_fields:
+            if name not in data:
+                continue
+
+            data[name] = self._convert_unit_string_to_unit_type(data[name])
+
+    @staticmethod
+    def _is_unit_type(field):
+        from sdRDM.base.datatypes import Unit
+
+        if field.annotation == Unit:
+            return True
+
+        return any(dtype == Unit for dtype in get_args(field.annotation))
+
+    @staticmethod
+    def _convert_unit_string_to_unit_type(units):
+        from sdRDM.base.datatypes import Unit
+
+        if not isinstance(units, (list, ListPlus)):
+            is_list = False
+            units = [units]
+        else:
+            is_list = True
+
+        converted = []
+        for unit in units:
+            if isinstance(unit, str) and unit != "":
+                converted.append(Unit.from_string(unit))
+            elif isinstance(unit, str) and unit == "":
+                converted.append(None)
+            else:
+                converted.append(unit)
+
+        if is_list:
+            return converted
+        else:
+            return converted[0]
+
     # ! Overloads
     def __setattr__(self, name, value):
         if bool(re.match("_[a-zA-Z0-9]*", name)):
             return super().__setattr__(name, value)
+
+        if self._is_unit_type(self.model_fields[name]):
+            value = self._convert_unit_string_to_unit_type(value)
 
         self._add_reference_to_object(name, value)
         self._set_parent_instances(value)
