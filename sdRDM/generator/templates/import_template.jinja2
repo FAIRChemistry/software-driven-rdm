@@ -4,10 +4,11 @@ import sdRDM
 {% endfor %}
 
 from typing import Optional, Union, List
+from uuid import uuid4
 from pydantic import PrivateAttr, field_validator
 from pydantic_xml import attr, element, wrapped
 from sdRDM.base.listplus import ListPlus
-from sdRDM.base.utils import forge_signature, IDGenerator
+from sdRDM.base.utils import forge_signature
 {% for import in from_imports %}
 {{import}}
 {%- endfor %}

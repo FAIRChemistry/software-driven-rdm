@@ -9,7 +9,7 @@ class {{name}}({% if inherit is not none %}
     id: Optional[str] = attr(
             name="id",
             description="Unique identifier of the given object.",
-            default_factory=IDGenerator("{{name.lower()}}INDEX"),
+            default_factory=lambda: str(uuid4()),
             xml="@id"
     )
     

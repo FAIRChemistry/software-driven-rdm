@@ -6,20 +6,6 @@ from pydantic import Field, create_model
 
 from sdRDM.base.importedmodules import ImportedModules
 
-class IDGenerator:
-    def __init__(self, pattern: str):
-        self.pattern = pattern.replace(r"\d", "INDEX")
-        self.index = 0
-        self.__name__ = "IDGenerator"
-
-    def __call__(self):
-        return self.generate_id()
-
-    def generate_id(self):
-        id = re.sub(r"\[?INDEX\]?[+|*|?]?", str(self.index), self.pattern)
-        self.index += 1
-        return id
-
 
 def generate_model(
     data: Dict,
