@@ -1,8 +1,8 @@
-<p align="center">
-![](https://cdni.iconscout.com/illustration/premium/thumb/coder-3462295-2895977.png){width=400}
-</p>
-
 # Basic Model
+
+<p align="center">
+  <img src="https://cdni.iconscout.com/illustration/premium/thumb/coder-3462295-2895977.png" width="300" />
+</p>
 
 In this example, a simple model is setup to demonstrate the capabilities of sdRDM's markdown and how it can be used to generate a Python API. To start, the markdown based sepcification builds upon these blocks:
 
