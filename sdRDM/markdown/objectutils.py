@@ -252,7 +252,14 @@ def process_type_option(
         del current_attr["default"]
 
     for dtype in dtypes.split(","):
+        _validate_dtype(dtype, object_stack)
+
         dtype = dtype.strip()
+
+        if dtype.endswith("[]"):
+            dtype = dtype.rstrip("[]")
+            object_stack[-1]["attributes"][-1]["multiple"] = "True"
+            del object_stack[-1]["attributes"][-1]["default"]
 
         if not dtype:
             continue
@@ -277,6 +284,25 @@ def process_type_option(
         processed_types.append(dtype)
 
     return processed_types
+
+
+def _validate_dtype(dtype: str, object_stack: List[Dict]) -> None:
+    """
+    Validates the data type of an attribute.
+
+    Args:
+        dtype (str): The data type to validate.
+        object_stack (List[Dict]): The stack of objects being processed.
+
+    Raises:
+        ValueError: If the attribute has the same name as its type.
+    """
+    attribute = object_stack[-1]["attributes"][-1]
+
+    if dtype.rstrip("[]") == attribute["name"]:
+        raise ValueError(
+            f"Attribute '{dtype.rstrip('[]')}' has the same name as its type. Please rename it."
+        )
 
 
 def is_remote_type(dtype: str) -> bool:
