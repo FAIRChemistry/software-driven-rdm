@@ -1,0 +1,14 @@
+    def add_to_{{ name }}(
+        self,
+        unit_string: str,
+    ):
+        """
+        This method adds an object of type 'Unit' to attribute units
+
+        Args:
+            unit_string (str): The string to be parsed into a Unit object
+        """
+        
+        self.{{ name }}.append(Unit.from_string(unit_string))
+
+        return self.{{ name }}[-1]

@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "sdRDM"
+version = "0.2.0"
+description = "Software-driven RDM converts markdown data models into powerful objects that can be serialized to JSON, XML, YAML and HDF5"
+authors = ["Jan Range <range.jan@web.de>"]
+license = "MIT License"
+readme = "README.md"
+packages = [{include = "sdRDM"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pydantic = "^2.5.3"
+pydantic-xml = "^2.7.0"
+numpy = "^1.26.3"
+pandas = "^2.1.4"
+jinja2 = "^3.1.3"
+black = "^23.12.1"
+typer = "^0.9.0"
+pyyaml = "^6.0.1"
+toml = "^0.10.2"
+nob = "^0.8.2"
+validators = "^0.22.0"
+gitpython = "^3.1.41"
+dotted-dict = "1.1.3"
+autoflake = "2.0.0"
+bigtree = "^0.15.4"
+anytree = "^2.12.1"
+email-validator = "^2.1.0.post1"
+astropy = "^6.0.0"
+markdown-it-py = "^3.0.0"
+rich = "^13.7.0"
+lxml = "^5.1.0"
+
+[tool.poetry.group.dev.dependencies]
+coverage = "^7.4.0"
+pytest-cov = "^4.1.0"
+
+
+[tool.poetry.group.hdf5.dependencies]
+h5py = "^3.10.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+sdrdm = "sdRDM.cli:app"
+
+[tool.pytest.ini_options]
+addopts = ["-v", "--cov=sdRDM"]
+markers = [
+    "e2e",
+    "unit",
+]

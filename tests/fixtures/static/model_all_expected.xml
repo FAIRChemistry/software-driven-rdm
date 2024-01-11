@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Root id="id">
+  <string>string</string>
+  <float>1.5</float>
+  <integer>1</integer>
+  <boolean>true</boolean>
+  <date>2023-12-17</date>
+  <datetime>2023-12-17T15:55:44.245441</datetime>
+  <posfloat>1.5</posfloat>
+  <PositiveInt>2</PositiveInt>
+  <AnyHttpUrl>https://www.google.com/</AnyHttpUrl>
+  <EmailStr>max.mustermann@muster.de</EmailStr>
+  <bytes>this_is_bytes</bytes>
+  <multiple_primitives>
+    <float>1.5</float>
+    <float>1.7</float>
+    <float>1.9</float>
+  </multiple_primitives>
+  <SomeEnum>value1</SomeEnum>
+  <Nested id="id">
+    <string>string</string>
+    <float>1.5</float>
+    <integer>1</integer>
+  </Nested>
+  <nested_multiple_obj>
+    <Nested id="id">
+      <string>string</string>
+      <float>1.5</float>
+      <integer>1</integer>
+    </Nested>
+  </nested_multiple_obj>
+</Root>

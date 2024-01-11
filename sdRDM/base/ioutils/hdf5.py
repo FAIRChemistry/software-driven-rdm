@@ -1,9 +1,9 @@
 import os
 import numpy as np
+import datetime
 
 from anytree import findall
-from datetime import date, datetime
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 from typing import Union
 
 from h5py._hl.dataset import Dataset as H5Dataset
@@ -12,12 +12,19 @@ from h5py._hl.group import Group as H5Group
 
 import h5py
 
+from sdRDM.base.listplus import ListPlus
+
 
 def write_hdf5(dataset, file: Union[H5File, str]):
     """Writes a given sdRDM model to HDF5"""
 
+    # Keep track of closing the file
+    # only valid for str case
+    auto_close = False
+
     if isinstance(file, str):
         file = h5py.File(file, "w")
+        auto_close = True
 
     _write_source(dataset, file)
 
@@ -29,23 +36,41 @@ def write_hdf5(dataset, file: Union[H5File, str]):
         data = dataset.get(path)
         prefix, attribute = path.split()
         prefix = str(prefix)
+        is_array = isinstance(data, (np.ndarray, H5Dataset))
 
-        if str(prefix) == "/":
+        if isinstance(data, (list, ListPlus)):
+            is_multiple_numeric = all(isinstance(value, (float, int)) for value in data)
+        else:
+            is_multiple_numeric = False
+
+        # if isinstance(data, list) and len(data) == 1:
+        #     data = data[0]
+
+        if prefix == "/":
             # Write root attributes directly
-            _write_attr(prefix, dataset.get(path), file)
+            _write_attr(attribute, data, file)
+            continue
 
         # Fetch or create a group
         group = _get_group(file, prefix)
 
-        if isinstance(data, (np.ndarray, H5Dataset)):
+        if is_array and not is_multiple_numeric:
             _write_array(attribute, data, group)
+        elif not is_array and is_multiple_numeric:
+            print(np.array(data), np.array(data).shape)
+            _write_array(attribute, np.array(data), group)
         else:
             _write_attr(attribute, data, group)  # type: ignore
 
+    if auto_close:
+        file.close()
 
-def read_hdf5(obj, file):
 
-    tree, _ = obj.create_tree()
+def read_hdf5(
+    obj: "DataModel",
+    file: H5File,
+):
+    tree, _ = obj.meta_tree()
     meta_paths = obj.meta_paths(leaves=True)
 
     for path in meta_paths:
@@ -86,10 +111,10 @@ def _write_source(dataset, file: H5File):
 
     try:
         # Add Git info if given
-        if dataset.__repo__:
-            group.attrs["repo"] = (dataset.__repo__,)  # type: ignore
-        group.attrs["commit"] = (dataset.__commit__,)  # type: ignore
-        group.attrs["url"] = (dataset.__repo__.replace(".git", f"/tree/{dataset.__commit__}"),)  # type: ignore
+        if dataset._repo:
+            group.attrs["repo"] = dataset._repo  # type: ignore
+        group.attrs["commit"] = dataset._commit  # type: ignore
+        group.attrs["url"] = dataset._repo.replace(".git", f"/tree/{dataset._commit}")  # type: ignore
     except AttributeError:
         pass
 
@@ -97,14 +122,14 @@ def _write_source(dataset, file: H5File):
 def _write_attr(name, value, h5obj: Union[H5File, H5Group]):
     """Writes an attribute to an HDF5 root or group"""
 
-    if isinstance(value, (date, datetime)):
+    if isinstance(value, (datetime.date, datetime.datetime)):
         # HDF5 does not like date types
         value = str(value)
 
     h5obj.attrs[name] = value
 
 
-def _write_array(name, data: Union[ArrayLike, H5Dataset], group):
+def _write_array(name, data: Union[NDArray, H5Dataset], group):
     """Writes an ndarray to an HDF5 file"""
 
     dataset = group.create_dataset(name=name, shape=data.shape)

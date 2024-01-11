@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<MyObject id="b03ec777-dda3-4f9f-809d-3cae15ac98b3">
+  <string>value</string>
+  <float>100.0</float>
+  <array_attribute>
+    <float>1.0</float>
+    <float>2.0</float>
+    <float>3.0</float>
+  </array_attribute>
+  <AnotherObject id="7acd48e8-9967-430a-b87b-0bb6d7d02c9e">
+    <SmallType id="eb905685-23fa-4705-a14b-cea835cda321">
+      <float>1.0</float>
+      <string>Small Object</string>
+    </SmallType>
+  </AnotherObject>
+  <multiple_object_attribute>
+    <AnotherObject id="6de37403-4544-4d7e-b791-7255aed0df09">
+      <SmallType id="3a96af7e-eee1-4876-8ddf-dd097ffe8002">
+        <float>200.0</float>
+        <string>I am a small object</string>
+      </SmallType>
+    </AnotherObject>
+    <AnotherObject id="6e6be1ff-4fc0-483e-9980-5093f9ff21cb">
+      <SmallType id="1bd3eada-2beb-4598-861b-76caeefd57f2">
+        <float>100.0</float>
+        <string>Another small object</string>
+      </SmallType>
+    </AnotherObject>
+  </multiple_object_attribute>
+  <Unit xmlns="https://www.github.com/software-driven-rdm" id="8a7979db-eaa9-42e2-8cc2-ce7a64dcda99" name="mmol / l">
+    <BaseUnit scale="0.001" kind="mol" exponent="1.0"/>
+    <BaseUnit scale="1.0" kind="l" exponent="-1.0"/>
+  </Unit>
+</MyObject>

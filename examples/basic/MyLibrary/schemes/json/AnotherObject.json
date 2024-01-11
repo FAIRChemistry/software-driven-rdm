@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "SmallType": {
+      "description": "Small type for attribute 'small_type'",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Unique identifier of the given object.",
+          "title": "Id"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "title": "SmallType",
+      "type": "object"
+    }
+  },
+  "description": "Since the object `AnotherObject` is used as a type in `MyObject`, it needs to be defined as well. Here we will make use of so called `SmallTypes` which can be used on the fly to create sub-objects. Sometimes you might not want to define trivial objects in a separate block and rather define them on the fly. This is where `SmallTypes` come in handy.",
+  "properties": {
+    "id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Unique identifier of the given object.",
+      "title": "Id"
+    },
+    "small_type": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SmallType"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "This is an attribute of type string"
+    }
+  },
+  "title": "AnotherObject",
+  "type": "object"
+}

@@ -1,0 +1,117 @@
+{
+  "objects": [
+    {
+      "name": "Object",
+      "docstring": "",
+      "attributes": [
+        {
+          "name": "attribute",
+          "required": false,
+          "default": null,
+          "type": [
+            "int"
+          ],
+          "description": "Primitive attribute"
+        },
+        {
+          "name": "multiple_primitive_attribute",
+          "required": false,
+          "type": [
+            "int"
+          ],
+          "description": "Multiple primitive attribute",
+          "default_factory": "ListPlus()",
+          "multiple": "True"
+        },
+        {
+          "name": "nested",
+          "required": false,
+          "default": null,
+          "type": [
+            "Nested"
+          ],
+          "description": "Nested attribute"
+        },
+        {
+          "name": "inherited_nested",
+          "required": false,
+          "default": null,
+          "type": [
+            "InheritedNested"
+          ],
+          "description": "Inherited nested attribute"
+        }
+      ],
+      "type": "object",
+      "subtypes": [],
+      "module": "objects"
+    },
+    {
+      "name": "Nested",
+      "docstring": "",
+      "attributes": [
+        {
+          "name": "attribute",
+          "required": false,
+          "default": null,
+          "type": [
+            "int"
+          ],
+          "description": "Primitive attribute"
+        }
+      ],
+      "type": "object",
+      "subtypes": [],
+      "module": "objects"
+    },
+    {
+      "name": "InheritedNested",
+      "docstring": "",
+      "attributes": [
+        {
+          "name": "added_attr",
+          "required": false,
+          "default": null,
+          "type": [
+            "int"
+          ],
+          "description": "Primitive attribute"
+        }
+      ],
+      "type": "object",
+      "subtypes": [],
+      "parent": "Nested",
+      "module": "objects"
+    }
+  ],
+  "enums": [
+    {
+      "name": "SomeEnum",
+      "docstring": "",
+      "mappings": [
+        {
+          "key": "VALUE",
+          "value": "\"value\""
+        }
+      ],
+      "type": "enum"
+    }
+  ],
+  "inherits": [
+    {
+      "parent": "Nested",
+      "child": "InheritedNested"
+    }
+  ],
+  "compositions": [
+    {
+      "container": "Object",
+      "module": "Nested"
+    },
+    {
+      "container": "Object",
+      "module": "InheritedNested"
+    }
+  ],
+  "external_objects": {}
+}

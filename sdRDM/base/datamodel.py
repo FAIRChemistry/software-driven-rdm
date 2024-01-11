@@ -1,35 +1,48 @@
-import inspect
 import json
 import os
-import h5py
-import pydantic
+import re
+import shutil
+import uuid
+import pydantic_xml
 import random
 import tempfile
-import toml
 import validators
 import yaml
 import warnings
 import numpy as np
+import hashlib
 
 from nob import Nob
+from nob.path import Path
+from dotted_dict import DottedDict
 from enum import Enum
-from anytree import RenderTree, Node, LevelOrderIter
-from h5py._hl.files import File as H5File
-from h5py._hl.dataset import Dataset as H5Dataset
-from lxml import etree
-from pydantic import PrivateAttr, validator
-from sqlalchemy.orm import declarative_base
-from typing import Dict, Optional, IO, Union
+from anytree import Node, LevelOrderIter
+from bigtree import print_tree, levelorder_iter, yield_tree
+from functools import lru_cache
+from pydantic import ConfigDict, PrivateAttr, field_validator
+from typing import (
+    Any,
+    List,
+    Dict,
+    Optional,
+    IO,
+    Tuple,
+    Union,
+    get_args,
+    Callable,
+    get_origin,
+)
 
-from sdRDM.base.importemodules import ImportedModules
+from sdRDM.base.importedmodules import ImportedModules
 from sdRDM.base.listplus import ListPlus
-from sdRDM.base.utils import object_to_orm, generate_model
-from sdRDM.base.ioutils.xml import write_xml
-from sdRDM.base.ioutils.hdf5 import read_hdf5, write_hdf5
-from sdRDM.linking.link import convert_data_model
+from sdRDM.base.referencecheck import (
+    object_is_compliant_to_references,
+    value_is_compliant_to_references,
+)
+from sdRDM.base.utils import generate_model
+from sdRDM.base.tree import _digit_free_path, build_guide_tree, ClassNode
 from sdRDM.generator.codegen import generate_python_api
-from sdRDM.linking.utils import build_guide_tree, generate_template
-from sdRDM.database.utils import add_to_database
+from sdRDM.generator.utils import extract_modules
 from sdRDM.tools.utils import YAMLDumper
 from sdRDM.tools.gitutils import (
     ObjectNode,
@@ -38,62 +51,215 @@ from sdRDM.tools.gitutils import (
 )
 
 
-class DataModel(pydantic.BaseModel):
-    class Config:
-        validate_assignment = True
-        use_enum_values = True
-        arbitrary_types_allowed = True
-        allow_population_by_field_name = True
-        orm_mode = True
+class DataModel(pydantic_xml.BaseXmlModel):
+    # * Config
+    model_config = ConfigDict(
+        validate_assignment=True,
+        use_enum_values=True,
+        arbitrary_types_allowed=True,
+        populate_by_name=True,
+    )
 
     # * Private attributes
-    __node__: Optional[Node] = PrivateAttr(default=None)
+    _node: Optional[Node] = PrivateAttr(default=None)
+    _types: DottedDict = PrivateAttr(default=dict)
+    _parent: Optional["DataModel"] = PrivateAttr(default=None)
+    _references: DottedDict = PrivateAttr(default_factory=DottedDict)
+    _id: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
+    _attribute: Optional[str] = PrivateAttr(default=None)
+
+    def __init__(self, **data):
+        self._convert_units(self, data)
+
+        super().__init__(**data)
+        self._initialize_references()
+
+        for name, value in data.items():
+            if bool(re.match("_[a-zA-Z0-9]*", name)):
+                continue
+
+            # Store references to other objects and vice versa
+            # self._add_reference_to_object(name, value)
+
+        for field, value in self.__dict__.items():
+            is_object = hasattr(value, "model_fields")
+            is_list = isinstance(value, (list, ListPlus))
+
+            if is_list:
+                is_object = all([self.is_data_model(v) for v in value])
+
+            if not is_object and not is_list:
+                continue
+            elif not is_object and is_list:
+                continue
+
+            self.__dict__[field]._parent = self
+            self.__dict__[field]._attribute = field
+
+        self._types = DottedDict()
+        for name, field in self.model_fields.items():
+            args = get_args(field.annotation)
+
+            if not args and hasattr(field.annotation, "model_fields"):
+                self._types[name] = field.annotation
+            elif args:
+                self._types[name] = tuple(
+                    [subtype for subtype in args if hasattr(subtype, "model_fields")]
+                )
+
+    def _initialize_references(self):
+        """Initialized references for each field present in the data model"""
+        for field in self.model_fields.values():
+            self._references[field] = ListPlus()
 
     # ! Getters
     def get(
-        self, path: str, attribute: Optional[str] = None, target: Optional[str] = None
+        self,
+        path: str,
+        attribute: Optional[str] = None,
+        target: Union[str, float, int, None, "DataModel", Callable] = None,
     ):
-        """Traverses the data model tree by a path or key and returns its content.
+        if isinstance(path, Path):
+            path = str(path)
 
-        Args:
-            path (str): _description_
-        """
+        # Remove trailing slash
+        path = path.rstrip("/")
 
         if not path.startswith("/") and len(path.split("/")) > 1:
             path = f"/{path}"
 
+        if not bool(re.search(r"\/\d*\/", path)):
+            return self._get_by_meta_path(path, attribute, target)
+
+        return self._get_by_absolute_path(path, attribute, target)
+
+    def _get_by_absolute_path(
+        self,
+        path: str,
+        attribute: Optional[str] = None,
+        target: Union[str, float, int, None, "DataModel", Callable] = None,
+    ):
+        """Helper function to search for a given path in the model"""
+
+        query = self._setup_query(target)
         model = Nob(self.to_dict(warn=False, convert_h5ds=False))
+
         path = model.find(path)
 
-        if attribute is None and target is None:
-            return self._traverse_model_by_path(self, path[0])
+        assert path, f"Path '{path}' does not exist in the model."
+
+        object = self._traverse_model_by_path(self, path[0])
+
+        return self._check_query(object, attribute, query)
+
+    def _get_by_meta_path(
+        self: "DataModel",
+        path: str,
+        attribute: Optional[str] = None,
+        target: Optional[str] = None,
+    ) -> List["DataModel"]:
+        """Returns all obejcts or values found via the meta path and instance"""
+
+        if not path.startswith("/"):
+            path = "/" + path
+
+        # Get all the paths that end with the last part
+        last_part = path.split("/")[-1].strip("/")
+        model = Nob(self.to_dict(warn=False, convert_h5ds=False))
+        query = self._setup_query(target)
+
+        paths = model.find(last_part)
+        matching_paths = [p for p in paths if _digit_free_path(str(p)) == path]
+
+        references = ListPlus()
+        for path in matching_paths:  # type: ignore
+            reference = self._check_query(
+                self._traverse_model_by_path(self, path),
+                attribute,
+                query,
+            )
+
+            if reference:
+                references.append(reference)
+
+        return references
+
+    @staticmethod
+    def _setup_query(
+        target: Union[str, float, int, None, "DataModel", Callable]
+    ) -> Optional[Callable]:
+        """Sets up a query function that can be used to filter values"""
+
+        if not isinstance(target, Callable) and target is not None:
+            return lambda x: x == target
+        elif target is None:
+            return None
+
+        return target
+
+    def _check_query(
+        self,
+        value: Any,
+        attribute: Optional[str],
+        query: Optional[Callable],
+    ):
+        """Performs a query on a given object and attribute"""
+
+        # No query given
+        if query is None:
+            return value
+
+        is_list = isinstance(value, (list, ListPlus))
+        is_all_objects = (
+            all([self.is_data_model(v) for v in value]) if is_list else False
+        )
+        is_object = self.is_data_model(value)
+
+        # Object case
+        if is_object and not is_list:
+            return self._query_object(value, attribute, query)
+        elif is_all_objects and is_list:
+            l = ListPlus()
+            for v in value:
+                if self._query_object(v, attribute, query):
+                    l.append(v)
+            return l
+        elif is_list:
+            return ListPlus([v for v in value if query(v)])
         else:
-            object = self._traverse_model_by_path(self, path[0])
+            if query(value):
+                return value
 
-            if isinstance(object, ListPlus):
-                result = object.get(query=target, attr=attribute)  # type: ignore
+    @staticmethod
+    def _query_object(
+        obj: "DataModel",
+        attribute: Optional[str],
+        query: Callable,
+    ):
+        assert attribute is not None, f"Attribute must be specified for query."
 
-                if len(result) == 1:
-                    return result[0]
-                else:
-                    return result
+        if not hasattr(obj, attribute):
+            raise ValueError(
+                f"Object '{obj.__class__.__name__}' does not have attribute '{attribute}'"
+            )
 
-            else:
-                if hasattr(object, attribute) and getattr(object, attribute) == target:
-                    return object
+        if query(getattr(obj, attribute)):
+            return obj
 
     def _traverse_model_by_path(self, object, path):
         """Traverses a give sdRDM model by using a path"""
 
-        if path[0].isdigit():
-            object = object[int(path[0])]
-        else:
-            object = getattr(object, path[0])
+        # Split path into commands
+        commands = str(path).strip("/").split("/")
 
-        if len(path) == 1:
-            return object
-        else:
-            return self._traverse_model_by_path(object, path[1::])
+        current = self
+        for command in commands:
+            if command.isdigit():
+                current = current[int(command)]  # type: ignore
+            else:
+                current = getattr(current, command)
+
+        return current
 
     def paths(self, leaves: bool = False):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
@@ -111,41 +277,81 @@ class DataModel(pydantic.BaseModel):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
 
         metapaths = set()
-        for node in LevelOrderIter(cls.create_tree()[0]):
-            if len(node.path) == 1:
+        for node in LevelOrderIter(cls.meta_tree(show=False)):
+            if len(node.node_path) == 1:
                 continue
 
             if leaves and node.is_leaf:
                 metapaths.add(
-                    "/".join([n.name for n in node.path if n.name[0].islower()])
+                    "/".join([n.name for n in node.node_path if n.name[0].islower()])
                 )
             elif not leaves:
                 metapaths.add(
-                    "/".join([n.name for n in node.path if n.name[0].islower()])
+                    "/".join([n.name for n in node.node_path if n.name[0].islower()])
                 )
 
-        return sorted(metapaths, key=lambda path: len(path.split("/")))
+        return sorted(metapaths)
+
+    def _meta_path(self):
+        """
+        Returns the meta path of the DataModel object.
+
+        The meta path is a string representation of the path from the root DataModel object to the current object.
+        It is constructed by traversing the parent-child relationship of the objects and appending the attribute names
+        to the path.
+
+        Returns:
+            str: The meta path of the DataModel object.
+        """
+
+        if not self._attribute or not self._parent:
+            return self.__class__.__name__
+
+        path = []
+        obj = self
+
+        while True:
+            if not obj._parent:
+                path.append(type(obj).__name__)
+                break
+
+            path.append(obj._attribute)
+            obj = obj._parent
+
+        return "/".join(path[::-1])
 
     # ! Exporters
-    def to_dict(self, exclude_none=True, warn=True, convert_h5ds=True, **kwargs):
-        data = super().dict(exclude_none=exclude_none, by_alias=True, **kwargs)
+    def to_dict(
+        self,
+        exclude_none=True,
+        warn=True,
+        convert_h5ds=True,
+        mode="json",
+        **kwargs,
+    ):
+        data = super().model_dump(
+            exclude_none=exclude_none,
+            by_alias=True,
+            mode=mode,
+            **kwargs,
+        )
 
         # Convert all ListPlus items back to normal lists
         # to stay compliant to PyDantic
-        data = self._convert_types(data, exclude_none, convert_h5ds)
-
-        # Add source for reproducibility
-        data["__source__"] = {"root": self.__class__.__name__}
+        data = self._convert_types_and_remove_empty_objects(
+            data,
+            exclude_none,
+            convert_h5ds,
+        )
 
         try:
             # Add git specs if available
-            data["__source__"].update(
-                {
-                    "repo": self.__repo__,  # type: ignore
-                    "commit": self.__commit__,  # type: ignore
-                    "url": self.__repo__.replace(".git", "") + f"/tree/{self.__commit__}",  # type: ignore
-                }
-            )  # type: ignore
+            data["__source__"] = {
+                "root": self.__class__.__name__,
+                "repo": self._repo,  # type: ignore
+                "commit": self._commit,  # type: ignore
+                "url": self._repo.replace(".git", "") + f"/tree/{self._commit}",  # type: ignore
+            }  # type: ignore
         except AttributeError:
             if warn:
                 warnings.warn(
@@ -154,13 +360,15 @@ class DataModel(pydantic.BaseModel):
 
         return data
 
-    def _convert_types(self, data, exclude_none, convert_h5ds):
+    def _convert_types_and_remove_empty_objects(self, data, exclude_none, convert_h5ds):
         """Converts als ListPlus items back to lists."""
 
         nu_data = {}
 
-        for key, value in data.items():
+        if not isinstance(data, dict):
+            return data
 
+        for key, value in data.items():
             if isinstance(value, ListPlus):
                 if not value and exclude_none:
                     continue
@@ -173,14 +381,15 @@ class DataModel(pydantic.BaseModel):
             elif isinstance(value, (dict)):
                 if not value and exclude_none:
                     continue
+                elif self._is_empty(value):
+                    continue
 
-                if self._convert_types(value, exclude_none, convert_h5ds):
-                    nu_data[key] = self._convert_types(
+                if self._convert_types_and_remove_empty_objects(
+                    value, exclude_none, convert_h5ds
+                ):
+                    nu_data[key] = self._convert_types_and_remove_empty_objects(
                         value, exclude_none, convert_h5ds
                     )
-
-            elif isinstance(value, H5Dataset) and convert_h5ds:
-                nu_data[key] = value[:].tolist()
 
             elif isinstance(value, np.ndarray):
                 nu_data[key] = value.tolist()
@@ -189,6 +398,27 @@ class DataModel(pydantic.BaseModel):
                 nu_data[key] = value
 
         return nu_data
+
+    def _is_empty(self, value):
+        """Checks whether this object is just made up by its ID"""
+
+        if not isinstance(value, dict):
+            return False
+
+        is_empty = []
+
+        for name, attribute in value.items():
+            if name == "id":
+                continue
+
+            if isinstance(attribute, list):
+                is_empty.append(len(attribute) == 0)
+            elif isinstance(attribute, dict):
+                is_empty.append(self._is_empty(attribute))
+            else:
+                is_empty.append(attribute == None)
+
+        return all(is_empty)
 
     def _check_and_convert_sub(self, element, exclude_none, convert_h5ds):
         """Helper function used to trigger recursion on deeply nested lists."""
@@ -199,10 +429,16 @@ class DataModel(pydantic.BaseModel):
         if element.__class__.__module__ == "builtins" and not isinstance(element, dict):
             return element
 
-        return self._convert_types(element, exclude_none, convert_h5ds)
+        return self._convert_types_and_remove_empty_objects(
+            element, exclude_none, convert_h5ds
+        )
 
-    def json(self, indent: int = 2):
-        return json.dumps(self.to_dict(), indent=indent, default=self._json_dump)
+    def json(self, indent: int = 2, **kwargs):
+        return json.dumps(
+            self.to_dict(**kwargs),
+            indent=indent,
+            default=self._json_dump,
+        )
 
     @staticmethod
     def _json_dump(value):
@@ -213,93 +449,38 @@ class DataModel(pydantic.BaseModel):
 
         return str(value)
 
-    def yaml(self):
+    def yaml(self, **kwargs):
         return yaml.dump(
-            self.to_dict(), Dumper=YAMLDumper, default_flow_style=False, sort_keys=False
+            self.to_dict(**kwargs),
+            Dumper=YAMLDumper,
+            default_flow_style=False,
+            sort_keys=False,
         )
 
-    def xml(self, pascal: bool = True):
-        tree = write_xml(self, pascal=pascal)
+    def xml(self):
+        return self.to_xml(
+            pretty_print=True,
+            encoding="UTF-8",
+            skip_empty=True,
+            xml_declaration=True,
+        ).decode()  # type: ignore
+
+    def hdf5(self, file: Union["H5File", str]) -> None:
+        """Writes the object instance to HDF5."""
 
         try:
-            tree.attrib.update(
-                {
-                    "repo": self.__repo__,  # type: ignore
-                    "commit": self.__commit__,  # type: ignore
-                    "url": self.__repo__.replace(".git", f"/tree/{self.__commit__}"),  # type: ignore
-                }
+            from sdRDM.base.ioutils.hdf5 import write_hdf5
+        except ImportError:
+            raise ImportError(
+                "HDF5 is not installed. Please install it via 'pip install h5py'"
             )
-        except AttributeError:
-            pass
 
-        return etree.tostring(
-            tree, pretty_print=True, xml_declaration=True, encoding="UTF-8"
-        ).decode("utf-8")
-
-    def hdf5(self, file: Union[H5File, str]) -> None:
-        """Writes the object instance to HDF5."""
         write_hdf5(self, file)
-
-    def convert_to(self, option: str = "", template: Union[str, None, Dict] = None):
-        """
-        Converts a given data model to another model that has been specified
-        in the attributes metadata. This will create a new object model from
-        the current.
-
-        Example:
-            ## Origin
-            class DataModel(sdRDM.DataModel):
-                foo: str = Field(... another_model="AnotherModel.sub.bar")
-
-            --> The goal is to project the data from 'DataModel' to 'AnotherModel'
-                which maps the 'foo' attribute to the nested 'bar' attribute.
-
-        This function provides the utility to map in between data models and
-        offer an exchange of data without explicit code.
-
-        Args:
-            option (str): Key of the attribute metadata, where the destination is stored.
-        """
-
-        if isinstance(template, str):
-            if template.lower().endswith(".yaml") or template.lower().endswith(".yml"):
-                template = yaml.safe_load(open(template))
-            elif template.lower().endswith("toml"):
-                template = toml.load(open(template))
-            else:
-                raise TypeError(
-                    f"Linking template format of '{template.split('.')[-1]}' is not supported. Please consider using TOML or YAML."
-                )
-        elif template is None:
-            template = {}
-
-        return convert_data_model(obj=self, option=option, template=template)
-
-    def to_sql(self, loc: str):
-        """Adds data to a complementary SQL database"""
-        add_to_database(self, loc)
-
-    @classmethod
-    def build_orm(cls):
-        """Builds an ORM model to build a database and fetch from"""
-
-        Base = declarative_base()
-        object_to_orm(cls, Base)
-
-        return Base
-
-    @classmethod
-    def generate_linking_template(
-        cls, path: str = "linking_template.toml", simple: bool = True
-    ):
-        """Generates a template that can be used to link between two data models."""
-
-        generate_template(cls, path, simple)
 
     # ! Inherited Initializers
     @classmethod
     def from_dict(cls, obj: Dict):
-        return cls.parse_obj(obj)
+        return cls.model_validate(obj)
 
     @classmethod
     def from_json_string(cls, json_string: str):
@@ -318,12 +499,24 @@ class DataModel(pydantic.BaseModel):
         return cls.from_dict(yaml.safe_load(handler))
 
     @classmethod
-    def from_xml_string(cls, xml_string: str):
-        raise NotImplementedError()
+    def from_xml(cls, handler: IO):
+        return super().from_xml(handler.read())
 
     @classmethod
-    def from_hdf5(cls, file: h5py.File):
+    def from_xml_string(cls, xml_string: str):
+        return super().from_xml(xml_string)
+
+    @classmethod
+    def from_hdf5(cls, file):
         """Reads a hdf5 file from path into the class model."""
+
+        try:
+            from sdRDM.base.ioutils.hdf5 import read_hdf5
+        except ImportError:
+            raise ImportError(
+                "HDF5 is not installed. Please install it via 'pip install h5py'"
+            )
+
         return read_hdf5(cls, file)
 
     # ! Dynamic initializers
@@ -386,19 +579,6 @@ class DataModel(pydantic.BaseModel):
         else:
             # Get source and build libary
             url = dataset.get("__source__")["repo"]
-
-            if url is None:
-                raise ValueError(f"No repository given in __source__")
-            
-            # Replace git action artifact
-            elif url.startswith("git://"):
-                url = url.replace("git://", "https://", 1)
-                
-            elif not validators.url(url):
-                raise ValueError(f"Given URL '{url}' is not a valid URL.")
-
-    
-
             commit = dataset.get("__source__")["commit"]
             root = dataset.get("__source__")["root"]
             lib = cls.from_git(url=url, commit=commit)
@@ -424,8 +604,13 @@ class DataModel(pydantic.BaseModel):
 
     @staticmethod
     def _is_hdf5(path: str):
-        import deepdish as dd
-        from tables.exceptions import HDF5ExtError
+        try:
+            import deepdish as dd
+            from tables.exceptions import HDF5ExtError
+        except ImportError:
+            raise ImportError(
+                "HDF5 is not installed. Please install it via 'pip install h5py deepdish'"
+            )
 
         try:
             dd.io.load(path)
@@ -435,7 +620,7 @@ class DataModel(pydantic.BaseModel):
         return True
 
     @classmethod
-    def from_markdown(cls, path: str):
+    def from_markdown(cls, path: str) -> ImportedModules:
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -452,21 +637,22 @@ class DataModel(pydantic.BaseModel):
             lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
             api_loc = os.path.join(tmpdirname, lib_name)
             generate_python_api(
-                path=path, out=tmpdirname, name=lib_name, use_formatter=False
+                path=path, dirpath=tmpdirname, libname=lib_name, use_formatter=False
             )
 
             lib = _import_library(api_loc, lib_name)
 
-        return cls._extract_modules(lib=lib, links={})
+        return extract_modules(lib=lib, links={})
 
     @classmethod
+    @lru_cache(maxsize=128)
     def from_git(
         cls,
         url: str,
         commit: Optional[str] = None,
         tag: Optional[str] = None,
         only_classes: bool = False,
-    ):
+    ) -> ImportedModules:
         """Fetches a Markdown specification from a git repository and builds the library accordingly.
 
         This function will clone the repository into a temporary directory and
@@ -479,34 +665,32 @@ class DataModel(pydantic.BaseModel):
             tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
         """
 
+        if not validators.url(url):
+            raise ValueError(f"Given URL '{url}' is not a valid URL.")
+
         # Build and import the library
-        lib, links = build_library_from_git_specs(
-            url=url, commit=commit, tag=tag, only_classes=only_classes
-        )
+        tmpdirname = tempfile.mkdtemp()
+
+        try:
+            lib, links = build_library_from_git_specs(
+                url=url,
+                tmpdirname=tmpdirname,
+                commit=commit,
+                tag=tag,
+                only_classes=only_classes,
+            )
+        except Exception as e:
+            # At any exception catch it and remove the tempdir
+            shutil.rmtree(tmpdirname, ignore_errors=True)
+            raise e
+        finally:
+            # At success, also remove it
+            shutil.rmtree(tmpdirname, ignore_errors=True)
 
         if only_classes:
             return lib
 
-        return cls._extract_modules(lib, links)
-
-    @classmethod
-    def _extract_modules(cls, lib, links):
-        """Extracts root nodes and specified modules from a generated API"""
-
-        # Get all classes present
-        classes = {
-            obj.__name__: ObjectNode(obj)
-            for obj in lib.__dict__.values()
-            if inspect.isclass(obj) and issubclass(obj, DataModel)
-        }
-
-        enums = {
-            obj.__name__: ObjectNode(obj)
-            for obj in lib.__dict__.values()
-            if inspect.isclass(obj) and issubclass(obj, Enum)
-        }
-
-        return ImportedModules(classes, enums, links)
+        return extract_modules(lib, links)
 
     @staticmethod
     def _find_root_objects(classes: Dict):
@@ -517,11 +701,11 @@ class DataModel(pydantic.BaseModel):
         """
 
         for definition in classes.values():
-            for field in definition.cls.__fields__.values():
-                if "Union" not in repr(field.type_) and issubclass(
-                    field.type_, DataModel
+            for field in definition.cls.model_fields.values():
+                if "Union" not in repr(field.annotation) and issubclass(
+                    field.annotation, DataModel
                 ):
-                    classes[field.type_.__name__].add_parent_class(definition)
+                    classes[field.annotation.__name__].add_parent_class(definition)
 
         roots = list(
             filter(lambda definition: not definition.parent_classes, classes.values())
@@ -529,48 +713,75 @@ class DataModel(pydantic.BaseModel):
 
         return [root.cls for root in roots]
 
-    # ! Databases
-    def to_dataverse(self, template: Optional[str] = None):
-        """
-        Converts a dataset to it Datavere specifications and returns a Dataset object,
-        which can be uploaded to Dataverse.
-        """
-
-        from easyDataverse import Dataset
-
-        blocks = self.convert_to("dataverse", template=template)
-
-        if not blocks:
-            raise ValueError("Couldnt convert, no mapping towards Dataverse specified.")
-
-        dataset = Dataset()
-        for block in blocks:
-            dataset.add_metadatablock(block[0])
-
-        return dataset
-
     # ! Utilities
     @classmethod
-    def create_tree(cls):
+    def meta_tree(
+        cls,
+        show: bool = True,
+        max_depth: int = 0,
+    ):
         """Builds a tree structure from the class definition and all decending types."""
         tree = build_guide_tree(cls)
-        return tree, RenderTree(tree)
 
-    @classmethod
-    def visualize_tree(cls):
-        _, render = cls.create_tree()
-        print(render.by_attr("name"))
+        if show:
+            print_tree(tree, max_depth=max_depth)
+
+        return tree
+
+    def tree(
+        self,
+        show: bool = True,
+        values: bool = True,
+        max_depth: int = 0,
+    ):
+        """Builds a tree structure from the class definition and all decending types."""
+        tree = build_guide_tree(self)
+
+        if show:
+            show_tree = self._prune_tree(tree)
+            print_tree(
+                show_tree,
+                attr_list=["value"] if values else [],
+                max_depth=max_depth,
+            )
+
+        return tree
+
+    def _prune_tree(self, tree: ClassNode):
+        """Prunes leaves that have no value given"""
+        for node in levelorder_iter(tree):
+            if hasattr(node, "value") and node.value is None and not node.children:
+                node.children = []
+                node.parent = None
+
+        return tree
 
     # ! Validators
-    @validator("*")
-    def convert_extended_list_and_numpy_strings(cls, value):
+    @field_validator("*")
+    @classmethod
+    def _convert_extended_list_and_numpy_strings(cls, value):
         """Validator used to convert any list into a ListPlus."""
+
         if isinstance(value, list):
             return ListPlus(*[cls._convert_numpy_type(v) for v in value], in_setup=True)
         elif isinstance(value, np.str_):
             return str(value)
         else:
             return value
+
+    @field_validator("*", mode="before")
+    def _convert_lists_to_ndarray(cls, value, info):
+        field_type = cls.model_fields[info.field_name].annotation
+        if cls._has_ndarray(field_type) and isinstance(value, list):
+            return np.array(value)
+
+        return value
+
+    @staticmethod
+    def _has_ndarray(dtype):
+        return any(
+            t.__name__ == "ndarray" for t in get_args(dtype) if hasattr(t, "__name__")
+        )
 
     @staticmethod
     def _convert_numpy_type(value):
@@ -579,3 +790,299 @@ class DataModel(pydantic.BaseModel):
             return str(value)
 
         return value
+
+    def validate_references(self):
+        """Recursively validates this object and all sub-objects"""
+
+        report = {}
+
+        for _, value in self:
+            if not self.is_data_model(value):
+                continue
+
+            if isinstance(value, list):
+                for subvalue in value:
+                    report.update(subvalue.validate_references())
+                continue
+
+            report.update(value.validate_references())
+
+        return report
+
+    @field_validator("*")
+    @classmethod
+    def check_list_values(cls, values, info):
+        if not isinstance(values, (list, ListPlus)):
+            return values
+
+        field_type = cls.model_fields[info.field_name].annotation
+
+        if get_args(field_type):
+            field_type = get_args(field_type)
+        else:
+            field_type = [field_type]
+
+        for value in values:
+            checks = [
+                cls._check_list_value(value, dtype)
+                for dtype in field_type
+                if dtype != type(None)
+            ]
+
+            if not any([check[1] for check in checks]):
+                error_messages = "\n".join(
+                    [msg for msg, check in checks if check is False]
+                )
+                raise TypeError(error_messages)
+
+        return values
+
+    @staticmethod
+    def _check_list_value(value: Any, field_type) -> Tuple[str, bool]:
+        msg = f"List element of type '{type(value)}' cannot be added. Expected type '{field_type}'"
+
+        if not isinstance(value, field_type) and not issubclass(field_type, Enum):
+            return msg, False
+
+        return "", True
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def convert_numpy_to_appropriate_type(cls, value, info):
+        """Converts numpy arrays to the appropriate native numeric type, if possible."""
+
+        field_type = cls.model_fields[info.field_name].annotation
+
+        if not isinstance(value, np.ndarray):
+            # Skip if not a numpy array
+            return value
+
+        is_multiple = get_origin(field_type) is list
+        is_numeric = any(dtype in (int, float) for dtype in get_args(field_type))
+
+        if not is_numeric:
+            return value
+
+        if isinstance(value, np.ndarray) and is_multiple:
+            return value.tolist()
+        elif isinstance(value, np.ndarray) and not is_multiple:
+            return field_type(value)
+
+        return value
+
+    # ! Pre-validators
+    def _convert_units(self, model, data):
+        unit_fields = [
+            name
+            for name, field in model.model_fields.items()
+            if self._is_unit_type(field)
+        ]
+
+        for name in unit_fields:
+            if name not in data:
+                continue
+
+            data[name] = self._convert_unit_string_to_unit_type(data[name])
+
+    @staticmethod
+    def _is_unit_type(field):
+        from sdRDM.base.datatypes import Unit
+
+        if field.annotation == Unit:
+            return True
+
+        return any(dtype == Unit for dtype in get_args(field.annotation))
+
+    @staticmethod
+    def _convert_unit_string_to_unit_type(units):
+        from sdRDM.base.datatypes import Unit
+
+        if not isinstance(units, (list, ListPlus)):
+            is_list = False
+            units = [units]
+        else:
+            is_list = True
+
+        converted = []
+        for unit in units:
+            if isinstance(unit, str) and unit != "":
+                converted.append(Unit.from_string(unit))
+            elif isinstance(unit, str) and unit == "":
+                converted.append(None)
+            else:
+                converted.append(unit)
+
+        if is_list:
+            return converted
+        else:
+            return converted[0]
+
+    # ! Overloads
+    def __setattr__(self, name, value):
+        if bool(re.match("_[a-zA-Z0-9]*", name)):
+            return super().__setattr__(name, value)
+
+        if self._is_unit_type(self.model_fields[name]):
+            value = self._convert_unit_string_to_unit_type(value)
+
+        self._add_reference_to_object(name, value)
+        self._set_parent_instances(value)
+        self._check_references(name, value)
+
+        super().__setattr__(name, value)
+
+        if isinstance(value, (list, ListPlus)):
+            self.__dict__[name]._parent = self
+            self.__dict__[name]._attribute = name
+
+    def _add_reference_to_object(self, name, value):
+        """Adds the current class to the referenced object to maintain its relation"""
+
+        if name.startswith("_"):
+            return
+
+        extra = self.model_fields[name].json_schema_extra
+
+        if extra is None:
+            return
+        elif "reference" not in extra:
+            return
+        elif not hasattr(value, "model_fields"):
+            return
+
+        # Add the relation to the attribute of this field
+        self._references[name].append(value)
+
+        # Also add it to the other object
+        target_attr = extra["reference"].split(".")[-1]
+        value._references[target_attr].append(self)
+
+    def _check_references(self, name, value):
+        """Checks whether references are compliant"""
+
+        if self.is_data_model(value):
+            report = self.check_object_references(value)
+        else:
+            report = self.check_value_references(name, value)
+
+        if report != {}:
+            rendered_report = "\n\n".join(
+                [f"- {message}" for message in report.values()]
+            )
+            raise ValueError(
+                f"""Object is not compliant to the model:
+                
+            {rendered_report}
+                """
+            )
+
+    def _set_parent_instances(self, value) -> None:
+        """Sets current instance as the parent to objects"""
+        if isinstance(value, ListPlus):
+            value._parent = self
+            for i in range(len(value)):
+                self.set_parent_to_object_field(value[i])
+        else:
+            self.set_parent_to_object_field(value)
+
+    def set_parent_to_object_field(self, value):
+        """Sets a reference to the parent element found in the data model"""
+
+        if not hasattr(value, "model_fields"):
+            return
+
+        value._parent = self
+
+    def check_object_references(self, value) -> Dict:
+        """Checks if any (sub)-object fulfills the conditions of the model"""
+
+        report = {}
+
+        if isinstance(value, list):
+            for i in range(len(value)):
+                report.update(object_is_compliant_to_references(value[i]))
+
+            return report
+
+        else:
+            return object_is_compliant_to_references(value)
+
+    def check_value_references(self, attribute, value) -> Dict:
+        """Checks if a value assigned to this object is compliant to references"""
+
+        report = {}
+
+        if isinstance(value, list):
+            for i in range(len(value)):
+                report.update(
+                    value_is_compliant_to_references(attribute, value[i], self)
+                )
+
+            return report
+
+        else:
+            return value_is_compliant_to_references(attribute, value, self)
+
+    def is_data_model(self, value) -> bool:
+        """Checks whether this object is of type 'DataModel'"""
+
+        if isinstance(value, list):
+            return all(hasattr(subval, "model_fields") for subval in value)
+
+        return hasattr(value, "model_fields")
+
+    # ! Dunder methods
+    def __hash__(self) -> int:
+        """Hashes the object based on its `dict` content"""
+
+        data = [f"{key}={dict(self)[key]}" for key in sorted(dict(self).keys())]  # type: ignore
+        data_string = "".join(data)
+
+        return hashlib.md5(data_string.encode()).hexdigest()
+
+    def __eq__(self, __value: object) -> bool:
+        """Compares two objects based on their hashes"""
+
+        try:
+            __value.__hash__()
+        except TypeError:
+            raise TypeError(
+                f"Can't compare '{self.__class__.__name__}' to type '{type(__value)}'"
+            )
+        return self.__hash__() == __value.__hash__()
+
+    def __str__(self) -> str:
+        class bcolors:
+            HEADER = "\033[95m"
+            OKBLUE = "\033[94m"
+            OKCYAN = "\033[96m"
+            OKGREEN = "\033[92m"
+            WARNING = "\033[93m"
+            FAIL = "\033[91m"
+            ENDC = "\033[0m"
+            BOLD = "\033[1m"
+            UNDERLINE = "\033[4m"
+
+        tree = self._prune_tree(self.tree(show=False))
+        tree_string = ""
+
+        for branch, stem, node in yield_tree(tree, style="const"):
+            if hasattr(node, "value") and node.value is not None:
+                if isinstance(node.value, (list, ListPlus)):
+                    value = f"[{', '.join([str(v) for v in node.value[0:5]])}, ...]"
+                else:
+                    value = str(node.value)
+
+                tree_string += f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC} = {value}\n"
+            elif hasattr(node, "value") and node.value is None:
+                tree_string += (
+                    f"{branch}{stem}{bcolors.OKBLUE}{node.node_name}{bcolors.ENDC}\n"
+                )
+            elif node.name.isdigit():
+                tree_string += f"{branch}{stem}{node.node_name}\n"
+            else:
+                tree_string += (
+                    f"{branch}{stem}{bcolors.UNDERLINE}{node.node_name}{bcolors.ENDC}\n"
+                )
+
+        return tree_string

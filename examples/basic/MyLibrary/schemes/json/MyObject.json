@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "AnotherObject": {
+      "description": "Since the object `AnotherObject` is used as a type in `MyObject`, it needs to be defined as well. Here we will make use of so called `SmallTypes` which can be used on the fly to create sub-objects. Sometimes you might not want to define trivial objects in a separate block and rather define them on the fly. This is where `SmallTypes` come in handy.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Unique identifier of the given object.",
+          "title": "Id"
+        },
+        "small_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SmallType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "This is an attribute of type string"
+        }
+      },
+      "title": "AnotherObject",
+      "type": "object"
+    },
+    "BaseUnit": {
+      "properties": {
+        "scale": {
+          "title": "Scale",
+          "type": "number"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "exponent": {
+          "title": "Exponent",
+          "type": "number"
+        }
+      },
+      "required": [
+        "scale",
+        "kind",
+        "exponent"
+      ],
+      "title": "BaseUnit",
+      "type": "object"
+    },
+    "SmallType": {
+      "description": "Small type for attribute 'small_type'",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Unique identifier of the given object.",
+          "title": "Id"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "title": "SmallType",
+      "type": "object"
+    },
+    "Unit": {
+      "description": "Represents a unit type.\n\nAttributes:\n    scale (float): The scale of the unit.\n    bases (list[Union[str, UnitBase]]): The bases of the unit.\n    powers (list[float]): The powers of the unit.\n    _unit (Union[UnitBase, UnitBase]): The internal unit object.\n\nMethods:\n    _serialize_bases: Serializes the bases of the unit.\n    from_string: Creates a Unit object from a string representation.\n    from_astropy_unit: Creates an instance of the class from an Astropy unit.\n    to_unit_string: Returns a string representation of the unit.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "bases": {
+          "items": {
+            "$ref": "#/$defs/BaseUnit"
+          },
+          "title": "Bases",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "bases"
+      ],
+      "title": "Unit",
+      "type": "object"
+    }
+  },
+  "description": "This is a description of the object `MyObject`. It can be used to describe the object in more detail. This object includes primitive, mandatory and array attributes:**Types**\n: The type option is a mandatory option that specifies the type of the attribute. You can find a list of all supported types in `sdRDM/generator/datatypes.py`. In addtion to the primitive types, you can also use other objects as types. These will then help you to build more complex data models.**Options**\n: You can include many more options to shape the output of your data model. One of which is `XML` that allows you to specifiy an alias for the serialisation.Lets define the object `MyObject`:",
+  "properties": {
+    "id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Unique identifier of the given object.",
+      "title": "Id"
+    },
+    "attribute": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "This is an attribute of type string",
+      "title": "Attribute"
+    },
+    "mandatory_attribute": {
+      "description": "This is a mandatory attribute of type string",
+      "title": "Mandatory Attribute",
+      "type": "number"
+    },
+    "array_attribute": {
+      "description": "This is an array attribute of type float",
+      "items": {
+        "type": "number"
+      },
+      "multiple": true,
+      "title": "Array Attribute",
+      "type": "array"
+    },
+    "object_attribute": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AnotherObject"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "This is an object attribute of type AnotherObject"
+    },
+    "multiple_object_attribute": {
+      "description": "This is an object attribute of type AnotherObject",
+      "items": {
+        "$ref": "#/$defs/AnotherObject"
+      },
+      "multiple": true,
+      "title": "Multiple Object Attribute",
+      "type": "array"
+    },
+    "some_unit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Unit"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "This is an object attribute of type Unit"
+    }
+  },
+  "required": [
+    "mandatory_attribute"
+  ],
+  "title": "MyObject",
+  "type": "object"
+}

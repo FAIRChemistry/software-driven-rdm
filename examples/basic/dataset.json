@@ -1,0 +1,52 @@
+{
+  "id": "b03ec777-dda3-4f9f-809d-3cae15ac98b3",
+  "attribute": "value",
+  "mandatory_attribute": 100.0,
+  "array_attribute": [
+    1.0,
+    2.0,
+    3.0
+  ],
+  "object_attribute": {
+    "id": "7acd48e8-9967-430a-b87b-0bb6d7d02c9e",
+    "small_type": {
+      "id": "eb905685-23fa-4705-a14b-cea835cda321",
+      "value": 1.0,
+      "name": "Small Object"
+    }
+  },
+  "multiple_object_attribute": [
+    {
+      "id": "6de37403-4544-4d7e-b791-7255aed0df09",
+      "small_type": {
+        "id": "3a96af7e-eee1-4876-8ddf-dd097ffe8002",
+        "value": 200.0,
+        "name": "I am a small object"
+      }
+    },
+    {
+      "id": "6e6be1ff-4fc0-483e-9980-5093f9ff21cb",
+      "small_type": {
+        "id": "1bd3eada-2beb-4598-861b-76caeefd57f2",
+        "value": 100.0,
+        "name": "Another small object"
+      }
+    }
+  ],
+  "some_unit": {
+    "id": "8a7979db-eaa9-42e2-8cc2-ce7a64dcda99",
+    "name": "mmol / l",
+    "bases": [
+      {
+        "scale": 0.001,
+        "kind": "mol",
+        "exponent": 1.0
+      },
+      {
+        "scale": 1.0,
+        "kind": "l",
+        "exponent": -1.0
+      }
+    ]
+  }
+}
