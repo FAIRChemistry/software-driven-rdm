@@ -311,7 +311,7 @@ def render_add_methods(object: Dict, objects: List[Dict], small_types: Dict) -> 
         complex_types = get_complex_types(attribute, objects)
         is_single_type = len(complex_types) == 1
 
-        if "Unit" in attribute["type"]:
+        if "Unit" in attribute["type"] and "multiple" in attribute:
             add_methods.append(render_unit_add_method(attribute["name"]))
             continue
 
