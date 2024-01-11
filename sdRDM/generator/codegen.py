@@ -1,10 +1,13 @@
+import json
 import os
 import subprocess
 import sys
 
 from glob import glob
 from typing import List, Dict, Optional
+from sdRDM.generator.utils import extract_modules
 from sdRDM.markdown.markdownparser import MarkdownParser
+from sdRDM.tools.gitutils import _import_library
 
 from .classrender import render_object
 from .enumrender import render_enum
@@ -53,7 +56,7 @@ def generate_python_api(
 
 
 def generate_api_from_parser(
-    parser: str,
+    parser: MarkdownParser,
     dirpath: str,
     libname: str,
     url: Optional[str] = None,
@@ -91,6 +94,7 @@ def generate_api_from_parser(
 
     # Write schema to library
     generate_mermaid_schema(os.path.join(libpath, "schemes"), libname, parser)
+    _write_json_schemes(libpath, libname)
 
 
 def write_classes(
@@ -162,3 +166,32 @@ def create_directory_structure(path: str, libname: str) -> str:
     os.makedirs(os.path.join(libpath, "schemes"), exist_ok=True)
 
     return libpath
+
+
+def _write_json_schemes(libpath: str, lib_name: str):
+    """
+    Write JSON schemas for each class in the library.
+
+    Args:
+        libpath (str): The path to the library.
+        lib_name (str): The name of the library.
+
+    Returns:
+        None
+    """
+    lib = extract_modules(
+        _import_library(
+            api_loc=libpath,
+            lib_name=lib_name,
+        ),
+        links={},
+    )
+
+    for name, cls in lib.get_classes().items():
+        dir_path = os.path.join(libpath, "schemes", "json")
+        path = os.path.join(dir_path, f"{name}.json")
+
+        os.makedirs(dir_path, exist_ok=True)
+
+        with open(path, "w") as f:
+            json.dump(cls.model_json_schema(), f, indent=2)
