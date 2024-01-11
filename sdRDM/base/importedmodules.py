@@ -38,6 +38,10 @@ class ImportedModules(DottedDict):
             self.links = links
             self._distribute_links()
 
+    def get_classes(self):
+        """Returns all classes"""
+        return {name: cls for name, cls in self.items() if hasattr(cls, "model_fields")}
+
     def _distribute_links(self):
         """Adds the given links as instance methods"""
 
