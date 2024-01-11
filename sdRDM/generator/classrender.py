@@ -158,7 +158,6 @@ def render_attribute(
         tag = attribute["type"][0]
         wrapped = True
     else:
-        tag = attribute["type"][0]
         xml_alias = None
         wrapped = False
 
