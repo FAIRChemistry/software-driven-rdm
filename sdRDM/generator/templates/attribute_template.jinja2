@@ -1,7 +1,15 @@
-{{name}}: {{dtype}} = Field(
+{{name}}: {{dtype}} = {% if wrapped %}wrapped("{{xml_alias}}",{% endif %}{{ field_type }}(
+    tag="{{tag}}",
     {% if required is true and 'default' not in metadata.keys() and 'default_factory' not in metadata.keys() %}...,{% endif %}
-    {% for key, value in metadata.items() %}
-    {{key}}={{value}},
-    {% endfor %}
-    )
+    {% if "description" in metadata %}description={{metadata["description"]}},{% endif %}
+    {% if "default" in metadata %}default={{metadata["default"]}},{% endif %}
+    {% if "default_factory" in metadata %}default_factory={{metadata["default_factory"]}},{% endif %}
+    json_schema_extra=dict(
+        {% for key, value in metadata.items() %}
+        {% if not key in ["default", "description", "default_factory"]%}
+        {{key}}={{value}},
+        {% endif %}
+        {% endfor %}
+    ),
+    ){% if wrapped %}){% endif %}
 
