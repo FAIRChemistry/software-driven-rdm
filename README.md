@@ -20,7 +20,7 @@ Get started with by running the following command
 
 ```bash
 # Using PIP
-python -m pip install git+https://github.com/JR-1991/software-driven-rdm.git
+python -m pip install sdRDM
 ```
 
 Or build by source
@@ -34,6 +34,13 @@ python3 setup.py install
 ## 📖 Documentation and more examples
 
 In the making! 🐛
+
+## 📦 Other sdRDM-related repositories
+
+* [Code generator for GitHub Actions](https://github.com/JR-1991/generate-sdrdm-api/tree/main)
+: Deposit your Markdown-based data model in a GitHub repository and automatically generate a Python API upon changes.
+* [Create a database from a Markdown-based data model](https://github.com/JR-1991/sdrdm-database)
+: Use your data model to create a relational database and interact with it via a Python API.
 
 ## ⚠️ License
 
