@@ -1,11 +1,33 @@
+from uuid import uuid4
+from pydantic_xml import attr, element, wrapped
 import sdRDM
 
 from typing import List, Union
-from astropy.units import UnitBase, Unit, CompositeUnit
-from pydantic import field_serializer, field_validator, PrivateAttr
+from astropy.units import UnitBase, Unit as AstroUnit
+from pydantic import field_serializer, PrivateAttr
 
 
-class UnitType(sdRDM.DataModel):
+class BaseUnit(
+    sdRDM.DataModel,
+    tag="BaseUnit",
+):
+    scale: float = attr(name="scale")
+    kind: Union[str, AstroUnit, UnitBase] = attr(name="kind")
+    exponent: float = attr(name="exponent")
+
+    @field_serializer("kind")
+    def _serialize_kind(self, v):
+        if isinstance(self.kind, str):
+            return self.kind
+        else:
+            return str(self.kind)
+
+
+class Unit(
+    sdRDM.DataModel,
+    nsmap={"": "https://www.github.com/software-driven-rdm"},
+    tag="Unit",
+):
     """
     Represents a unit type.
 
@@ -22,39 +44,11 @@ class UnitType(sdRDM.DataModel):
         to_unit_string: Returns a string representation of the unit.
     """
 
-    scale: float
-    bases: List[Union[str, UnitBase]]
-    powers: List[float]
-    _unit: Union[UnitBase, UnitBase] = PrivateAttr()
+    id: str = attr(name="id", default_factory=lambda: str(uuid4()))
+    name: str = attr(name="name")
+    bases: List[BaseUnit] = element()
+    _unit: UnitBase = PrivateAttr()
     _hash: int = PrivateAttr()
-
-    def __init__(self, **data):
-        super().__init__(**data)
-        self._unit = CompositeUnit(
-            scale=self.scale,
-            bases=self.bases,
-            powers=self.powers,
-        )
-
-        self._hash = hash(self._unit)
-
-    @field_validator("bases", mode="before")
-    @classmethod
-    def _bases_to_astropy(cls, v):
-        """
-        Convert a list of bases to Astropy units.
-
-        Args:
-            v (list): List of bases.
-
-        Returns:
-            list: List of Astropy units.
-        """
-        return [Unit(base) for base in v]
-
-    @field_serializer("bases")
-    def _serialize_bases(self, bases: List[Union[str, UnitBase]]):
-        return [str(base) for base in bases]
 
     @classmethod
     def from_string(cls, unit_string: str):
@@ -70,22 +64,16 @@ class UnitType(sdRDM.DataModel):
         Raises:
             AssertionError: If the unit is not a UnitBase or Unit.
         """
-        unit = Unit(unit_string)
+        unit = AstroUnit(unit_string)
 
-        unit_class = cls(
-            scale=unit.si._scale,  # type: ignore
-            bases=unit.si._bases,  # type: ignore
-            powers=unit.si._powers,  # type: ignore
-        )
+        assert isinstance(
+            unit, (UnitBase, AstroUnit)
+        ), "Unit must be a UnitBase or Unit."
 
-        assert isinstance(unit, (UnitBase, Unit)), "Unit must be a UnitBase or Unit."
-
-        unit_class._unit = unit
-
-        return unit_class
+        return cls.from_astropy_unit(unit)
 
     @classmethod
-    def from_astropy_unit(cls, unit: Union[UnitBase, Unit]):
+    def from_astropy_unit(cls, unit: Union[UnitBase, AstroUnit]):
         """
         Creates an instance of the class from an Astropy unit.
 
@@ -98,14 +86,15 @@ class UnitType(sdRDM.DataModel):
         Raises:
             AssertionError: If the unit is not an instance of UnitBase or Unit.
         """
+
+        assert isinstance(
+            unit, (UnitBase, AstroUnit)
+        ), "Unit must be a UnitBase or Unit."
+
         unit_class = cls(
-            scale=unit.si._scale,  # type: ignore
-            bases=unit.si._bases,  # type: ignore
-            powers=unit.si._powers,  # type: ignore
+            name=str(unit),
+            bases=cls._convert_unit_to_base_units(unit),
         )
-
-        assert isinstance(unit, (UnitBase, Unit)), "Unit must be a UnitBase or Unit."
-
         unit_class._unit = unit
 
         return unit_class
@@ -118,3 +107,59 @@ class UnitType(sdRDM.DataModel):
             str: The unit as a string.
         """
         return str(self._unit)
+
+    @classmethod
+    def _convert_unit_to_base_units(cls, unit):
+        """
+        Converts a given unit to its base units.
+
+        Parameters:
+        unit (Unit): The unit to be converted.
+
+        Returns:
+        list: A list of base units.
+
+        """
+        base_units = []
+
+        if not hasattr(unit, "_powers"):
+            powers = [1.0]
+        else:
+            powers = unit._powers
+
+        for base, power in zip(unit.bases, powers):
+            if base._long_names == ["liter"]:
+                base_units.append(cls._construct_base_unit(base, power))
+            elif not hasattr(base, "_represents"):
+                base_units.append(cls._construct_base_unit(base, power))
+            else:
+                reduced_unit = base._represents
+                base_units.append(
+                    cls._construct_base_unit(reduced_unit, power),
+                )
+
+        return base_units
+
+    @staticmethod
+    def _construct_base_unit(unit: UnitBase, power: float):
+        """
+        Decomposes a unit into its scale, exponent, and kind.
+
+        Args:
+            unit: The unit to be decomposed.
+            power: The exponent of the unit.
+
+        Returns:
+            A dictionary containing the scale, exponent, and kind of the unit.
+        """
+
+        if not hasattr(unit, "_bases"):
+            kind = unit
+        else:
+            kind = unit._bases[0]  # type: ignore
+
+        return BaseUnit(
+            scale=float(unit.scale),
+            exponent=power,
+            kind=kind,
+        )
