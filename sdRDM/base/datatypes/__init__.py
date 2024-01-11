@@ -1,1 +1,1 @@
-from .unit import UnitType
+from .unit import Unit
