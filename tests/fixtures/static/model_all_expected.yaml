@@ -25,4 +25,3 @@ nested_multiple_obj:
     str_value: string
     float_value: 1.5
     int_value: 1
-referenced_value: id

@@ -12,9 +12,8 @@ Other description
   - Type: int
   - Description: Primitive attribute
 - multiple_primitive_attribute
-  - Type: int
+  - Type: int[]
   - Description: Multiple primitive attribute
-  - Multiple: True
 - nested
   - Type: Nested
   - Description: Nested attribute

@@ -20,3 +20,13 @@ def test_yaml_serialisation(model_all_dataset):
     given = yaml.safe_load(model_all_dataset.yaml())
 
     assert given == expected, "YAML serialisation does not match"
+
+
+@pytest.mark.e2e
+def test_xml_serialisation(model_all_dataset):
+    """Checks the xml serialisation of the model"""
+
+    expected = open("tests/fixtures/static/model_all_expected.xml").read()
+    given = model_all_dataset.xml()
+
+    assert given == expected, "YAML serialisation does not match"

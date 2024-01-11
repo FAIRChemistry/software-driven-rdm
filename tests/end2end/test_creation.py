@@ -37,7 +37,6 @@ def test_dataset_creation(model_all, model_all_dataset):
                 "int_value": 1,
             }
         ],
-        "referenced_value": "id",
     }
 
     # Create a dataset with the given library

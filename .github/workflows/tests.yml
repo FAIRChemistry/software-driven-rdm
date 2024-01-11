@@ -1,4 +1,4 @@
-name: End-to-end tests
+name: Unit Tests
 
 on: [push]
 
@@ -8,7 +8,6 @@ jobs:
     strategy:
       matrix:
         python-version: [
-            "3.8",
             "3.9",
             "3.10",
             "3.11"
@@ -22,9 +21,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m pip install -e .
-
+          python -m pip install poetry
+          python -m pip install -e .[dev]
       - name: Run tests with pytest
         run: |
-          pytest -v -m e2e
+          poetry run pytest

@@ -35,7 +35,6 @@ def test_scheme(model_all):
         ("enum_value", Union[SomeEnum, NoneType]),
         ("nested_single_obj", Union[Nested, NoneType]),
         ("nested_multiple_obj", List[Nested]),
-        ("referenced_value", Union[Nested, str, NoneType]),
     ]
 
     given_scheme = [

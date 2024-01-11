@@ -36,10 +36,7 @@ This model tests all methods and types that are present within the sdRDM library
 - nested_single_obj
   - Type: Nested
 - nested_multiple_obj
-  - Type: Nested
-  - Multiple: True
-- referenced_value
-  - Type: @Nested.id
+  - Type: Nested[]
 
 ### Nested
 
