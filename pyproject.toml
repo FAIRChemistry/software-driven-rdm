@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sdRDM"
-version = "0.2.1"
+version = "0.2.2"
 description = "Software-driven RDM converts markdown data models into powerful objects that can be serialized to JSON, XML, YAML and HDF5"
 authors = ["Jan Range <range.jan@web.de>"]
 license = "MIT License"
@@ -9,7 +9,7 @@ packages = [{include = "sdRDM"}]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-pydantic = "^2.5.3"
+pydantic = "2.5.3"
 pydantic-xml = "^2.7.0"
 numpy = "^1.26.3"
 pandas = "^2.1.4"
