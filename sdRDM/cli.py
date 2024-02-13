@@ -44,6 +44,10 @@ def generate(
         None,
         help="Commit hash from which this API was generated",
     ),
+    json_schemes: bool = typer.Option(
+        default=False,
+        help="Generate JSON schemes for the API",
+    ),
 ):
     """Generates a Python API based on the Markdown fiels found in the path.
 
@@ -60,7 +64,14 @@ def generate(
         # Convert into valid URL
         url = url.replace("git://", "https://", 1)
 
-    generate_python_api(path=path, dirpath=out, libname=name, commit=commit, url=url)
+    generate_python_api(
+        path=path,
+        dirpath=out,
+        libname=name,
+        commit=commit,
+        url=url,
+        json_schemes=json_schemes,
+    )
 
 
 @app.command()
