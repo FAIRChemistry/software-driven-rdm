@@ -24,6 +24,7 @@ def generate_python_api(
     commit: Optional[str] = None,
     only_classes: bool = False,
     use_formatter: bool = True,
+    json_schemes: bool = False,
 ) -> Optional[MarkdownParser]:
     """Generates a Python API based on a markdown model, which is parsed
     and code generated based on the specifications.
@@ -52,6 +53,7 @@ def generate_python_api(
         url=url,
         commit=commit,
         use_formatter=use_formatter,
+        json_schemes=json_schemes,
     )
 
 
@@ -59,6 +61,7 @@ def generate_api_from_parser(
     parser: MarkdownParser,
     dirpath: str,
     libname: str,
+    json_schemes: bool,
     url: Optional[str] = None,
     commit: Optional[str] = None,
     use_formatter: bool = True,
@@ -94,7 +97,9 @@ def generate_api_from_parser(
 
     # Write schema to library
     generate_mermaid_schema(os.path.join(libpath, "schemes"), libname, parser)
-    _write_json_schemes(libpath, libname)
+
+    if json_schemes:
+        _write_json_schemes(libpath, libname)
 
 
 def write_classes(
