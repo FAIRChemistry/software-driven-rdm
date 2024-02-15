@@ -3,15 +3,15 @@ from uuid import uuid4
 
 from pydantic import PrivateAttr, computed_field, model_validator
 from pydantic_xml import attr, element
-import sdRDM
-from sdRDM.base.datatypes.unit import Unit
+from sdRDM import DataModel
+from sdRDM.base.datatypes import Unit
 
 import astropy
 from astropy.units import Quantity as AstroQuantity
 
 
 class Quantity(
-    sdRDM.DataModel,
+    DataModel,
     nsmap={"": "https://www.github.com/software-driven-rdm"},
     tag="Quantity",
 ):
@@ -34,6 +34,7 @@ class Quantity(
     """
 
     id: str = attr(name="id", default_factory=lambda: str(uuid4()))
+
     value: Union[float, int] = attr(
         title="Value",
         description="The numerical value of the quantity.",
@@ -46,9 +47,17 @@ class Quantity(
 
     _quantity: AstroQuantity = PrivateAttr(default=None)
 
+    def __init__(
+        self,
+        value: Union[float, int],
+        unit: Union[str, Unit],
+    ):
+        super().__init__(value=value, unit=unit)
+
     @model_validator(mode="after")
     def _set_quantity(self):
         self._quantity = AstroQuantity(self.value, self.unit._unit)
+        return self
 
     # dunders
     def __mul__(self, other):
