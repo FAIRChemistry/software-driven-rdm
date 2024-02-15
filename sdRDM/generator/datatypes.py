@@ -141,6 +141,7 @@ class DataTypes(Enum):
     )
     H5Dataset = ("H5Dataset", ["from h5py._hl.dataset import Dataset as H5Dataset"])
     h5dataset = ("H5Dataset", ["from h5py._hl.dataset import Dataset as H5Dataset"])
+    Quantity = ("Quantity", ["from sdRDM.base.datatypes import Quantity"])
 
     @classmethod
     def get_value_list(cls):
