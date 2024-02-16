@@ -843,8 +843,9 @@ class DataModel(pydantic_xml.BaseXmlModel):
     def _check_list_value(value: Any, field_type) -> Tuple[str, bool]:
         msg = f"List element of type '{type(value)}' cannot be added. Expected type '{field_type}'"
 
-        if not isinstance(value, field_type) and not issubclass(field_type, Enum):
-            return msg, False
+        # Todo: Fix 3.9 compatibility for generics
+        # if not isinstance(value, field_type) and not hasattr(value, "__members__"):
+        #     return msg, False
 
         return "", True
 
