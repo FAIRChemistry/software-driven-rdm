@@ -45,7 +45,6 @@ from sdRDM.generator.codegen import generate_python_api
 from sdRDM.generator.utils import extract_modules
 from sdRDM.tools.utils import YAMLDumper
 from sdRDM.tools.gitutils import (
-    ObjectNode,
     build_library_from_git_specs,
     _import_library,
 )
