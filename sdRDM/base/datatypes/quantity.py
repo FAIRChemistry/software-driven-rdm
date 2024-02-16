@@ -1,7 +1,8 @@
 from typing import List, Union
 from uuid import uuid4
+import warnings
 
-from pydantic import PrivateAttr, computed_field, model_validator
+from pydantic import PrivateAttr, model_validator
 from pydantic_xml import attr, element
 from sdRDM import DataModel
 from sdRDM.base.datatypes import Unit
@@ -63,45 +64,116 @@ class Quantity(
     def __mul__(self, other):
         if isinstance(other, Quantity):
             new_quantity = self._quantity * other._quantity
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
 
         if isinstance(other, (int, float)):
             new_quantity = self._quantity.value * other * self._quantity.unit
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
+
+        else:
+            raise TypeError(
+                "unsupported operand type(s) for *: 'Quantity' and '{}'".format(
+                    type(other).__name__
+                )
+            )
 
     def __truediv__(self, other):
         if isinstance(other, Quantity):
+            if other._quantity.value == 0:
+                raise ZeroDivisionError("division by zero")
+
             new_quantity = (
                 self._quantity.value
                 / other._quantity.value
                 * self._quantity.unit
                 / other._quantity.unit
             )
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
 
         if isinstance(other, (int, float)):
+            if other == 0:
+                raise ZeroDivisionError("division by zero")
+
             new_quantity = self._quantity.value / other * self._quantity.unit
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
+
+        raise TypeError(
+            "unsupported operand type(s) for /: 'Quantity' and '{}'".format(
+                type(other).__name__
+            )
+        )
 
     def __add__(self, other):
         if isinstance(other, Quantity) and self._quantity.unit == other._quantity.unit:
             new_quantity = (
                 self._quantity.value + other._quantity.value
             ) * self._quantity.unit
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
 
         if isinstance(other, (int, float)):
             new_quantity = (self._quantity.value + other) * self._quantity.unit
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
+
+        raise TypeError(
+            "unsupported operand type(s) for +: 'Quantity' and '{}'".format(
+                type(other).__name__
+            )
+        )
 
     def __sub__(self, other):
         if isinstance(other, Quantity) and self._quantity.unit == other._quantity.unit:
             new_quantity = self._quantity - other._quantity
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
 
         if isinstance(other, (int, float)):
-            new_quantity = self._quantity - other
-            return Quantity(value=new_quantity.value, unit=new_quantity.unit)
+            new_quantity = (self._quantity.value - other) * self._quantity.unit
+            return Quantity(
+                value=new_quantity.value, unit=new_quantity.unit.to_string()
+            )
+
+        raise TypeError(
+            "unsupported operand type(s) for -: 'Quantity' and '{}'".format(
+                type(other).__name__
+            )
+        )
+
+    def __eq__(self, other):
+        if isinstance(other, Quantity):
+            return self._quantity == other._quantity
+
+        if isinstance(other, (int, float)):
+            if not self.value == other:
+                return False
+
+            warnings.warn(
+                "Comparing a Quantity object to a scalar. This is not recommended. "
+                "Consider using the .value attribute to compare the value directly.",
+                UserWarning,
+            )
+            return self.value == other
+
+        raise TypeError(
+            "unsupported operand type(s) for ==: 'Quantity' and '{}'".format(
+                type(other).__name__
+            )
+        )
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 if __name__ == "__main__":
