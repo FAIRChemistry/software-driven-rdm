@@ -155,7 +155,7 @@ def render_attribute(
 
     if is_multiple and tag != "None":
         xml_alias = tag
-        tag = attribute["type"][0]
+        tag = _transform(attribute["type"][0])
         wrapped = True
     else:
         xml_alias = None
@@ -184,7 +184,9 @@ def _get_field_type(attribute: Dict) -> str:
 
 
 def _extract_xml_alias(attribute: Dict) -> Optional[str]:
-    if "xml" not in attribute:
+    if "MathML" in attribute["type"]:
+        return "math"
+    elif "xml" not in attribute:
         return attribute["name"]
 
     return attribute["xml"].split("@")[-1]
@@ -661,3 +663,12 @@ def process_subtypes(
         types.append(subtype)
 
     return types
+
+
+def _transform(dtype: str) -> str:
+    """Transforms a dtype into a tag for special cases"""
+
+    if dtype == "MathML":
+        return "math"
+
+    return dtype
