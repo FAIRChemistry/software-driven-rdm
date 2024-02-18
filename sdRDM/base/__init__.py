@@ -1,2 +1,2 @@
 from .datamodel import DataModel
-from .linker import Linker
+from ..tools.linker import Linker
