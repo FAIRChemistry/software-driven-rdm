@@ -50,3 +50,27 @@ def check_numeric(value):
         return value
     except ValueError:
         return f'"{value}"'
+
+
+def elem2dict(node):
+    """
+    Convert an lxml.etree node tree into a dict.
+
+    Args:
+        node (lxml.etree.Element): The lxml.etree node tree to be converted.
+
+    Returns:
+        dict: The converted dictionary representation of the node tree.
+    """
+    result = {}
+
+    for element in node.iterchildren():
+        key = element.tag.split("}")[1] if "}" in element.tag else element.tag
+        if element.text and element.text.strip():
+            value = element.text
+        else:
+            value = elem2dict(element)
+
+        result[key] = value
+
+    return result

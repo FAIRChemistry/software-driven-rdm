@@ -141,6 +141,7 @@ class DataTypes(Enum):
     )
     H5Dataset = ("H5Dataset", ["from h5py._hl.dataset import Dataset as H5Dataset"])
     h5dataset = ("H5Dataset", ["from h5py._hl.dataset import Dataset as H5Dataset"])
+    RawXML = ("_Element", ["from lxml.etree import _Element"])
 
     @classmethod
     def get_value_list(cls):
