@@ -1,5 +1,6 @@
 from uuid import uuid4
 from pydantic_xml import attr, element, wrapped
+from pydantic import model_validator
 import sdRDM
 
 from typing import List, Union
@@ -25,7 +26,6 @@ class BaseUnit(
 
 class Unit(
     sdRDM.DataModel,
-    nsmap={"": "https://www.github.com/software-driven-rdm"},
     tag="Unit",
 ):
     """
@@ -46,9 +46,20 @@ class Unit(
 
     id: str = attr(name="id", default_factory=lambda: str(uuid4()))
     name: str = attr(name="name")
-    bases: List[BaseUnit] = element()
-    _unit: UnitBase = PrivateAttr()
-    _hash: int = PrivateAttr()
+    bases: List[BaseUnit] = wrapped(
+        "listOfUnits",
+        element(tag="unit"),
+    )
+
+    _unit: UnitBase = PrivateAttr(default=None)
+    _hash: int = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def create_astropy_unit(self):
+        if self._unit is None:
+            self._unit = AstroUnit(self.name)
+
+        return self
 
     @classmethod
     def from_string(cls, unit_string: str):
