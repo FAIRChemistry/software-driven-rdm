@@ -455,6 +455,8 @@ def assemble_signature(
     except StopIteration:
         if type in small_types:
             sub_object = small_types[type]
+        elif type in DataTypes.__members__:
+            return []
         else:
             raise ValueError(f"Sub object '{type}' has no attributes.")
 
@@ -555,6 +557,10 @@ def render_imports(
             continue
 
         parent_type = inherit["parent"]
+
+        if parent_type in DataTypes.__members__:
+            continue
+
         all_types += gather_all_types(
             get_object(parent_type, objects)["attributes"],
             objects,
@@ -654,10 +660,14 @@ def process_subtypes(
     subtypes = gather_all_types(attributes, objects, small_types, object["name"])
 
     if object.get("parent"):
-        parent_obj = get_object(object["parent"], objects)
-        subtypes += gather_all_types(
-            parent_obj["attributes"], objects, small_types, parent_obj["name"]
-        )
+
+        if object["parent"] in DataTypes.__members__:
+            pass
+        else:
+            parent_obj = get_object(object["parent"], objects)
+            subtypes += gather_all_types(
+                parent_obj["attributes"], objects, small_types, parent_obj["name"]
+            )
 
     for subtype in subtypes:
         types.append(subtype)

@@ -155,6 +155,7 @@ class DataTypes(Enum):
     h5dataset = ("H5Dataset", ["from h5py._hl.dataset import Dataset as H5Dataset"])
     MathML = ("MathML", ["from sdRDM.base.datatypes import MathML"])
     Equation = ("Equation", ["from sdRDM.base.datatypes import Equation"])
+    RawXML = ("_Element", ["from lxml.etree import _Element"])
 
     @classmethod
     def get_value_list(cls):

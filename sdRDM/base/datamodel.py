@@ -19,6 +19,7 @@ from enum import Enum
 from anytree import Node, LevelOrderIter
 from bigtree import print_tree, levelorder_iter, yield_tree
 from functools import lru_cache
+from lxml.etree import _Element
 from pydantic import ConfigDict, PrivateAttr, field_validator
 from typing import (
     Any,
@@ -267,7 +268,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
 
         # Get JSON representation
-        model = Nob(self.to_dict(warn=False))
+        model = Nob(self.to_dict(warn=False, mode="python"))
 
         if leaves:
             return model.leaves
@@ -331,6 +332,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
         mode="json",
         **kwargs,
     ):
+
         data = super().model_dump(
             exclude_none=exclude_none,
             by_alias=True,
