@@ -453,6 +453,8 @@ def assemble_signature(
     except StopIteration:
         if type in small_types:
             sub_object = small_types[type]
+        elif type in DataTypes.__members__:
+            return []
         else:
             raise ValueError(f"Sub object '{type}' has no attributes.")
 
