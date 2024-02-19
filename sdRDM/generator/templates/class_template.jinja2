@@ -19,3 +19,16 @@ class {{name}}({% if inherit is not none %}
     
     {% if repo is not none %}_repo: Optional[str] = PrivateAttr(default="{{repo}}"){% endif %}
     {% if commit is not none %}_commit: Optional[str] = PrivateAttr(default="{{commit}}"){% endif %}
+    _raw_xml_data: Dict = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _parse_raw_xml_data(self):
+        for attr, value in self:
+            if isinstance(value, (ListPlus, list)) and all(
+                isinstance(i, _Element) for i in value
+            ):
+                self._raw_xml_data[attr] = [elem2dict(i) for i in value]
+            elif isinstance(value, _Element):
+                self._raw_xml_data[attr] = elem2dict(value)
+
+        return self
