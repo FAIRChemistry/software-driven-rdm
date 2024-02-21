@@ -155,7 +155,7 @@ def render_attribute(
 
     if tag and len(tag.split("/")) > 1:
         xml_alias = "/".join(tag.split("/")[:-1])
-        tag = _transform(_transform(attribute["type"][0], tag.split("/")[-1]))
+        tag = _transform(attribute["type"][0], tag.split("/")[-1])
         wrapped = True
     else:
         xml_alias = None
@@ -682,12 +682,3 @@ def _transform(dtype: str, tag: str) -> str:
         return "math"
 
     return tag
-
-
-def _transform(dtype: str) -> str:
-    """Transforms a dtype into a tag for special cases"""
-
-    if dtype == "MathML":
-        return "math"
-
-    return dtype
