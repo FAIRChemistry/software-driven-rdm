@@ -153,9 +153,9 @@ def render_attribute(
         reference_types = get_reference_type(attribute["reference"], objects)
         attribute["type"] += reference_types
 
-    if is_multiple and tag != "None":
-        xml_alias = tag
-        tag = attribute["type"][0]
+    if tag and len(tag.split("/")) > 1:
+        xml_alias = "/".join(tag.split("/")[:-1])
+        tag = _transform(attribute["type"][0], tag.split("/")[-1])
         wrapped = True
     else:
         xml_alias = None
@@ -671,3 +671,12 @@ def process_subtypes(
         types.append(subtype)
 
     return types
+
+
+def _transform(dtype: str, tag: str) -> str:
+    """Transforms a dtype into a tag for special cases"""
+
+    if dtype == "MathML":
+        return "math"
+
+    return tag
