@@ -11,6 +11,7 @@ INHERITANCE_PATTERN = r"class [A-Za-z0-9\_\.]*\(([A-Za-z0-9\_\.]*)\)\:"
 ATTRIBURE_PATTERN = r"description=(\"|\')[A-Za-z0-9\_\.]*"
 FUNCTION_PATTERN = r"def ([a-zA-Z0-9_]+)\("
 FUNCTION_NAME_PATTERN = r"def ([a-zA-Z0-9_]+)\("
+XML_PARSER_PATTERN = r"_parse_raw_xml_data"
 
 
 class ModuleOrder(Enum):
@@ -73,6 +74,8 @@ def extract_custom_methods(rendered_class: str, path: str) -> List[str]:
 
         # Ignore adder functions
         if re.findall(ADDER_PATTERN, line):
+            continue
+        elif re.findall(XML_PARSER_PATTERN, line):
             continue
 
         # Account for decorators
