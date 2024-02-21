@@ -57,7 +57,6 @@ def write_hdf5(dataset, file: Union[H5File, str]):
         if is_array and not is_multiple_numeric:
             _write_array(attribute, data, group)
         elif not is_array and is_multiple_numeric:
-            print(np.array(data), np.array(data).shape)
             _write_array(attribute, np.array(data), group)
         else:
             _write_attr(attribute, data, group)  # type: ignore
