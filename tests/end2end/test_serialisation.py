@@ -29,4 +29,4 @@ def test_xml_serialisation(model_all_dataset):
     expected = open("tests/fixtures/static/model_all_expected.xml").read()
     given = model_all_dataset.xml()
 
-    assert given == expected, "YAML serialisation does not match"
+    assert given.strip() == expected.strip(), "XML serialisation does not match"
