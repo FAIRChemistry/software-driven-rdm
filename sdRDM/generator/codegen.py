@@ -71,13 +71,14 @@ def generate_api_from_parser(
 
     # Write classes to the directory
     write_classes(
-        libpath,
-        parser.objects,
-        parser.enums,
-        parser.inherits,
-        use_formatter,
-        url,
-        commit,
+        libpath=libpath,
+        objects=parser.objects,
+        enums=parser.enums,
+        inherits=parser.inherits,
+        use_formatter=use_formatter,
+        repo=url,
+        commit=commit,
+        namespaces=parser.namespaces,
     )
 
     # Write init files
@@ -108,6 +109,7 @@ def write_classes(
     enums: List[Dict],
     inherits: List[Dict],
     use_formatter: bool,
+    namespaces: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
 ) -> None:
@@ -122,13 +124,14 @@ def write_classes(
 
     for object in objects:
         rendered = render_object(
-            object,
-            objects,
-            enums,
-            inherits,
-            repo,
-            commit,
-            small_types,
+            object=object,
+            objects=objects,
+            enums=enums,
+            inherits=inherits,
+            repo=repo,
+            commit=commit,
+            small_types=small_types,
+            namespaces=namespaces,
         )
         path = os.path.join(libpath, "core", f"{object['name'].lower()}.py")
         save_rendered_to_file(rendered, path, use_formatter)
