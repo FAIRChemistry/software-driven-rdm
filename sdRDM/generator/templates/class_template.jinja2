@@ -1,7 +1,15 @@
 @forge_signature
 class {{name}}({% if inherit is not none %}
                 {{inherit}}
-                {% else %}sdRDM.DataModel{% endif %}, {% if repo %}nsmap={"": "{{ repo }}@{{ commit }}#{{ name }}"},{% endif %}):
+                {% else %}sdRDM.DataModel{% endif %},
+                {% if namespaces %}
+                nsmap = {
+                {% for key, value in namespaces.items() %}
+                    "{{key}}": "{{value}}",
+                {% endfor %}
+                },
+                {% endif %}
+                ):
 
                 
     {% if docstring is not none %}"""{{ docstring }}"""{% endif %}

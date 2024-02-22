@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<Root id="id">
+<Root xmlns="http://www.example.com/ns0" xmlns:math="http://www.example.com/math" xmlns:chem="http://www.example.com/chem" id="id">
   <str_value>string</str_value>
   <float_value>1.5</float_value>
   <int_value>1</int_value>
