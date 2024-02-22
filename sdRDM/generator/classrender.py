@@ -14,6 +14,7 @@ def render_object(
     objects: List[Dict],
     enums: List[Dict],
     inherits: List[Dict],
+    namespaces: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
     small_types: Dict = {},
@@ -31,6 +32,7 @@ def render_object(
                     objects=all_objects,
                     repo=repo,
                     commit=commit,
+                    namespaces=namespaces,
                 )
                 for subtype in small_types.values()
                 if subtype["origin"] == object["name"]
@@ -46,6 +48,7 @@ def render_object(
         objects=all_objects,
         repo=repo,
         commit=commit,
+        namespaces=namespaces,
     )
 
     methods_part = render_add_methods(
@@ -84,6 +87,7 @@ def render_class(
     object: Dict,
     inherits: List[Dict],
     objects: List[Dict],
+    namespaces: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
 ) -> str:
@@ -101,6 +105,7 @@ def render_class(
     if filtered and len(filtered) == 1:
         inherit = filtered[0]["parent"]
 
+
     return template.render(
         name=name,
         inherit=inherit,
@@ -115,6 +120,7 @@ def render_class(
         ],
         repo=repo,
         commit=commit,
+        namespaces=namespaces,
     )
 
 

@@ -1,5 +1,7 @@
+from io import StringIO
 import re
 
+import frontmatter
 from typing import List, Tuple, Dict, IO
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
@@ -17,6 +19,7 @@ class MarkdownParser(BaseModel):
     inherits: List = []
     compositions: List = []
     external_objects: Dict = {}
+    namespaces: Dict = {}
 
     @classmethod
     def parse(cls, handle: IO):
@@ -24,7 +27,9 @@ class MarkdownParser(BaseModel):
 
         parser = cls()
 
-        doc = MarkdownIt().parse(cls.clean_html_tags(handle.readlines()))
+        content = parser.clean_html_tags(handle.readlines())
+        doc = MarkdownIt().parse(parser._remove_header(content))
+        parser.namespaces = parser._extract_namespaces(content)
         modules, enumerations = parser.get_objects_and_enumerations(doc)
 
         for module, model in modules.items():
@@ -61,6 +66,36 @@ class MarkdownParser(BaseModel):
         self.inherits += parser.inherits
         self.compositions += parser.compositions
         self.external_objects.update(parser.external_objects)
+
+    @staticmethod
+    def _extract_namespaces(content: str):
+        """Extracts all namespaces from the model.
+
+        Args:
+            content (str): The content of the model.
+
+        Returns:
+            dict: A dictionary containing the extracted namespaces.
+        """
+
+        doc = frontmatter.load(StringIO(content))
+        return doc.get("xmlns", {})
+
+    @staticmethod
+    def _remove_header(text: str):
+        """
+        Removes the header from the given text.
+
+        Args:
+            text (str): The text containing the header.
+
+        Returns:
+            str: The text with the header removed.
+        """
+        header = re.search(r"^---\n.*?\n---\n", text, re.DOTALL)
+        if header:
+            text = text.replace(header.group(), "")
+        return text.strip()
 
     def _has_duplicate_object_names(self, parser):
         """Checks whether there are redundancies within the model"""
