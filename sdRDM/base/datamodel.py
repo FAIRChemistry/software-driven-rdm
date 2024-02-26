@@ -180,7 +180,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
                 query,
             )
 
-            if reference:
+            if reference is not None:
                 references.append(reference)
 
         return references
