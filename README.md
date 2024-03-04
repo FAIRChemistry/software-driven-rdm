@@ -1,7 +1,7 @@
 <h1 align="center">
   Software-Driven RDM</br>
   <a href="https://badge.fury.io/py/sdRDM"><img src="https://badge.fury.io/py/sdRDM.svg" alt="PyPI version" height="18"></a>
-  <img src="https://img.shields.io/badge/python-3.9|3.10|3.11-blue.svg" alt="Build Badge">
+  <img src="https://img.shields.io/badge/python-3.9 | 3.10 | 3.11-blue.svg" alt="Build Badge">
   <img src="https://github.com/JR-1991/software-driven-rdm/actions/workflows/tests.yml/badge.svg" alt="Build Badge">
 </h1>
 <p align="center">
