@@ -20,6 +20,7 @@ class MarkdownParser(BaseModel):
     compositions: List = []
     external_objects: Dict = {}
     namespaces: Dict = {}
+    add_id_field: bool = True
 
     @classmethod
     def parse(cls, handle: IO):
@@ -28,8 +29,13 @@ class MarkdownParser(BaseModel):
         parser = cls()
 
         content = parser.clean_html_tags(handle.readlines())
+
+        # Extract frontmatter and markdown
+        metadata = frontmatter.load(StringIO(content))
+        parser.namespaces = metadata.get("xmlns", {})  # type: ignore
+        parser.add_id_field = metadata.get("id-field", True)  # type: ignore
+
         doc = MarkdownIt().parse(parser._remove_header(content))
-        parser.namespaces = parser._extract_namespaces(content)
         modules, enumerations = parser.get_objects_and_enumerations(doc)
 
         for module, model in modules.items():
@@ -66,20 +72,6 @@ class MarkdownParser(BaseModel):
         self.inherits += parser.inherits
         self.compositions += parser.compositions
         self.external_objects.update(parser.external_objects)
-
-    @staticmethod
-    def _extract_namespaces(content: str):
-        """Extracts all namespaces from the model.
-
-        Args:
-            content (str): The content of the model.
-
-        Returns:
-            dict: A dictionary containing the extracted namespaces.
-        """
-
-        doc = frontmatter.load(StringIO(content))
-        return doc.get("xmlns", {})
 
     @staticmethod
     def _remove_header(text: str):

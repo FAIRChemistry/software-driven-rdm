@@ -18,6 +18,7 @@ def render_object(
     repo: Optional[str] = None,
     commit: Optional[str] = None,
     small_types: Dict = {},
+    add_id_field: bool = True,
 ) -> str:
     """Renders a class of type object coming from a parsed Markdown model"""
 
@@ -33,6 +34,7 @@ def render_object(
                     repo=repo,
                     commit=commit,
                     namespaces=namespaces,
+                    add_id_field=add_id_field,
                 )
                 for subtype in small_types.values()
                 if subtype["origin"] == object["name"]
@@ -49,6 +51,7 @@ def render_object(
         repo=repo,
         commit=commit,
         namespaces=namespaces,
+        add_id_field=add_id_field,
     )
 
     methods_part = render_add_methods(
@@ -88,6 +91,7 @@ def render_class(
     inherits: List[Dict],
     objects: List[Dict],
     namespaces: Dict,
+    add_id_field: bool,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
 ) -> str:
@@ -105,7 +109,6 @@ def render_class(
     if filtered and len(filtered) == 1:
         inherit = filtered[0]["parent"]
 
-
     return template.render(
         name=name,
         inherit=inherit,
@@ -121,6 +124,7 @@ def render_class(
         repo=repo,
         commit=commit,
         namespaces=namespaces,
+        add_id_field=add_id_field,
     )
 
 
@@ -153,7 +157,9 @@ def render_attribute(
         attribute["default_factory"] = "ListPlus"
     elif not is_multiple and is_all_optional:
         attribute["default_factory"] = f"{attribute['type'][0]}"
-        del attribute["default"]
+
+        if "default" in attribute:
+            del attribute["default"]
 
     if has_reference:
         reference_types = get_reference_type(attribute["reference"], objects)

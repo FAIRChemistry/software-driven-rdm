@@ -9,17 +9,20 @@ class {{name}}({% if inherit is not none %}
                 {% endfor %}
                 },
                 {% endif %}
+                search_mode="unordered",
                 ):
 
                 
     {% if docstring is not none %}"""{{ docstring }}"""{% endif %}
     
+    {% if add_id_field %}
     id: Optional[str] = attr(
             name="id",
             description="Unique identifier of the given object.",
             default_factory=lambda: str(uuid4()),
             xml="@id"
     )
+    {% endif %}
     
     {% for attribute in attributes %}
     {{ attribute }}
