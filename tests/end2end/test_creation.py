@@ -85,3 +85,17 @@ def test_ns_map(model_all):
     assert (
         model_all.Root.__xml_nsmap__ == expected
     ), "Namespace map does not match expected values"
+
+
+@pytest.mark.e2e
+def test_no_id_field(model_no_id):
+    """
+    Test that the 'id' field is not present in the model's fields.
+
+    Args:
+        model_no_id (object): The model object without the 'id' field.
+
+    Returns:
+        None
+    """
+    assert "id" not in model_no_id.Object.model_fields.keys()

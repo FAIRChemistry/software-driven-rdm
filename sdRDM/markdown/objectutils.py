@@ -259,7 +259,9 @@ def process_type_option(
         if dtype.endswith("[]"):
             dtype = dtype.rstrip("[]")
             object_stack[-1]["attributes"][-1]["multiple"] = "True"
-            del object_stack[-1]["attributes"][-1]["default"]
+
+            if "default" in object_stack[-1]["attributes"][-1]:
+                del object_stack[-1]["attributes"][-1]["default"]
 
         if not dtype:
             continue
