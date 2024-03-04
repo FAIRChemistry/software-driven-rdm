@@ -34,6 +34,12 @@ def model_all_expected():
 
 
 @pytest.fixture
+def model_no_id():
+    """Loads the data model that has ID field disabled"""
+    return DataModel.from_markdown("tests/fixtures/static/model_minimal_no_id.md")
+
+
+@pytest.fixture
 def model_all_dataset(model_all):
     # Create a dataset with the given library
     nested = model_all.Nested(
