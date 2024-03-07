@@ -56,7 +56,7 @@ class Unit(
 
     @model_validator(mode="after")
     def create_astropy_unit(self):
-        if self._unit is None:
+        if self._unit is None and self.name != "dimensionless":
             self._unit = AstroUnit(self.name)
 
         return self
@@ -75,6 +75,13 @@ class Unit(
         Raises:
             AssertionError: If the unit is not a UnitBase or Unit.
         """
+
+        if unit_string.lower() == "dimensionless":
+            return cls(
+                name="dimensionless",
+                bases=[],
+            )
+
         unit = AstroUnit(unit_string)
 
         assert isinstance(
