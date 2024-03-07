@@ -4,7 +4,7 @@ from pydantic import model_validator
 import sdRDM
 
 from typing import List, Union
-from astropy.units import UnitBase, Unit as AstroUnit
+from astropy.units import UnitBase, Unit as AstroUnit, dimensionless_unscaled
 from pydantic import field_serializer, PrivateAttr
 
 
@@ -58,6 +58,8 @@ class Unit(
     def create_astropy_unit(self):
         if self._unit is None and self.name != "dimensionless":
             self._unit = AstroUnit(self.name)
+        elif self.name == "dimensionless":
+            self._unit = AstroUnit(dimensionless_unscaled)
 
         return self
 
