@@ -79,6 +79,7 @@ def generate_api_from_parser(
         repo=url,
         commit=commit,
         namespaces=parser.namespaces,
+        add_id_field=parser.add_id_field,
     )
 
     # Write init files
@@ -112,6 +113,7 @@ def write_classes(
     namespaces: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
+    add_id_field: bool = True,
 ) -> None:
     """Renders classes that were parsed from a markdown model and creates a library."""
 
@@ -132,6 +134,7 @@ def write_classes(
             commit=commit,
             small_types=small_types,
             namespaces=namespaces,
+            add_id_field=add_id_field,
         )
         path = os.path.join(libpath, "core", f"{object['name'].lower()}.py")
         save_rendered_to_file(rendered, path, use_formatter)
