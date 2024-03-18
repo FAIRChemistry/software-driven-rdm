@@ -209,7 +209,9 @@ def process_option(
     if option.lower().strip() == "type":
         value = process_type_option(value, object_stack, external_types)
     elif option.lower().strip() == "multiple" and attribute_has_default(object_stack):
-        del object_stack[-1]["attributes"][-1]["default"]
+
+        if "default" in object_stack[-1]["attributes"][-1]:
+            del object_stack[-1]["attributes"][-1]["default"]
         object_stack[-1]["attributes"][-1]["default_factory"] = "ListPlus()"
 
     object_stack[-1]["attributes"][-1][option.strip().lower()] = value
