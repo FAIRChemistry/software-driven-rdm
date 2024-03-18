@@ -27,4 +27,5 @@
       <int_value>1</int_value>
     </nested>
   </nested_multiple_obj>
+  <leaf_element id="id" some_attribute="I am an attribute">I am a leaf</leaf_element>
 </Root>

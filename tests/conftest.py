@@ -49,6 +49,12 @@ def model_all_dataset(model_all):
         int_value=1,
     )
 
+    leaf_element = model_all.LeafElement(
+        id="id",
+        leaf_value="I am a leaf",
+        some_attribute="I am an attribute",
+    )
+
     dataset = model_all.Root(
         id="id",
         str_value="string",
@@ -67,6 +73,7 @@ def model_all_dataset(model_all):
         nested_single_obj=nested,
         nested_multiple_obj=[nested],
         referenced_value=nested,
+        leaf_element=leaf_element,
     )
 
     return dataset
