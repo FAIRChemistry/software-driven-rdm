@@ -136,10 +136,17 @@ def render_attribute(
     """Renders an attributeibute to code using a Jinja2 template"""
 
     attribute = deepcopy(attribute)
-    template = Template(
+    attr_template = Template(
         pkg_resources.read_text(
             jinja_templates,
             "attribute_template.jinja2",
+        )
+    )
+
+    leaf_template = Template(
+        pkg_resources.read_text(
+            jinja_templates,
+            "attribute_leaf_template.jinja2",
         )
     )
 
@@ -173,16 +180,29 @@ def render_attribute(
         xml_alias = None
         wrapped = False
 
-    return template.render(
-        name=attribute.pop("name"),
-        required=attribute.pop("required"),
-        dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
-        metadata=stringize_option_values(attribute),
-        field_type=_get_field_type(attribute),
-        wrapped=wrapped,
-        tag=tag,
-        xml_alias=xml_alias,
-    )
+    if xml_alias == obj_name or tag == obj_name:
+        return leaf_template.render(
+            name=attribute.pop("name"),
+            required=attribute.pop("required"),
+            dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
+            metadata=stringize_option_values(attribute),
+            field_type=_get_field_type(attribute),
+            wrapped=wrapped,
+            tag=tag,
+            xml_alias=xml_alias,
+        )
+
+    else:
+        return attr_template.render(
+            name=attribute.pop("name"),
+            required=attribute.pop("required"),
+            dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
+            metadata=stringize_option_values(attribute),
+            field_type=_get_field_type(attribute),
+            wrapped=wrapped,
+            tag=tag,
+            xml_alias=xml_alias,
+        )
 
 
 def _get_field_type(attribute: Dict) -> str:
