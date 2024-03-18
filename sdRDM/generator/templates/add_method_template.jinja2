@@ -3,13 +3,13 @@
         {%- for attr in signature %}
         {{attr.name}}: {{attr.type}} {% if 'default' in attr%}= {{attr.default}} {% elif attr.multiple is true %}= ListPlus(){% endif %},
         {%- endfor %}
-        id: Optional[str] = None,
+        {% if add_id_field %}id: Optional[str] = None,{% endif %}
     ) -> {{ cls }}:
         """
         {{summary}}
 
         Args:
-            id (str): Unique identifier of the '{{ cls }}' object. Defaults to 'None'.
+            {% if add_id_field %}id (str): Unique identifier of the '{{ cls }}' object. Defaults to 'None'.{% endif %}
             {%- for attr in signature %}
             {{attr.name}} ({{ attr.dtype }}): {{ attr.description }}.{% if 'default' in attr %} Defaults to {{attr.default}}{% endif %}
             {%- endfor %}
