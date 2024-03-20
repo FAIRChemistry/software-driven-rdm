@@ -14,9 +14,11 @@ def render_object(
     objects: List[Dict],
     enums: List[Dict],
     inherits: List[Dict],
+    namespaces: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
     small_types: Dict = {},
+    add_id_field: bool = True,
 ) -> str:
     """Renders a class of type object coming from a parsed Markdown model"""
 
@@ -31,6 +33,8 @@ def render_object(
                     objects=all_objects,
                     repo=repo,
                     commit=commit,
+                    namespaces=namespaces,
+                    add_id_field=add_id_field,
                 )
                 for subtype in small_types.values()
                 if subtype["origin"] == object["name"]
@@ -46,6 +50,8 @@ def render_object(
         objects=all_objects,
         repo=repo,
         commit=commit,
+        namespaces=namespaces,
+        add_id_field=add_id_field,
     )
 
     methods_part = render_add_methods(
@@ -84,6 +90,8 @@ def render_class(
     object: Dict,
     inherits: List[Dict],
     objects: List[Dict],
+    namespaces: Dict,
+    add_id_field: bool,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
 ) -> str:
@@ -115,6 +123,8 @@ def render_class(
         ],
         repo=repo,
         commit=commit,
+        namespaces=namespaces,
+        add_id_field=add_id_field,
     )
 
 
@@ -147,15 +157,17 @@ def render_attribute(
         attribute["default_factory"] = "ListPlus"
     elif not is_multiple and is_all_optional:
         attribute["default_factory"] = f"{attribute['type'][0]}"
-        del attribute["default"]
+
+        if "default" in attribute:
+            del attribute["default"]
 
     if has_reference:
         reference_types = get_reference_type(attribute["reference"], objects)
         attribute["type"] += reference_types
 
-    if is_multiple and tag != "None":
-        xml_alias = tag
-        tag = attribute["type"][0]
+    if tag and len(tag.split("/")) > 1:
+        xml_alias = "/".join(tag.split("/")[:-1])
+        tag = _transform(attribute["type"][0], tag.split("/")[-1])
         wrapped = True
     else:
         xml_alias = None
@@ -453,6 +465,8 @@ def assemble_signature(
     except StopIteration:
         if type in small_types:
             sub_object = small_types[type]
+        elif type in DataTypes.__members__:
+            return []
         else:
             raise ValueError(f"Sub object '{type}' has no attributes.")
 
@@ -553,6 +567,10 @@ def render_imports(
             continue
 
         parent_type = inherit["parent"]
+
+        if parent_type in DataTypes.__members__:
+            continue
+
         all_types += gather_all_types(
             get_object(parent_type, objects)["attributes"],
             objects,
@@ -652,12 +670,25 @@ def process_subtypes(
     subtypes = gather_all_types(attributes, objects, small_types, object["name"])
 
     if object.get("parent"):
-        parent_obj = get_object(object["parent"], objects)
-        subtypes += gather_all_types(
-            parent_obj["attributes"], objects, small_types, parent_obj["name"]
-        )
+
+        if object["parent"] in DataTypes.__members__:
+            pass
+        else:
+            parent_obj = get_object(object["parent"], objects)
+            subtypes += gather_all_types(
+                parent_obj["attributes"], objects, small_types, parent_obj["name"]
+            )
 
     for subtype in subtypes:
         types.append(subtype)
 
     return types
+
+
+def _transform(dtype: str, tag: str) -> str:
+    """Transforms a dtype into a tag for special cases"""
+
+    if dtype == "MathML":
+        return "math"
+
+    return tag

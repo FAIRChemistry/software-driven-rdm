@@ -24,6 +24,7 @@ def generate_python_api(
     commit: Optional[str] = None,
     only_classes: bool = False,
     use_formatter: bool = True,
+    json_schemes: bool = False,
 ) -> Optional[MarkdownParser]:
     """Generates a Python API based on a markdown model, which is parsed
     and code generated based on the specifications.
@@ -52,6 +53,7 @@ def generate_python_api(
         url=url,
         commit=commit,
         use_formatter=use_formatter,
+        json_schemes=json_schemes,
     )
 
 
@@ -59,6 +61,7 @@ def generate_api_from_parser(
     parser: MarkdownParser,
     dirpath: str,
     libname: str,
+    json_schemes: bool,
     url: Optional[str] = None,
     commit: Optional[str] = None,
     use_formatter: bool = True,
@@ -68,13 +71,15 @@ def generate_api_from_parser(
 
     # Write classes to the directory
     write_classes(
-        libpath,
-        parser.objects,
-        parser.enums,
-        parser.inherits,
-        use_formatter,
-        url,
-        commit,
+        libpath=libpath,
+        objects=parser.objects,
+        enums=parser.enums,
+        inherits=parser.inherits,
+        use_formatter=use_formatter,
+        repo=url,
+        commit=commit,
+        namespaces=parser.namespaces,
+        add_id_field=parser.add_id_field,
     )
 
     # Write init files
@@ -94,7 +99,9 @@ def generate_api_from_parser(
 
     # Write schema to library
     generate_mermaid_schema(os.path.join(libpath, "schemes"), libname, parser)
-    _write_json_schemes(libpath, libname)
+
+    if json_schemes:
+        _write_json_schemes(libpath, libname)
 
 
 def write_classes(
@@ -103,8 +110,10 @@ def write_classes(
     enums: List[Dict],
     inherits: List[Dict],
     use_formatter: bool,
+    namespaces: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
+    add_id_field: bool = True,
 ) -> None:
     """Renders classes that were parsed from a markdown model and creates a library."""
 
@@ -117,13 +126,15 @@ def write_classes(
 
     for object in objects:
         rendered = render_object(
-            object,
-            objects,
-            enums,
-            inherits,
-            repo,
-            commit,
-            small_types,
+            object=object,
+            objects=objects,
+            enums=enums,
+            inherits=inherits,
+            repo=repo,
+            commit=commit,
+            small_types=small_types,
+            namespaces=namespaces,
+            add_id_field=add_id_field,
         )
         path = os.path.join(libpath, "core", f"{object['name'].lower()}.py")
         save_rendered_to_file(rendered, path, use_formatter)

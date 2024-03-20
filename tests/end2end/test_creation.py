@@ -5,7 +5,7 @@ from pydantic_core import Url
 
 
 @pytest.mark.e2e
-def test_dataset_creation(model_all, model_all_dataset):
+def test_dataset_creation(model_all):
     """Tests whether the data that is passed to the model is correctly parsed"""
 
     expected = {
@@ -70,3 +70,32 @@ def test_dataset_creation(model_all, model_all_dataset):
     assert (
         dataset.to_dict(mode="python") == expected
     ), "Dataset does not match expected values"
+
+
+@pytest.mark.e2e
+def test_ns_map(model_all):
+    """Tests whether the namespace map is correctly extracted from the model"""
+
+    expected = {
+        "": "http://www.example.com/ns0",
+        "math": "http://www.example.com/math",
+        "chem": "http://www.example.com/chem",
+    }
+
+    assert (
+        model_all.Root.__xml_nsmap__ == expected
+    ), "Namespace map does not match expected values"
+
+
+@pytest.mark.e2e
+def test_no_id_field(model_no_id):
+    """
+    Test that the 'id' field is not present in the model's fields.
+
+    Args:
+        model_no_id (object): The model object without the 'id' field.
+
+    Returns:
+        None
+    """
+    assert "id" not in model_no_id.Object.model_fields.keys()

@@ -1,9 +1,10 @@
 from uuid import uuid4
 from pydantic_xml import attr, element, wrapped
+from pydantic import model_validator
 import sdRDM
 
 from typing import List, Union
-from astropy.units import UnitBase, Unit as AstroUnit
+from astropy.units import UnitBase, Unit as AstroUnit, dimensionless_unscaled
 from pydantic import field_serializer, PrivateAttr
 
 
@@ -25,7 +26,6 @@ class BaseUnit(
 
 class Unit(
     sdRDM.DataModel,
-    nsmap={"": "https://www.github.com/software-driven-rdm"},
     tag="Unit",
 ):
     """
@@ -46,9 +46,22 @@ class Unit(
 
     id: str = attr(name="id", default_factory=lambda: str(uuid4()))
     name: str = attr(name="name")
-    bases: List[BaseUnit] = element()
-    _unit: UnitBase = PrivateAttr()
-    _hash: int = PrivateAttr()
+    bases: List[BaseUnit] = wrapped(
+        "listOfUnits",
+        element(tag="unit"),
+    )
+
+    _unit: UnitBase = PrivateAttr(default=None)
+    _hash: int = PrivateAttr(default=None)
+
+    @model_validator(mode="after")
+    def create_astropy_unit(self):
+        if self._unit is None and self.name != "dimensionless":
+            self._unit = AstroUnit(self.name)
+        elif self.name == "dimensionless":
+            self._unit = AstroUnit(dimensionless_unscaled)
+
+        return self
 
     @classmethod
     def from_string(cls, unit_string: str):
@@ -64,6 +77,13 @@ class Unit(
         Raises:
             AssertionError: If the unit is not a UnitBase or Unit.
         """
+
+        if unit_string.lower() == "dimensionless":
+            return cls(
+                name="dimensionless",
+                bases=[],
+            )
+
         unit = AstroUnit(unit_string)
 
         assert isinstance(

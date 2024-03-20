@@ -19,6 +19,7 @@ from enum import Enum
 from anytree import Node, LevelOrderIter
 from bigtree import print_tree, levelorder_iter, yield_tree
 from functools import lru_cache
+from lxml.etree import _Element
 from pydantic import ConfigDict, PrivateAttr, field_validator
 from typing import (
     Any,
@@ -45,7 +46,6 @@ from sdRDM.generator.codegen import generate_python_api
 from sdRDM.generator.utils import extract_modules
 from sdRDM.tools.utils import YAMLDumper
 from sdRDM.tools.gitutils import (
-    ObjectNode,
     build_library_from_git_specs,
     _import_library,
 )
@@ -179,7 +179,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
                 query,
             )
 
-            if reference:
+            if reference is not None:
                 references.append(reference)
 
         return references
@@ -265,7 +265,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
         """Returns all possible paths of an instantiated data model. Can also be reduced to just leaves."""
 
         # Get JSON representation
-        model = Nob(self.to_dict(warn=False))
+        model = Nob(self.to_dict(warn=False, mode="python"))
 
         if leaves:
             return model.leaves
@@ -329,6 +329,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
         mode="json",
         **kwargs,
     ):
+
         data = super().model_dump(
             exclude_none=exclude_none,
             by_alias=True,
@@ -621,15 +622,10 @@ class DataModel(pydantic_xml.BaseXmlModel):
 
     @classmethod
     def from_markdown(cls, path: str) -> ImportedModules:
-        """Fetches a Markdown specification from a git repository and builds the library accordingly.
-
-        This function will clone the repository into a temporary directory and
-        builds the correpsonding API and loads it into the memory. After that
-        the cloned repository is deleted and the root object(s) detected.
+        """Converts a markdown file into a in-memory Python API.
 
         Args:
-            url (str): Link to the git repository. Use the URL ending with ".git".
-            commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
+            path (str): Path to the markdown file.
         """
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -637,7 +633,10 @@ class DataModel(pydantic_xml.BaseXmlModel):
             lib_name = f"sdRDM-Library-{str(random.randint(0,30))}"
             api_loc = os.path.join(tmpdirname, lib_name)
             generate_python_api(
-                path=path, dirpath=tmpdirname, libname=lib_name, use_formatter=False
+                path=path,
+                dirpath=tmpdirname,
+                libname=lib_name,
+                use_formatter=False,
             )
 
             lib = _import_library(api_loc, lib_name)
@@ -663,6 +662,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
             url (str): Link to the git repository. Use the URL ending with ".git".
             commit (Optional[str], optional): Hash of the commit to fetch from. Defaults to None.
             tag (Optional[str], optional): Tag of the release or branch to fetch from. Defaults to None.
+            only_classes (bool, optional): If True, only the classes will be returned. Defaults to False.
         """
 
         if not validators.url(url):

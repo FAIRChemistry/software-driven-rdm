@@ -1,3 +1,10 @@
+---
+xmlns:
+    "": "http://www.example.com/ns0"
+    "math": "http://www.example.com/math"
+    "chem": "http://www.example.com/chem"
+---
+
 # Test
 
 This model tests all methods and types that are present within the sdRDM library.
@@ -37,6 +44,7 @@ This model tests all methods and types that are present within the sdRDM library
   - Type: Nested
 - nested_multiple_obj
   - Type: Nested[]
+  - XML: nested_multiple_obj/nested
 
 ### Nested
 
