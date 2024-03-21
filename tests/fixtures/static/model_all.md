@@ -45,6 +45,9 @@ This model tests all methods and types that are present within the sdRDM library
 - nested_multiple_obj
   - Type: Nested[]
   - XML: nested_multiple_obj/nested
+- leaf_element
+  - Type: LeafElement
+  - XML: leaf_element
 
 ### Nested
 
@@ -54,6 +57,15 @@ This model tests all methods and types that are present within the sdRDM library
   - Type: float
 - int_value
   - Type: integer
+
+### LeafElement
+
+- leaf_value
+  - Type: string
+  - XML: LeafElement
+- some_attribute
+  - Type: string
+  - XML: @some_attribute
 
 ## Enumerations
 

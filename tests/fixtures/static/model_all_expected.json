@@ -30,5 +30,10 @@
             "float_value": 1.5,
             "int_value": 1
         }
-    ]
+    ],
+    "leaf_element": {
+        "id": "id",
+        "leaf_value": "I am a leaf",
+        "some_attribute": "I am an attribute"
+    }
 }

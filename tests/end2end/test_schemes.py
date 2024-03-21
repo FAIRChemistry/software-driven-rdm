@@ -17,6 +17,7 @@ def test_scheme(model_all):
     NoneType = type(None)
     SomeEnum = model_all.enums.SomeEnum
     Nested = model_all.Nested
+    LeafElement = model_all.LeafElement
 
     expected_scheme = [
         ("id", Optional[str]),
@@ -35,6 +36,7 @@ def test_scheme(model_all):
         ("enum_value", Union[SomeEnum, NoneType]),
         ("nested_single_obj", Union[Nested, NoneType]),
         ("nested_multiple_obj", List[Nested]),
+        ("leaf_element", Union[LeafElement, NoneType]),
     ]
 
     given_scheme = [

@@ -1,0 +1,14 @@
+{{name}}: {{dtype}} = Field(
+    {% if required is false and 'default' not in metadata.keys() and 'default_factory' not in metadata.keys() %}default=None,{% endif %}
+    {% if "description" in metadata %}description={{metadata["description"]}},{% endif %}
+    {% if "default" in metadata %}default={{metadata["default"]}},{% endif %}
+    {% if "default_factory" in metadata %}default_factory={{metadata["default_factory"]}},{% endif %}
+    json_schema_extra=dict(
+        {% for key, value in metadata.items() %}
+        {% if not key in ["default", "description", "default_factory"]%}
+        {{key}}={{value}},
+        {% endif %}
+        {% endfor %}
+    ),
+    )
+

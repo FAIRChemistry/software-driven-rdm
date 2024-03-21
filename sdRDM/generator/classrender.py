@@ -58,6 +58,7 @@ def render_object(
         object=object,
         objects=all_objects,
         small_types=small_types,
+        add_id_field=add_id_field,
     )
 
     validator_part = render_reference_validator(
@@ -136,10 +137,17 @@ def render_attribute(
     """Renders an attributeibute to code using a Jinja2 template"""
 
     attribute = deepcopy(attribute)
-    template = Template(
+    attr_template = Template(
         pkg_resources.read_text(
             jinja_templates,
             "attribute_template.jinja2",
+        )
+    )
+
+    leaf_template = Template(
+        pkg_resources.read_text(
+            jinja_templates,
+            "attribute_leaf_template.jinja2",
         )
     )
 
@@ -173,16 +181,29 @@ def render_attribute(
         xml_alias = None
         wrapped = False
 
-    return template.render(
-        name=attribute.pop("name"),
-        required=attribute.pop("required"),
-        dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
-        metadata=stringize_option_values(attribute),
-        field_type=_get_field_type(attribute),
-        wrapped=wrapped,
-        tag=tag,
-        xml_alias=xml_alias,
-    )
+    if xml_alias == obj_name or tag == obj_name:
+        return leaf_template.render(
+            name=attribute.pop("name"),
+            required=attribute.pop("required"),
+            dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
+            metadata=stringize_option_values(attribute),
+            field_type=_get_field_type(attribute),
+            wrapped=wrapped,
+            tag=tag,
+            xml_alias=xml_alias,
+        )
+
+    else:
+        return attr_template.render(
+            name=attribute.pop("name"),
+            required=attribute.pop("required"),
+            dtype=combine_types(attribute.pop("type"), is_multiple, is_required),
+            metadata=stringize_option_values(attribute),
+            field_type=_get_field_type(attribute),
+            wrapped=wrapped,
+            tag=tag,
+            xml_alias=xml_alias,
+        )
 
 
 def _get_field_type(attribute: Dict) -> str:
@@ -314,7 +335,12 @@ def is_reference(key: str, option: str) -> bool:
     return False
 
 
-def render_add_methods(object: Dict, objects: List[Dict], small_types: Dict) -> str:
+def render_add_methods(
+    object: Dict,
+    objects: List[Dict],
+    small_types: Dict,
+    add_id_field: bool,
+) -> str:
     """Renders add methods fro each non-native type of an attribute"""
 
     add_methods = []
@@ -330,12 +356,13 @@ def render_add_methods(object: Dict, objects: List[Dict], small_types: Dict) -> 
         for type in complex_types:
             add_methods.append(
                 render_single_add_method(
-                    attribute,
-                    type,
-                    objects,
-                    is_single_type,
-                    object["name"],
-                    small_types,
+                    attribute=attribute,
+                    type=type,
+                    objects=objects,
+                    is_single_type=is_single_type,
+                    obj_name=object["name"],
+                    small_types=small_types,
+                    add_id_field=add_id_field,
                 )
             )
 
@@ -408,6 +435,7 @@ def render_single_add_method(
     is_single_type: bool,
     obj_name: str,
     small_types: Dict,
+    add_id_field: bool,
 ) -> str:
     """Renders an add method for an attribute that occurs multiple times"""
 
@@ -433,6 +461,7 @@ def render_single_add_method(
         cls=type,
         signature=assemble_signature(type, objects, obj_name, small_types),
         summary=f"This method adds an object of type '{type}' to attribute {attribute['name']}",
+        add_id_field=add_id_field,
     )
 
 
