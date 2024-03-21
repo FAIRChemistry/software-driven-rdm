@@ -4,6 +4,7 @@
         {{attr.name}}: {{attr.type}} {% if 'default' in attr%}= {{attr.default}} {% elif attr.multiple is true %}= ListPlus(){% endif %},
         {%- endfor %}
         {% if add_id_field %}id: Optional[str] = None,{% endif %}
+        **kwargs,
     ) -> {{ cls }}:
         """
         {{summary}}
