@@ -276,6 +276,7 @@ def stringize_option_values(attribute: Dict):
         elif key == "default_factory":
             continue
 
+        option = option.replace('"', "'")
         attribute[key] = f'"{option}"'
 
     return attribute
