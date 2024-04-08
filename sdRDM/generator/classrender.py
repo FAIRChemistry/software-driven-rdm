@@ -1,3 +1,6 @@
+import re
+import validators
+
 from copy import deepcopy
 from typing import Dict, List, Optional, Union
 from jinja2 import Template
@@ -8,6 +11,7 @@ from sdRDM.generator import templates as jinja_templates
 
 from .utils import camel_to_snake
 
+global_prefixes = {}
 
 def render_object(
     object: Dict,
@@ -15,6 +19,7 @@ def render_object(
     enums: List[Dict],
     inherits: List[Dict],
     namespaces: Dict,
+    prefixes: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
     small_types: Dict = {},
@@ -22,6 +27,9 @@ def render_object(
 ) -> str:
     """Renders a class of type object coming from a parsed Markdown model"""
 
+    global global_prefixes
+
+    global_prefixes = prefixes
     all_objects = objects + enums
 
     if small_types:
@@ -105,7 +113,11 @@ def render_class(
 
     inherit = None
     name = object.pop("name")
+    annotation = object.get("term", None)
     filtered = list(filter(lambda element: element["child"] == name, inherits))
+
+    if annotation is not None:
+        annotation = f'"{_validate_term(annotation)}"'
 
     if filtered and len(filtered) == 1:
         inherit = filtered[0]["parent"]
@@ -114,6 +126,7 @@ def render_class(
         name=name,
         inherit=inherit,
         docstring=object.pop("docstring"),
+        annotation=annotation,
         attributes=[
             render_attribute(
                 attr,
@@ -154,6 +167,7 @@ def render_attribute(
     is_multiple = "multiple" in attribute
     is_required = attribute["required"]
     is_all_optional = _is_optional_single_dtype(attribute, objects, obj_name)
+    has_term = "term" in attribute
     has_reference = "reference" in attribute
 
     tag = _extract_xml_alias(attribute)
@@ -181,6 +195,9 @@ def render_attribute(
         xml_alias = None
         wrapped = False
 
+    if has_term:
+        attribute["term"] = _validate_term(attribute["term"])
+
     if xml_alias == obj_name or tag == obj_name:
         return leaf_template.render(
             name=attribute.pop("name"),
@@ -204,6 +221,31 @@ def render_attribute(
             tag=tag,
             xml_alias=xml_alias,
         )
+
+def _validate_term(term: str):
+    """Validates the term and fetches the prefix from the global prefixes if needed"""
+
+    # Check if the term has a prefix
+    prefix_pattern = r"[A-Za-z0-9]*\:.*"
+
+    if validators.url(term):
+        return term
+    elif not re.match(prefix_pattern, term):
+        raise ValueError(f"Invalid term: {term} - Should either meet the prefix pattern 'prefix:term' or be a valid URL.")
+
+    prefix, rest = term.split(":", 1)
+
+    # Check if the prefix is given in the prefixes
+    assert prefix in global_prefixes, (
+        f"Invalid prefix: {prefix} - The following prefixes are available: {global_prefixes}"
+    )
+
+    url = global_prefixes[prefix]
+
+    if url.endswith("/"):
+        return f"{global_prefixes[prefix]}{rest}"
+    else:
+        return f"{global_prefixes[prefix]}/{rest}"
 
 
 def _get_field_type(attribute: Dict) -> str:
