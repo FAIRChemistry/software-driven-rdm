@@ -20,6 +20,7 @@ class MarkdownParser(BaseModel):
     compositions: List = []
     external_objects: Dict = {}
     namespaces: Dict = {}
+    prefixes: Dict = {}
     add_id_field: bool = True
 
     @classmethod
@@ -32,8 +33,9 @@ class MarkdownParser(BaseModel):
 
         # Extract frontmatter and markdown
         metadata = frontmatter.load(StringIO(content))
-        parser.namespaces = metadata.get("xmlns", {})  # type: ignore
+        parser.namespaces = metadata.get("nsmap", {})  # type: ignore
         parser.add_id_field = metadata.get("id-field", True)  # type: ignore
+        parser.prefixes = metadata.get("prefixes", {})  # type: ignore
 
         doc = MarkdownIt().parse(parser._remove_header(content))
         modules, enumerations = parser.get_objects_and_enumerations(doc)

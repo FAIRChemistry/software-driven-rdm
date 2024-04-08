@@ -79,6 +79,7 @@ def generate_api_from_parser(
         repo=url,
         commit=commit,
         namespaces=parser.namespaces,
+        prefixes=parser.prefixes,
         add_id_field=parser.add_id_field,
     )
 
@@ -111,6 +112,7 @@ def write_classes(
     inherits: List[Dict],
     use_formatter: bool,
     namespaces: Dict,
+    prefixes: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
     add_id_field: bool = True,
@@ -135,6 +137,7 @@ def write_classes(
             small_types=small_types,
             namespaces=namespaces,
             add_id_field=add_id_field,
+            prefixes=prefixes,
         )
         path = os.path.join(libpath, "core", f"{object['name'].lower()}.py")
         save_rendered_to_file(rendered, path, use_formatter)
