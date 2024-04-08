@@ -1,7 +1,7 @@
 import re
 
 from markdown_it.token import Token
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from sdRDM.markdown.smalltypes import process_small_type
 
 from sdRDM.tools.utils import snake_to_camel
@@ -100,15 +100,22 @@ def process_object(element: Token, object_stack: List, **kwargs) -> None:
 
     assert element.children is not None, "Object has no children"
 
-    object_stack.append(
-        {
-            "name": get_object_name(element.children),
-            "docstring": "",
-            "attributes": [],
-            "type": "object",
-            "subtypes": [],
-        }
-    )
+    name = get_object_name(element.children)
+    term = get_object_term(element.children)
+
+
+    obj = {
+        "name": name,
+        "docstring": "",
+        "attributes": [],
+        "type": "object",
+        "subtypes": [],
+    }
+
+    if term:
+        obj["term"] = term
+
+    object_stack.append(obj)
 
     if has_parent(element.children):
         object_stack[-1]["parent"] = get_parent(element.children)
@@ -118,10 +125,33 @@ def get_object_name(children: List[Token]) -> str:
     """Gets the name of an object"""
 
     if len(children) == 0:
-        raise IndexError("Object has no children")
+        raise IndexError("Object has no children to extract name from")
 
-    return re.sub(r"\[|\]", "", children[0].content).strip()
+    header = children[0].content
+    names = [
+        part for part in header.split(" ")
+        if not re.match(r"\(.*\)", part.strip())
+        and not re.match(r"\[.*\]", part.strip())
+    ]
 
+    return snake_to_camel("_".join(names))
+
+def get_object_term(children: List[Token]) -> Optional[str]:
+    """Gets the term of an object"""
+
+    if len(children) == 0:
+        raise IndexError("Object has no children to extract name from")
+
+    pattern = r"\((.*)\)"
+    header = children[0].content
+    match = re.findall(pattern, header)
+
+    if len(match) == 0:
+        return None
+    elif len(match) > 1:
+        raise ValueError("Object has more than one term, which is not allowed.")
+
+    return match[0]
 
 def has_parent(children: List[Token]) -> bool:
     """Checks whether an object inherits from another one"""
