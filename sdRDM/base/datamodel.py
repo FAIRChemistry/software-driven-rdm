@@ -58,6 +58,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
         use_enum_values=True,
         arbitrary_types_allowed=True,
         populate_by_name=True,
+        from_attributes=True,
     )
 
     # * Private attributes
