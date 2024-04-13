@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sdRDM"
-version = "0.2.2"
+version = "0.2.3"
 description = "Software-driven RDM converts markdown data models into powerful objects that can be serialized to JSON, XML, YAML and HDF5"
 authors = ["Jan Range <range.jan@web.de>"]
 license = "MIT License"
