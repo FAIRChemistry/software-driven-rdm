@@ -9,6 +9,12 @@ def test_dataset_creation(model_all):
     """Tests whether the data that is passed to the model is correctly parsed"""
 
     expected = {
+        "@context": {
+            "Root": "file://tests/fixtures/static/model_all.md/Root",
+        },
+        "@type": [
+            "Root",
+        ],
         "id": "id",
         "str_value": "string",
         "float_value": 1.5,
@@ -24,6 +30,12 @@ def test_dataset_creation(model_all):
         "multiple_primitives": [1.5, 1.7, 1.9],
         "enum_value": "value1",
         "nested_single_obj": {
+            "@context": {
+                "Nested": "file://tests/fixtures/static/model_all.md/Nested",
+            },
+            "@type": [
+                "Nested",
+            ],
             "id": "id",
             "str_value": "string",
             "float_value": 1.5,
@@ -31,6 +43,12 @@ def test_dataset_creation(model_all):
         },
         "nested_multiple_obj": [
             {
+                "@context": {
+                    "Nested": "file://tests/fixtures/static/model_all.md/Nested",
+                },
+                "@type": [
+                    "Nested",
+                ],
                 "id": "id",
                 "str_value": "string",
                 "float_value": 1.5,
@@ -68,7 +86,7 @@ def test_dataset_creation(model_all):
     )
 
     assert (
-        dataset.to_dict(mode="python") == expected
+        dataset.to_dict(mode="python", exclude={"leaf_element"}) == expected
     ), "Dataset does not match expected values"
 
 

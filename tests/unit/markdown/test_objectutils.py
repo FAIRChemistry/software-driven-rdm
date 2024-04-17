@@ -922,19 +922,19 @@ class TestGetObjectName:
     # Returns the name of the object when given a list of Tokens containing at least one child element.
     @pytest.mark.unit
     def test_returns_name_with_children(self):
-        children = [Token(type="type", tag="tag", nesting=0, content="[Object]")]
+        children = [Token(type="type", tag="tag", nesting=0, content="Object")]
         assert get_object_name(children=children) == "Object"
 
     # Returns the name of the object with leading and trailing whitespaces removed.
     @pytest.mark.unit
     def test_returns_name_with_whitespace_removed(self):
-        children = [Token(type="type", tag="tag", nesting=0, content="[   Object   ]")]
+        children = [Token(type="type", tag="tag", nesting=0, content="   Object   ")]
         assert get_object_name(children=children) == "Object"
 
     # Returns the name of the object with square brackets removed.
     @pytest.mark.unit
     def test_returns_name_with_square_brackets_removed(self):
-        children = [Token(type="type", tag="tag", nesting=0, content="[Object]")]
+        children = [Token(type="type", tag="tag", nesting=0, content="Object")]
         assert get_object_name(children=children) == "Object"
 
     # Raises an IndexError when given an empty list of Tokens.
@@ -948,12 +948,14 @@ class TestGetObjectName:
     @pytest.mark.unit
     def test_returns_empty_string_with_no_content(self):
         children = [Token(type="", tag="", nesting=0, content="")]
-        assert get_object_name(children=children) == ""
+
+        with pytest.raises(ValueError):
+            get_object_name(children=children)
 
     # Returns the object name when the first child element has no type.
     @pytest.mark.unit
     def test_returns_object_name_with_no_type(self):
-        children = [Token(tag="", nesting=0, content="[Object]", type=None)]
+        children = [Token(tag="", nesting=0, content="Object", type=None)]
         assert get_object_name(children=children) == "Object"
 
 
@@ -1025,7 +1027,7 @@ class TestProcessObject:
             tag="",
             nesting=0,
             children=[
-                Token(type="text", tag="", nesting=0, content="[Object]"),
+                Token(type="text", tag="", nesting=0, content="Object"),
                 Token(type="text", tag="", nesting=0, content="Object description"),
             ],
         )
@@ -1045,7 +1047,7 @@ class TestProcessObject:
             tag="",
             nesting=0,
             children=[
-                Token(type="text", tag="", nesting=0, content="[Object]"),
+                Token(type="text", tag="", nesting=0, content="Object"),
                 Token(type="text", tag="", nesting=0, content="Object description"),
                 Token(type="text", tag="", nesting=0, content="[Parent]"),
             ],
@@ -1079,8 +1081,9 @@ class TestProcessObject:
         )
         object_stack = []
         process_object(element, object_stack)
+
         assert len(object_stack) == 1
-        assert object_stack[0]["name"] == "object_name"
+        assert object_stack[0]["name"] == "ObjectName"
         assert object_stack[0]["docstring"] == ""
         assert object_stack[0]["attributes"] == []
         assert object_stack[0]["type"] == "object"

@@ -71,17 +71,26 @@ class TestUnit:
 
         # Assert
         expected_json = {
+            '@context': {
+                'Unit': 'https://www.github.com/JR-1991/software-driven-rdm/Unit',
+            },
             "name": "m / s",
             "bases": [
                 {
+                    "@context": {
+                        "BaseUnit": "https://www.github.com/JR-1991/software-driven-rdm/BaseUnit",
+                    },
                     "kind": "m",
-                    "exponent": 1,
-                    "scale": 1,
+                    "exponent": 1.0,
+                    "scale": 1.0,
                 },
                 {
+                    "@context": {
+                        "BaseUnit": "https://www.github.com/JR-1991/software-driven-rdm/BaseUnit",
+                    },
                     "kind": "s",
-                    "exponent": -1,
-                    "scale": 1,
+                    "exponent": -1.0,
+                    "scale": 1.0,
                 },
             ],
         }
