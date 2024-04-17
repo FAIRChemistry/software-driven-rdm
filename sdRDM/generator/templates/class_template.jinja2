@@ -28,8 +28,8 @@ class {{name}}({% if inherit is not none %}
     {{ attribute }}
     {% endfor %}
 
-    annotation_: List[str] = element(
-        name="annotation_",
+    annotations_: List[str] = element(
+        tag="annotations_",
         alias="@type",
         description="Annotation of the given object.",
         default=[
@@ -55,10 +55,13 @@ class {{name}}({% if inherit is not none %}
 
         return self
 
-    @field_validator("annotation_")
+    @field_validator("annotations_")
     @classmethod
-    def _validate_annotation(cls, value):
+    def _validate_annotation(cls, annotations):
         """Check if the annotation that has been set is a valid URL."""
-        if not validators.url(value):
-            raise ValueError(f"Invalid URL: {value}")
-        return value
+
+        for annotation in annotations:
+            if not validators.url(annotation) and annotation != cls.__name__:
+                raise ValueError(f"Invalid Annotation URL: {annotation}")
+
+        return annotations
