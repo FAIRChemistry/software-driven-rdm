@@ -470,8 +470,11 @@ class DataModel(pydantic_xml.BaseXmlModel):
     def xml(self):
         # Remove JSON LD elements
         tree = self.to_xml_tree()
-        xpath = "//*[local-name()='ld_context' or local-name()='ld_type']"
+        xpath = "//*[local-name()='ld_context' or local-name()='ld_type' or local-name()='annotations_']"
         tree = self._remove_nodes(tree, xpath)
+
+        # Add XML header
+        return "<?xml version='1.0' encoding='UTF-8'?>\n" + self._tree_to_string(tree)
 
         return self._tree_to_string(tree)
 
