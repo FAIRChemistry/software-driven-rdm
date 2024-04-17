@@ -103,7 +103,6 @@ def process_object(element: Token, object_stack: List, **kwargs) -> None:
     name = get_object_name(element.children)
     term = get_object_term(element.children)
 
-
     obj = {
         "name": name,
         "docstring": "",
@@ -127,12 +126,15 @@ def get_object_name(children: List[Token]) -> str:
     if len(children) == 0:
         raise IndexError("Object has no children to extract name from")
 
-    header = children[0].content
-    names = [
-        part for part in header.split(" ")
-        if not re.match(r"\(.*\)", part.strip())
-        and not re.match(r"\[.*\]", part.strip())
-    ]
+    header = children[0].content.rstrip(r"[(")
+
+    # Remove all the parts that are in brackets or parentheses
+    pattern = r"\(.*\)|\[.*\]"
+    header = re.sub(pattern, "", header)
+    names = [part for part in header.split(" ") if part]
+
+    if not names:
+        raise ValueError("There is an object that has no name. Please check your markdown file.")
 
     return snake_to_camel("_".join(names))
 
