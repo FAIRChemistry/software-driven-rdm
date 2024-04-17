@@ -81,16 +81,8 @@ class DataModel(pydantic_xml.BaseXmlModel):
         self._convert_units(self, data)
 
         super().__init__(**data)
-        self._initialize_references()
 
-        for name, value in data.items():
-            if bool(re.match("_[a-zA-Z0-9]*", name)):
-                continue
-
-            # Store references to other objects and vice versa
-            # self._add_reference_to_object(name, value)
-
-        for field, value in self.__dict__.items():
+        for field, value in self:
             is_object = hasattr(value, "model_fields")
             is_list = isinstance(value, (list, ListPlus))
 
@@ -115,11 +107,6 @@ class DataModel(pydantic_xml.BaseXmlModel):
                 self._types[name] = tuple(
                     [subtype for subtype in args if hasattr(subtype, "model_fields")]
                 )
-
-    def _initialize_references(self):
-        """Initialized references for each field present in the data model"""
-        for field in self.model_fields.values():
-            self._references[field] = ListPlus()
 
     # ! Computed fields
     @pydantic_xml.computed_element(
@@ -678,7 +665,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
     def from_markdown(
         cls,
         path: str,
-        url: Optional[str] = None
+        url: Optional[str] = None,
     ) -> ImportedModules:
         """Converts a markdown file into a in-memory Python API.
 
