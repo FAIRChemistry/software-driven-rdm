@@ -18,7 +18,7 @@ class {{name}}({% if inherit is not none %}
     {% if add_id_field %}
     id: Optional[str] = attr(
             name="id",
-            alias="id",
+            alias="@id",
             description="Unique identifier of the given object.",
             default_factory=lambda: str(uuid4()),
     )
