@@ -3,7 +3,7 @@
     "Root": "file://tests/fixtures/static/model_all.md/Root"
   },
   "@type": ["Root"],
-  "id": "id",
+  "@id": "id",
   "str_value": "string",
   "float_value": 1.5,
   "int_value": 1,
@@ -22,7 +22,7 @@
       "Nested": "file://tests/fixtures/static/model_all.md/Nested"
     },
     "@type": ["Nested"],
-    "id": "id",
+    "@id": "id",
     "str_value": "string",
     "float_value": 1.5,
     "int_value": 1
@@ -33,7 +33,7 @@
         "Nested": "file://tests/fixtures/static/model_all.md/Nested"
       },
       "@type": ["Nested"],
-      "id": "id",
+      "@id": "id",
       "str_value": "string",
       "float_value": 1.5,
       "int_value": 1
@@ -44,7 +44,7 @@
       "LeafElement": "file://tests/fixtures/static/model_all.md/LeafElement"
     },
     "@type": ["LeafElement"],
-    "id": "id",
+    "@id": "id",
     "leaf_value": "I am a leaf",
     "some_attribute": "I am an attribute"
   }

@@ -15,7 +15,7 @@ def test_dataset_creation(model_all):
         "@type": [
             "Root",
         ],
-        "id": "id",
+        "@id": "id",
         "str_value": "string",
         "float_value": 1.5,
         "int_value": 1,
@@ -36,7 +36,7 @@ def test_dataset_creation(model_all):
             "@type": [
                 "Nested",
             ],
-            "id": "id",
+            "@id": "id",
             "str_value": "string",
             "float_value": 1.5,
             "int_value": 1,
@@ -49,7 +49,7 @@ def test_dataset_creation(model_all):
                 "@type": [
                     "Nested",
                 ],
-                "id": "id",
+                "@id": "id",
                 "str_value": "string",
                 "float_value": 1.5,
                 "int_value": 1,
