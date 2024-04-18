@@ -2,26 +2,36 @@ from typing import get_args, get_origin
 
 from pydantic.fields import FieldInfo
 
+
 def process_term(
     obj,
     attr: str,
 ):
     """Processes the term of a field."""
 
+    from sdRDM.base.datatypes.identifier import Identifier
+
     field_info = obj.model_fields[attr]
     is_multiple = get_origin(field_info.annotation) == list
+    is_identifier = any(dtype == Identifier for dtype in get_args(field_info.annotation))
 
     term = _get_object_uri(obj, attr)
+    wrap = _get_term_wrap(is_multiple, is_identifier)
 
-    if term is None:
-        return None
-    elif is_multiple:
-        return {
-            "@id": term,
-            "@container": "@list"
-        }
+    if wrap and term:
+        return {"@id": term, **wrap}
     else:
         return term
+
+
+def _get_term_wrap(
+    is_multiple: bool,
+    is_identifier: bool,
+):
+    if is_multiple:
+        return {"@container": "@list"}
+    elif is_identifier:
+        return {"@type": "@id"}
 
 def _get_object_uri(obj, field: str):
     """Extracts the URI of a complex type."""
