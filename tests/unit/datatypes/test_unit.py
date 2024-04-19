@@ -74,12 +74,18 @@ class TestUnit:
             '@context': {
                 'Unit': 'https://www.github.com/JR-1991/software-driven-rdm/Unit',
             },
+            "@type": [
+                "Unit",
+            ],
             "name": "m / s",
             "bases": [
                 {
                     "@context": {
                         "BaseUnit": "https://www.github.com/JR-1991/software-driven-rdm/BaseUnit",
                     },
+                    "@type": [
+                        "BaseUnit",
+                    ],
                     "kind": "m",
                     "exponent": 1.0,
                     "scale": 1.0,
@@ -88,6 +94,9 @@ class TestUnit:
                     "@context": {
                         "BaseUnit": "https://www.github.com/JR-1991/software-driven-rdm/BaseUnit",
                     },
+                    "@type": [
+                        "BaseUnit",
+                    ],
                     "kind": "s",
                     "exponent": -1.0,
                     "scale": 1.0,

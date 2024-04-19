@@ -37,7 +37,6 @@ def test_scheme(model_all):
         ("nested_single_obj", Union[Nested, NoneType]),
         ("nested_multiple_obj", List[Nested]),
         ("leaf_element", Union[LeafElement, NoneType]),
-        ('annotations_', List[str]),
     ]
 
     given_scheme = [
