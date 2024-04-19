@@ -35,6 +35,7 @@ from typing import (
     Dict,
     Optional,
     IO,
+    Set,
     Tuple,
     Union,
     get_args,
@@ -76,6 +77,8 @@ class DataModel(pydantic_xml.BaseXmlModel):
     _references: DottedDict = PrivateAttr(default_factory=DottedDict)
     _id: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
     _attribute: Optional[str] = PrivateAttr(default=None)
+    _attribute_terms: Dict[str, Set[str]] = PrivateAttr(default_factory=dict)
+    _object_terms: Set[str] = PrivateAttr(default_factory=set)
 
     def __init__(self, **data):
         self._convert_units(self, data)
@@ -98,6 +101,8 @@ class DataModel(pydantic_xml.BaseXmlModel):
             self.__dict__[field]._attribute = field
 
         self._types = DottedDict()
+        self._attribute_terms = {attr: set() for attr in self.model_fields}
+
         for name, field in self.model_fields.items():
             args = get_args(field.annotation)
 
@@ -109,6 +114,22 @@ class DataModel(pydantic_xml.BaseXmlModel):
                 )
 
     # ! Computed fields
+    @pydantic_xml.computed_element(
+        tag="ld_type",
+        alias="@type",
+        return_type=List[str],
+        description="The context of the model used for JSON-LD."
+    )
+    def json_ld_type(self):
+        """
+        Returns the type of the model used for JSON-LD.
+        """
+
+        return [
+            self.__class__.__name__,
+            *list(self._object_terms)
+        ]
+
     @pydantic_xml.computed_element(
         tag="ld_context",
         alias="@context",
@@ -124,6 +145,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
         sub_annots = {}
 
         for attr in self.model_fields:
+
             term = process_term(self, attr)
 
             if term:
@@ -470,13 +492,10 @@ class DataModel(pydantic_xml.BaseXmlModel):
     def xml(self):
         # Remove JSON LD elements
         tree = self.to_xml_tree()
-        xpath = "//*[local-name()='ld_context' or local-name()='ld_type' or local-name()='annotations_']"
+        xpath = "//*[local-name()='ld_context' or local-name()='ld_type']"
         tree = self._remove_nodes(tree, xpath)
 
-        # Add XML header
         return "<?xml version='1.0' encoding='UTF-8'?>\n" + self._tree_to_string(tree)
-
-        return self._tree_to_string(tree)
 
     @staticmethod
     def _remove_nodes(tree, xpath):
@@ -765,6 +784,49 @@ class DataModel(pydantic_xml.BaseXmlModel):
         )
 
         return [root.cls for root in roots]
+
+    # ! Ontologies
+    def add_attribute_term(
+        self,
+        attribute: str,
+        term: str,
+    ):
+        """Adds an ontology term to an attribute, resulting in a JSON-LD context.
+
+        Args:
+            attribute (str): Name of the attribute.
+            term (str): Ontology term.
+
+        Raises:
+            AttributeError: If the attribute does not exist.
+            ValueError: If the term is not a valid URL.
+        """
+
+        if attribute not in self.model_fields:
+            raise AttributeError(f"Attribute '{attribute}' does not exist.")
+
+        if not validators.url(term):
+            raise ValueError(f"Given term '{term}' is not a valid URL.")
+
+        self._attribute_terms[attribute].add(term)
+
+    def add_object_term(
+        self,
+        term: str,
+    ):
+        """Adds an ontology term to the object, resulting in a JSON-LD context.
+
+        Args:
+            term (str): Ontology term.
+
+        Raises:
+            ValueError: If the term is not a valid URL.
+        """
+
+        if not validators.url(term):
+            raise ValueError(f"Given term '{term}' is not a valid URL.")
+
+        self._object_terms.add(term)
 
     # ! Utilities
     @classmethod
