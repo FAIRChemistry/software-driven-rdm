@@ -4,7 +4,6 @@
         {{attr.name}}: {{attr.type}} {% if 'default' in attr%}= {{attr.default}} {% elif attr.multiple is true %}= ListPlus(){% endif %},
         {%- endfor %}
         {% if add_id_field %}id: Optional[str] = None,{% endif %}
-        annotation: Optional[str] = None,
         **kwargs,
     ) -> {{ cls }}:
         """
@@ -27,9 +26,6 @@
             params["id"] = id
 
         obj = {{ cls }}(**params)
-
-        if annotation:
-            obj.annotations_.append(annotation)
 
         self.{{attribute}}.append(obj)
 

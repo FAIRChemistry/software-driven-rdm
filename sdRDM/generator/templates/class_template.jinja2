@@ -15,6 +15,12 @@ class {{name}}({% if inherit is not none %}
 
     {% if docstring is not none %}"""{{ docstring }}"""{% endif %}
 
+    {% if annotation is not none %}
+    class Config:
+        term = "{{ annotation }}"
+    {% endif %}
+
+
     {% if add_id_field %}
     id: Optional[str] = attr(
             name="id",
@@ -28,18 +34,13 @@ class {{name}}({% if inherit is not none %}
     {{ attribute }}
     {% endfor %}
 
-    annotations_: List[str] = element(
-        tag="annotations_",
-        alias="@type",
-        description="Annotation of the given object.",
-        default=[
-            "{{ name }}",
-            {% if annotation is not none %}{{ annotation }},{% endif %}
-        ],
-    )
-
     {% if repo is not none %}_repo: Optional[str] = PrivateAttr(default="{{repo}}"){% endif %}
     {% if commit is not none %}_commit: Optional[str] = PrivateAttr(default="{{commit}}"){% endif %}
+    {% if annotation is not none %}
+    _object_terms: Set[str] = PrivateAttr(
+        default_factory={"{{ annotation }}"}
+    )
+    {% endif %}
 
     _raw_xml_data: Dict = PrivateAttr(default_factory=dict)
 
@@ -54,14 +55,3 @@ class {{name}}({% if inherit is not none %}
                 self._raw_xml_data[attr] = elem2dict(value)
 
         return self
-
-    @field_validator("annotations_")
-    @classmethod
-    def _validate_annotation(cls, annotations):
-        """Check if the annotation that has been set is a valid URL."""
-
-        for annotation in annotations:
-            if not validators.url(annotation) and annotation != cls.__name__:
-                raise ValueError(f"Invalid Annotation URL: {annotation}")
-
-        return annotations
