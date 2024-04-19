@@ -12,6 +12,7 @@ ATTRIBURE_PATTERN = r"description=(\"|\')[A-Za-z0-9\_\.]*"
 FUNCTION_PATTERN = r"def ([a-zA-Z0-9_]+)\("
 FUNCTION_NAME_PATTERN = r"def ([a-zA-Z0-9_]+)\("
 XML_PARSER_PATTERN = r"_parse_raw_xml_data"
+ANNOTATION_PATTERN = r"_validate_annotation"
 
 
 class ModuleOrder(Enum):
@@ -72,8 +73,10 @@ def extract_custom_methods(rendered_class: str, path: str) -> List[str]:
         if not re.findall(FUNCTION_PATTERN, line):
             continue
 
-        # Ignore adder functions
+        # Ignore adder, annotation, and xml parser functions
         if re.findall(ADDER_PATTERN, line):
+            continue
+        elif re.findall(ANNOTATION_PATTERN, line):
             continue
         elif re.findall(XML_PARSER_PATTERN, line):
             continue
