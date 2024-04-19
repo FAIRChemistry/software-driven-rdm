@@ -1,4 +1,4 @@
-from typing import get_args, get_origin
+from typing import List, Optional, Set, get_args, get_origin
 
 from pydantic.fields import FieldInfo
 
@@ -14,24 +14,39 @@ def process_term(
     field_info = obj.model_fields[attr]
     is_multiple = get_origin(field_info.annotation) == list
     is_identifier = any(dtype == Identifier for dtype in get_args(field_info.annotation))
+    attr_terms = obj._attribute_terms.get(attr, None)
 
     term = _get_object_uri(obj, attr)
-    wrap = _get_term_wrap(is_multiple, is_identifier)
+    wrap = _get_term_wrap(
+        is_multiple=is_multiple,
+        is_identifier=is_identifier,
+        attr_terms=attr_terms,
+    )
 
     if wrap and term:
         return {"@id": term, **wrap}
-    else:
+    elif "@type" not in wrap and "@id" not in wrap:
         return term
+    else:
+        return wrap
 
 
 def _get_term_wrap(
     is_multiple: bool,
     is_identifier: bool,
+    attr_terms: Optional[Set[str]],
 ):
+    wrap = {}
     if is_multiple:
-        return {"@container": "@list"}
-    elif is_identifier:
-        return {"@type": "@id"}
+        wrap.update({"@container": "@list"})
+
+    if is_identifier:
+        wrap.update({"@type": "@id"})
+    elif attr_terms:
+        wrap.update({"@type": list(attr_terms)})
+
+    return wrap
+
 
 def _get_object_uri(obj, field: str):
     """Extracts the URI of a complex type."""
