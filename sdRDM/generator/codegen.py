@@ -163,9 +163,13 @@ def save_rendered_to_file(rendered: str, path: str, use_formatter: bool) -> None
             [
                 sys.executable,
                 "-m",
-                "autoflake",
-                "--in-place",
-                "--remove-all-unused-imports",
+                "ruff",
+                "check",
+                "--fix",
+                "--select",
+                "I",
+                "--select",
+                "F",
                 path,
             ]
         )
@@ -209,3 +213,14 @@ def _write_json_schemes(libpath: str, lib_name: str):
 
         with open(path, "w") as f:
             json.dump(cls.model_json_schema(), f, indent=2)
+
+
+if __name__ == "__main__":
+    # Test the function
+    from sdRDM.generator import generate_python_api
+
+    generate_python_api(
+        path="/Users/max/Documents/GitHub/pyeed/specifications/sequence_record.md",
+        dirpath="/Users/max/Documents/GitHub/pyeed/pyeed_ontology",
+        libname="pyeedd",
+    )
