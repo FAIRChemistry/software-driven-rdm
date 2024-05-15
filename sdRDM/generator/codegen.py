@@ -91,11 +91,8 @@ def generate_api_from_parser(
     )
 
     if not os.path.exists(os.path.join(libpath, "__init__.py")):
-        save_rendered_to_file(
-            "",
-            os.path.join(libpath, "__init__.py"),
-            use_formatter,
-        )
+        open(os.path.join(libpath, "__init__.py"), "w").close()
+        print(open(os.path.join(libpath, "__init__.py")).read())
 
     # Write schema to library
     generate_mermaid_schema(os.path.join(libpath, "schemes"), libname, parser)
