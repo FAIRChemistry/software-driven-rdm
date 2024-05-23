@@ -79,6 +79,7 @@ def generate_api_from_parser(
         repo=url,
         commit=commit,
         namespaces=parser.namespaces,
+        prefixes=parser.prefixes,
         add_id_field=parser.add_id_field,
     )
 
@@ -111,6 +112,7 @@ def write_classes(
     inherits: List[Dict],
     use_formatter: bool,
     namespaces: Dict,
+    prefixes: Dict,
     repo: Optional[str] = None,
     commit: Optional[str] = None,
     add_id_field: bool = True,
@@ -135,6 +137,7 @@ def write_classes(
             small_types=small_types,
             namespaces=namespaces,
             add_id_field=add_id_field,
+            prefixes=prefixes,
         )
         path = os.path.join(libpath, "core", f"{object['name'].lower()}.py")
         save_rendered_to_file(rendered, path, use_formatter)
@@ -160,9 +163,13 @@ def save_rendered_to_file(rendered: str, path: str, use_formatter: bool) -> None
             [
                 sys.executable,
                 "-m",
-                "autoflake",
-                "--in-place",
-                "--remove-all-unused-imports",
+                "ruff",
+                "check",
+                "--fix",
+                "--select",
+                "I",
+                "--select",
+                "F",
                 path,
             ]
         )
@@ -206,3 +213,14 @@ def _write_json_schemes(libpath: str, lib_name: str):
 
         with open(path, "w") as f:
             json.dump(cls.model_json_schema(), f, indent=2)
+
+
+if __name__ == "__main__":
+    # Test the function
+    from sdRDM.generator import generate_python_api
+
+    generate_python_api(
+        path="/Users/max/Documents/GitHub/pyeed/specifications/sequence_record.md",
+        dirpath="/Users/max/Documents/GitHub/pyeed/pyeed_ontology",
+        libname="pyeedd",
+    )

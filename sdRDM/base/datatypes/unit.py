@@ -16,6 +16,10 @@ class BaseUnit(
     kind: Union[str, AstroUnit, UnitBase] = attr(name="kind")
     exponent: float = attr(name="exponent")
 
+    _repo: str = PrivateAttr(
+        default="https://www.github.com/JR-1991/software-driven-rdm"
+    )
+
     @field_serializer("kind")
     def _serialize_kind(self, v):
         if isinstance(self.kind, str):
@@ -53,6 +57,9 @@ class Unit(
 
     _unit: UnitBase = PrivateAttr(default=None)
     _hash: int = PrivateAttr(default=None)
+    _repo: str = PrivateAttr(
+        default="https://www.github.com/JR-1991/software-driven-rdm"
+    )
 
     @model_validator(mode="after")
     def create_astropy_unit(self):

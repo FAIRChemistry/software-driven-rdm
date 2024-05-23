@@ -25,6 +25,8 @@
         if id is not None:
             params["id"] = id
 
-        self.{{attribute}}.append({{cls}}(**params))
+        obj = {{ cls }}(**params)
+
+        self.{{attribute}}.append(obj)
 
         return self.{{attribute}}[-1]

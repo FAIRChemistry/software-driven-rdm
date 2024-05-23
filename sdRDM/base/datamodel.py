@@ -18,15 +18,24 @@ from dotted_dict import DottedDict
 from enum import Enum
 from anytree import Node, LevelOrderIter
 from bigtree import print_tree, levelorder_iter, yield_tree
-from functools import lru_cache
+from functools import lru_cache, cached_property
+from lxml import etree
 from lxml.etree import _Element
-from pydantic import ConfigDict, PrivateAttr, field_validator
+from pydantic.fields import FieldInfo
+from pydantic import (
+    ConfigDict,
+    PrivateAttr,
+    field_validator,
+    model_serializer,
+    computed_field,
+)
 from typing import (
     Any,
     List,
     Dict,
     Optional,
     IO,
+    Set,
     Tuple,
     Union,
     get_args,
@@ -45,6 +54,7 @@ from sdRDM.base.tree import _digit_free_path, build_guide_tree, ClassNode
 from sdRDM.generator.codegen import generate_python_api
 from sdRDM.generator.utils import extract_modules
 from sdRDM.tools.utils import YAMLDumper
+from sdRDM.base.onto.jsonld import process_term
 from sdRDM.tools.gitutils import (
     build_library_from_git_specs,
     _import_library,
@@ -68,21 +78,15 @@ class DataModel(pydantic_xml.BaseXmlModel):
     _references: DottedDict = PrivateAttr(default_factory=DottedDict)
     _id: Optional[str] = PrivateAttr(default_factory=uuid.uuid4)
     _attribute: Optional[str] = PrivateAttr(default=None)
+    _attribute_terms: Dict[str, Set[str]] = PrivateAttr(default_factory=dict)
+    _object_terms: Set[str] = PrivateAttr(default_factory=set)
 
     def __init__(self, **data):
         self._convert_units(self, data)
 
         super().__init__(**data)
-        self._initialize_references()
 
-        for name, value in data.items():
-            if bool(re.match("_[a-zA-Z0-9]*", name)):
-                continue
-
-            # Store references to other objects and vice versa
-            # self._add_reference_to_object(name, value)
-
-        for field, value in self.__dict__.items():
+        for field, value in self:
             is_object = hasattr(value, "model_fields")
             is_list = isinstance(value, (list, ListPlus))
 
@@ -98,6 +102,8 @@ class DataModel(pydantic_xml.BaseXmlModel):
             self.__dict__[field]._attribute = field
 
         self._types = DottedDict()
+        self._attribute_terms = {attr: set() for attr in self.model_fields}
+
         for name, field in self.model_fields.items():
             args = get_args(field.annotation)
 
@@ -108,10 +114,48 @@ class DataModel(pydantic_xml.BaseXmlModel):
                     [subtype for subtype in args if hasattr(subtype, "model_fields")]
                 )
 
-    def _initialize_references(self):
-        """Initialized references for each field present in the data model"""
-        for field in self.model_fields.values():
-            self._references[field] = ListPlus()
+    # ! Computed fields
+    @pydantic_xml.computed_element(
+        tag="ld_type",
+        alias="@type",
+        return_type=List[str],
+        description="The context of the model used for JSON-LD."
+    )
+    def json_ld_type(self):
+        """
+        Returns the type of the model used for JSON-LD.
+        """
+
+        return [
+            self.__class__.__name__,
+            *list(self._object_terms)
+        ]
+
+    @pydantic_xml.computed_element(
+        tag="ld_context",
+        alias="@context",
+        return_type=Dict[str, str],
+        description="The context of the model used for JSON-LD."
+    )
+    def json_ld_context(self):
+        """
+        Returns the context of the model used for JSON-LD.
+        """
+
+        cls_name = self.__class__.__name__
+        sub_annots = {}
+
+        for attr in self.model_fields:
+
+            term = process_term(self, attr)
+
+            if term:
+                sub_annots[attr] = term
+
+        return {
+            cls_name: f"{self._repo}/{cls_name}", # type: ignore
+            **sub_annots
+        }
 
     # ! Getters
     def get(
@@ -346,20 +390,6 @@ class DataModel(pydantic_xml.BaseXmlModel):
             convert_h5ds,
         )
 
-        try:
-            # Add git specs if available
-            data["__source__"] = {
-                "root": self.__class__.__name__,
-                "repo": self._repo,  # type: ignore
-                "commit": self._commit,  # type: ignore
-                "url": self._repo.replace(".git", "") + f"/tree/{self._commit}",  # type: ignore
-            }  # type: ignore
-        except AttributeError:
-            if warn:
-                warnings.warn(
-                    "No 'URL' and 'Commit' specified. This model might not be re-usable."
-                )
-
         return data
 
     def _convert_types_and_remove_empty_objects(self, data, exclude_none, convert_h5ds):
@@ -440,6 +470,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
             self.to_dict(**kwargs),
             indent=indent,
             default=self._json_dump,
+            sort_keys=True,
         )
 
     @staticmethod
@@ -460,12 +491,44 @@ class DataModel(pydantic_xml.BaseXmlModel):
         )
 
     def xml(self):
-        return self.to_xml(
-            pretty_print=True,
-            encoding="UTF-8",
-            skip_empty=True,
-            xml_declaration=True,
-        ).decode()  # type: ignore
+        # Remove JSON LD elements
+        tree = self.to_xml_tree()
+        xpath = "//*[local-name()='ld_context' or local-name()='ld_type']"
+        tree = self._remove_nodes(tree, xpath)
+
+        return "<?xml version='1.0' encoding='UTF-8'?>\n" + self._tree_to_string(tree)
+
+    @staticmethod
+    def _remove_nodes(tree, xpath):
+        """Removes nodes from an XML tree based on an XPath expression.
+
+        Args:
+            tree (etree.ElementTree): XML tree
+            xpath (str): XPath expression
+
+        Returns:
+            etree.ElementTree: XML tree with nodes removed
+        """
+
+        nodes = tree.xpath(xpath)
+
+        for node in nodes:
+            node.getparent().remove(node)
+
+        return tree
+
+    @staticmethod
+    def _tree_to_string(tree):
+        """Converts an XML tree to a string.
+
+        Args:
+            tree (etree.ElementTree): XML tree
+
+        Returns:
+            str: XML tree as a string
+        """
+
+        return etree.tostring(tree, pretty_print=True).decode()
 
     def hdf5(self, file: Union["H5File", str]) -> None:
         """Writes the object instance to HDF5."""
@@ -622,12 +685,20 @@ class DataModel(pydantic_xml.BaseXmlModel):
         return True
 
     @classmethod
-    def from_markdown(cls, path: str) -> ImportedModules:
+    def from_markdown(
+        cls,
+        path: str,
+        url: Optional[str] = None,
+    ) -> ImportedModules:
         """Converts a markdown file into a in-memory Python API.
 
         Args:
             path (str): Path to the markdown file.
+            url (str): Namespace URL for the data model. Relevant for JSON-LD export.
         """
+
+        if url is None:
+            url = f"file://{path.lstrip('.|/')}"
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             # Generate API to parse the file
@@ -638,6 +709,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
                 dirpath=tmpdirname,
                 libname=lib_name,
                 use_formatter=False,
+                url=url,
             )
 
             lib = _import_library(api_loc, lib_name)
@@ -713,6 +785,49 @@ class DataModel(pydantic_xml.BaseXmlModel):
         )
 
         return [root.cls for root in roots]
+
+    # ! Ontologies
+    def add_attribute_term(
+        self,
+        attribute: str,
+        term: str,
+    ):
+        """Adds an ontology term to an attribute, resulting in a JSON-LD context.
+
+        Args:
+            attribute (str): Name of the attribute.
+            term (str): Ontology term.
+
+        Raises:
+            AttributeError: If the attribute does not exist.
+            ValueError: If the term is not a valid URL.
+        """
+
+        if attribute not in self.model_fields:
+            raise AttributeError(f"Attribute '{attribute}' does not exist.")
+
+        if not validators.url(term):
+            raise ValueError(f"Given term '{term}' is not a valid URL.")
+
+        self._attribute_terms[attribute].add(term)
+
+    def add_object_term(
+        self,
+        term: str,
+    ):
+        """Adds an ontology term to the object, resulting in a JSON-LD context.
+
+        Args:
+            term (str): Ontology term.
+
+        Raises:
+            ValueError: If the term is not a valid URL.
+        """
+
+        if not validators.url(term):
+            raise ValueError(f"Given term '{term}' is not a valid URL.")
+
+        self._object_terms.add(term)
 
     # ! Utilities
     @classmethod
@@ -972,7 +1087,7 @@ class DataModel(pydantic_xml.BaseXmlModel):
             )
             raise ValueError(
                 f"""Object is not compliant to the model:
-                
+
             {rendered_report}
                 """
             )

@@ -1,8 +1,8 @@
 ---
-xmlns:
-    "": "http://www.example.com/ns0"
-    "math": "http://www.example.com/math"
-    "chem": "http://www.example.com/chem"
+nsmap:
+  "": "http://www.example.com/ns0"
+  "math": "http://www.example.com/math"
+  "chem": "http://www.example.com/chem"
 ---
 
 # Test

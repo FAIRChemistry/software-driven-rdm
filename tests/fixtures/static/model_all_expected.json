@@ -1,39 +1,51 @@
 {
-    "id": "id",
+  "@context": {
+    "Root": "file://tests/fixtures/static/model_all.md/Root"
+  },
+  "@type": ["Root"],
+  "@id": "id",
+  "str_value": "string",
+  "float_value": 1.5,
+  "int_value": 1,
+  "bool_value": true,
+  "date_value": "2023-12-17",
+  "datetime_value": "2023-12-17T15:55:44.245441",
+  "posfloat_value": 1.5,
+  "posint_value": 2,
+  "http_url_value": "https://www.google.com/",
+  "email_value": "max.mustermann@muster.de",
+  "bytes_value": "this_is_bytes",
+  "multiple_primitives": [1.5, 1.7, 1.9],
+  "enum_value": "value1",
+  "nested_single_obj": {
+    "@context": {
+      "Nested": "file://tests/fixtures/static/model_all.md/Nested"
+    },
+    "@type": ["Nested"],
+    "@id": "id",
     "str_value": "string",
     "float_value": 1.5,
-    "int_value": 1,
-    "bool_value": true,
-    "date_value": "2023-12-17",
-    "datetime_value": "2023-12-17T15:55:44.245441",
-    "posfloat_value": 1.5,
-    "posint_value": 2,
-    "http_url_value": "https://www.google.com/",
-    "email_value": "max.mustermann@muster.de",
-    "bytes_value": "this_is_bytes",
-    "multiple_primitives": [
-        1.5,
-        1.7,
-        1.9
-    ],
-    "enum_value": "value1",
-    "nested_single_obj": {
-        "id": "id",
-        "str_value": "string",
-        "float_value": 1.5,
-        "int_value": 1
-    },
-    "nested_multiple_obj": [
-        {
-            "id": "id",
-            "str_value": "string",
-            "float_value": 1.5,
-            "int_value": 1
-        }
-    ],
-    "leaf_element": {
-        "id": "id",
-        "leaf_value": "I am a leaf",
-        "some_attribute": "I am an attribute"
+    "int_value": 1
+  },
+  "nested_multiple_obj": [
+    {
+      "@context": {
+        "Nested": "file://tests/fixtures/static/model_all.md/Nested"
+      },
+      "@type": ["Nested"],
+      "@id": "id",
+      "str_value": "string",
+      "float_value": 1.5,
+      "int_value": 1
     }
+  ],
+  "leaf_element": {
+    "@context": {
+      "LeafElement": "file://tests/fixtures/static/model_all.md/LeafElement"
+    },
+    "@type": ["LeafElement"],
+    "@id": "id",
+    "leaf_value": "I am a leaf",
+    "some_attribute": "I am an attribute"
+  }
 }
