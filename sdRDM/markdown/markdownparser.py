@@ -1,5 +1,6 @@
 from io import StringIO
 import re
+from collections import ChainMap
 
 import frontmatter
 from typing import List, Tuple, Dict, IO
@@ -35,7 +36,7 @@ class MarkdownParser(BaseModel):
         metadata = frontmatter.load(StringIO(content))
         parser.namespaces = metadata.get("nsmap", {})  # type: ignore
         parser.add_id_field = metadata.get("id-field", True)  # type: ignore
-        parser.prefixes = metadata.get("prefixes", {})  # type: ignore
+        parser.prefixes = dict(ChainMap(*metadata.get("prefixes", {}))) # type: ignore
 
         doc = MarkdownIt().parse(parser._remove_header(content))
         modules, enumerations = parser.get_objects_and_enumerations(doc)
